@@ -361,9 +361,9 @@ const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 48), ma
         alpha = mix(0.08, 0.35 + 0.55 * g * g, smoothstep(3.0, 40.0, vD));
       } else {
         // from below: crests drawn as moving lines, the way the deck drew its sea
-        float w1 = sin(vW.x * 0.35 + uTime * 0.6) + sin(vW.z * 0.27 - uTime * 0.45) * 0.7, w2 = sin((vW.x + vW.z) * 0.18 + uTime * 0.35);
-        float crest = 1.0 - smoothstep(0.0, 0.25, abs(fract((w1 + w2) * 0.6) - 0.5) * 2.0 - 0.6);
-        b = 0.10 + 0.5 * pow(p, 5.0) + 0.3 * crest * (0.3 + 0.7 * depthLight(-0.5));
+        float w = sin(vW.x * 0.11 + vW.z * 0.04 + uTime * 0.22) * 0.6 + sin(vW.z * 0.08 - vW.x * 0.03 - uTime * 0.16) * 0.4;
+        float crest = smoothstep(0.86, 0.97, w);   // a few thin crests, far apart, drifting
+        b = 0.12 + 0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5));
       }
       gl_FragColor = vec4(applyFog(b, vD), 0.0, 0.0, alpha);
     }` }));
