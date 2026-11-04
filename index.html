@@ -1382,18 +1382,23 @@ function stepPlayer(dt) {
   const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = wantBurst ? sp.max * 1.6 : (keys.Space && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
   const thrust = THREE.MathUtils.clamp((wantSpeed - along) * (wantBurst ? 4.0 : 2.2), -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
-  P.vel.addScaledVector(fwd, thrust * dt);
+  const inAir = P.pos.y > 0.0;   // out of the water there is nothing to push against
+  P.vel.addScaledVector(fwd, (inAir ? 0 : thrust) * dt);
   // drag balances full thrust exactly at the burst top speed, so every body can reach it
-  const vlen = P.vel.length(), vmax = sp.max * 1.6; if (vlen > 0.01) P.vel.addScaledVector(P.vel, -(2.4 * sp.max) * vlen / (vmax * vmax) * dt);
-  P.vel.lerp(fwd.clone().multiplyScalar(along), Math.min(1, 2.5 * dt));           // the body streamlines into its own motion
-  P.vel.y += climb * 2.2 * dt * Math.max(1, sp.max * 0.35) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
+  const vlen = P.vel.length(), vmax = sp.max * 1.6; if (vlen > 0.01) P.vel.addScaledVector(P.vel, -(2.4 * sp.max) * vlen / (vmax * vmax) * dt * (inAir ? 0.04 : 1));
+  if (!inAir) P.vel.lerp(fwd.clone().multiplyScalar(along), Math.min(1, 2.5 * dt));   // the body streamlines into its own motion
+  if (inAir) { P.vel.y -= 9.8 * dt; P.pitch += (Math.atan2(P.vel.y, Math.hypot(P.vel.x, P.vel.z) + 0.01) - P.pitch) * Math.min(1, 6 * dt); }   // a leap: gravity, nose follows the arc
+  else {
+    P.vel.y += climb * 2.2 * dt * Math.max(1, sp.max * 0.35) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
+    if (P.pos.y > -0.6 && P.vel.y > 0 && P.vel.y < 2.5) P.vel.y = Math.min(P.vel.y, (-0.08 - P.pos.y) * 4);   // a gentle rise floats you at the surface; only a burst breaches
+  }
   P.speed = Math.max(0, along);
 
   currentAt(P.pos.x, P.pos.z, WU.uTime.value, _cur);
   const next = P.pos.clone().addScaledVector(P.vel, dt).addScaledVector(_cur, dt);
   if (floorAt(next.x, next.z) > -sp.alt - 0.5) { P.vel.multiplyScalar(0.3); P.yaw += 0.8 * dt; next.copy(P.pos).addScaledVector(_cur, dt); }
   P.pos.copy(next);
-  P.pos.y = THREE.MathUtils.clamp(P.pos.y, fHere + sp.alt, 0.15);
+  P.pos.y = THREE.MathUtils.clamp(P.pos.y, fHere + sp.alt, 6);
   if (P.pos.y <= fHere + sp.alt + 0.01 && P.vel.y < 0) P.vel.y = 0;
   lastFloor = fHere; P.current = _cur.length();
   if (P.pos.y > -0.3) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - Math.random() * 0.1, P.pos.z + Math.sin(a) * r); } } }
