@@ -1301,7 +1301,10 @@ const every = (key, secs, fn) => { const t = now(); if (!audio.nextT[key] || t >
 function stepAudio(above) {
   if (!audio) return; const t = now(), depth = Math.max(0, -P.pos.y), k = 0.25, nearSurf = THREE.MathUtils.clamp(1 - depth / 2.5, 0, 1);
   // the world through water
-  audio.water.frequency.setTargetAtTime(above ? 6000 : Math.max(450, 1600 - depth * 45), t, 0.4);
+  audio.water.frequency.setTargetAtTime(above ? 14000 : Math.max(320, 900 - depth * 30), t, above ? 0.05 : 0.12);   // under: everything is heavy and far; out: the world is sharp
+  audio.water.Q.setTargetAtTime(above ? 0.2 : 1.1, t, 0.1);
+  if (audio.wasAbove !== undefined && audio.wasAbove !== above) burst({ buf: 'pink', type: 'bandpass', f0: above ? 500 : 1800, f1: above ? 2600 : 600, f2: above ? 1200 : 250, q: 1.4, attack: 0.01, length: 0.35, g: 0.35 });   // the pop of breaking through
+  audio.wasAbove = above;
   audio.sea.g.gain.setTargetAtTime(above ? 0.25 : 0.35 + Math.min(0.25, depth * 0.012), t, 0.6); audio.sea.f.frequency.setTargetAtTime(above ? 600 : Math.max(70, 220 - depth * 6), t, 0.8);
   audio.sea2.g.gain.setTargetAtTime(above ? 0.16 : 0.05, t, 0.6);
   audio.wind.g.gain.setTargetAtTime(above ? 0.2 : 0, t, 0.5);
@@ -1694,7 +1697,7 @@ function frame() {
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepFever(dt, t); stepAudio(!started ? above : P.pos.y > -0.2);   // sound follows your ears, not the camera stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
 
