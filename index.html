@@ -233,7 +233,7 @@ const composer = new EffectComposer(renderer);
 const dotPass = new ShaderPass(DotShader);
 dotPass.uniforms.tScene.value = lowRT.texture;
 composer.addPass(dotPass);
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.4, 0.55));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.4, 0.55));   // half-res bloom: the look is soft anyway
 function resize() {
   const dpr = renderer.getPixelRatio(), W = Math.floor(innerWidth * dpr), H = Math.floor(innerHeight * dpr);
   const pitch = Math.max(2, Math.round(pitchCss * dpr)), gw = Math.ceil(W / pitch), gh = Math.ceil(H / pitch);
@@ -512,7 +512,18 @@ function creatureMesh(sp, glow = 1) {
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
-const fwdOf = (yaw, pitch) => new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+const fwdInto = (out, yaw, pitch = 0) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+const fwdOf = (yaw, pitch = 0) => fwdInto(new THREE.Vector3(), yaw, pitch);
+const _s = new THREE.Vector3(), _f = new THREE.Vector3(), _M = new THREE.Matrix4(), _E = new THREE.Euler();
+// place one instance: position, euler rotation, scale
+function placeInstance(mesh, i, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
+  _E.set(rx, ry, rz); _M.makeRotationFromEuler(_E); if (sx !== 1 || sy !== 1 || sz !== 1) _M.scale(_s.set(sx, sy, sz)); _M.setPosition(x, y, z); mesh.setMatrixAt(i, _M);
+}
+// a random point in water around the player, or null
+function spotNear(rMin, rMax, minDepth = 2, tries = 12) {
+  for (let k = 0; k < tries; k++) { const a = Math.random() * Math.PI * 2, r = rMin + Math.random() * (rMax - rMin), x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r, f = floorAt(x, z); if (f < -minDepth) return { x, z, f }; }
+  return null;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  BUBBLE LOGO  —  the title hangs in the water as bubbles and scatters
@@ -659,10 +670,8 @@ function pickSpecies(deep) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 function spawnWild(w, first = false) {
-  for (let tries = 0; tries < 12; tries++) {
-    const a = Math.random() * Math.PI * 2, r = first ? 20 + Math.random() * 90 : 70 + Math.random() * 60;
-    const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r, f = floorAt(x, z);
-    if (f > -2) continue;
+  const spot = spotNear(first ? 20 : 70, first ? 110 : 130, 2); if (!spot) return;
+  { const { x, z, f } = spot;
     const sp = pickSpecies(f < -8);
     if (w.mesh) { w.mesh.visible = false; }
     w.mesh = w.meshes[sp.id] ??= (() => { const m = creatureMesh(sp, 0.95); scene.add(m); return m; })();
@@ -699,9 +708,7 @@ function stepWild(dt, t) {
       w.huntT += dt;
       if (w.huntT > 8 || d > 35) { w.hunting = false; w.cool = 25; }   // it loses interest if you keep away
       steerTo(w, P.pos.x, P.pos.z, 2.2); v = w.sp.max * 0.75; ty = P.pos.y;
-      if (d < 2.4 && P.stun <= 0) { thud(0.8); P.hp = Math.max(0, P.hp - 1); P.stun = 1.5; P.pitch = -0.5; w.cool = 30; w.hunting = false; flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180);
-        say(P.hp > 0 ? `${w.sp.name.toUpperCase()}\nbitten. it will circle back.` : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
-        if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500); }
+      if (d < 2.4 && P.stun <= 0) { hurt(0.8, `${w.sp.name.toUpperCase()}\nbitten. it will circle back.`); w.cool = 30; w.hunting = false; }
     } else { w.hunting = false; }
     if (rel === 'flee' && d < 30) {
       steerTo(w, 2 * w.pos.x - P.pos.x, 2 * w.pos.z - P.pos.z, 3); v = w.sp.max;
@@ -714,13 +721,13 @@ function stepWild(dt, t) {
       w.turn += (Math.random() - 0.5) * dt * 1.5; w.turn *= 0.985;
       if (w.sp.zone !== 'surface' && d < 6 && w.sp.len < 2) w.turn += 3 * dt;   // small things shy away
     }
-    const ahead = fwdOf(w.yaw, 0).multiplyScalar(8).add(w.pos);
-    if (floorAt(ahead.x, ahead.z) > -2.2) w.turn += 2.5 * dt;
+    fwdInto(_f, w.yaw).multiplyScalar(8).add(w.pos);
+    if (floorAt(_f.x, _f.z) > -2.2) w.turn += 2.5 * dt;
     w.yaw += w.turn * dt;
     const f = floorAt(w.pos.x, w.pos.z); if (ty === null) ty = targetY(w.sp, f, t, w.ph);
     ty = THREE.MathUtils.clamp(ty, f + w.sp.alt, -0.6);
     const dy = ty - w.pos.y; w.pitch += (THREE.MathUtils.clamp(dy * 0.4, -0.5, 0.5) - w.pitch) * Math.min(1, 2 * dt);
-    w.pos.addScaledVector(fwdOf(w.yaw, w.pitch), v * dt);
+    w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), v * dt);
     w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, -0.5);
     w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, -w.turn * 0.5);
     w.mesh.material.uniforms.uFlap.value = 0.6 + 0.4 * Math.min(1, v / w.sp.max);
@@ -741,10 +748,10 @@ jellyMesh.frustumCulled = false; scene.add(jellyMesh);
 const jellies = Array.from({ length: JELLIES }, () => ({ p: new THREE.Vector3(), ph: Math.random() * 6.28, s: 0.6 + Math.random() * 1.2 }));
 function stepJellies(dt, t) {
   for (let i = 0; i < JELLIES; i++) { const j = jellies[i];
-    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const a = Math.random() * 6.28, r = 20 + Math.random() * 90; j.p.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); const f = floorAt(j.p.x, j.p.z); if (f > -3) { j.p.set(0, 0, 0); _m.makeScale(0.001, 0.001, 0.001); jellyMesh.setMatrixAt(i, _m); continue; } j.p.y = f * (0.3 + Math.random() * 0.5); }
+    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const sp = spotNear(20, 110, 3); if (!sp) { placeInstance(jellyMesh, i, 0, 9999, 0); continue; } j.p.set(sp.x, sp.f * (0.3 + Math.random() * 0.5), sp.z); }
     const f = floorAt(j.p.x, j.p.z);
     j.p.y = THREE.MathUtils.clamp(j.p.y + Math.sin(t * 0.3 + j.ph) * 0.08 * dt + 0.02 * dt, f + 1, -1.5); j.p.x += Math.sin(t * 0.1 + j.ph) * 0.05 * dt; j.p.z += Math.cos(t * 0.13 + j.ph) * 0.05 * dt;
-    _e.set(Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2); _m.makeRotationFromEuler(_e); _m.scale(new THREE.Vector3(j.s, j.s, j.s)); _m.setPosition(j.p.x, j.p.y, j.p.z); jellyMesh.setMatrixAt(i, _m); }
+    placeInstance(jellyMesh, i, j.p.x, j.p.y, j.p.z, Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2, j.s); }
   jellyMesh.instanceMatrix.needsUpdate = true;
 }
 
@@ -804,11 +811,12 @@ function stepFever(dt, t) {
     fever.c.x = ax + (bx - ax) * fever.t; fever.c.z = az + (bz - az) * fever.t; fever.yaw = Math.atan2(-(bx - ax), -(bz - az));
   }
   const f = floorAt(fever.c.x, fever.c.z); fever.c.y = THREE.MathUtils.clamp(f * 0.5 - 1, f + 1.5, -2);
-  const M = new THREE.Matrix4(), E = new THREE.Euler();
+  fever.frame = (fever.frame || 0) + 1; fever.floor ??= new Float32Array(FEVER_N).fill(-30);
   for (let i = 0; i < FEVER_N; i++) {
     const o = fever.off[i], x = fever.c.x + o.x + Math.sin(t * 0.3 + i) * 2, z = fever.c.z + o.z + Math.cos(t * 0.25 + i * 0.7) * 2;
-    const y = THREE.MathUtils.clamp(fever.c.y + o.y, floorAt(x, z) + 0.6, -0.8);
-    E.set(0, fever.yaw + Math.sin(t * 0.2 + i) * 0.15, Math.sin(t * 0.5 + i) * 0.1); M.makeRotationFromEuler(E); M.setPosition(x, y, z); feverMesh.setMatrixAt(i, M);
+    if ((i + fever.frame) % 4 === 0) fever.floor[i] = floorAt(x, z);
+    const y = THREE.MathUtils.clamp(fever.c.y + o.y, fever.floor[i] + 0.6, -0.8);
+    placeInstance(feverMesh, i, x, y, z, 0, fever.yaw + Math.sin(t * 0.2 + i) * 0.15, Math.sin(t * 0.5 + i) * 0.1);
   }
   feverMesh.instanceMatrix.needsUpdate = true;
 }
@@ -817,7 +825,7 @@ function stepFever(dt, t) {
 //  BOATS  —  ships work the channel, small craft wander the flats.
 //  You hear them before you see them. Near the surface they can hit you.
 // ═══════════════════════════════════════════════════════════════════
-const boatMat = creatureMat({ glow: 0.45 });
+const boatMat = creatureMat({ glow: 0.45 }), UP = new THREE.Vector3(0, 1, 0);
 const boats = [];
 function addBoat(type, route) {
   const t = BOAT_TYPES[type], m = new THREE.Mesh(t.geo, boatMat); m.frustumCulled = false; scene.add(m);
@@ -834,12 +842,10 @@ function stepBoats(dt, t) {
       if (b.u < 0) { if (i > 0) { b.seg--; b.u = 1; } else { b.dir = 1; b.u = 0; } }
       b.pos.set(ax + (bx - ax) * b.u, 0, az + (bz - az) * b.u); b.yaw = Math.atan2(-(bx - ax) * b.dir, -(bz - az) * b.dir);
     } else {
-      if (b.pos.lengthSq() === 0 || b.pos.distanceTo(P.pos) > 700) {
-        for (let k = 0; k < 20; k++) { const a = Math.random() * 6.28, r = 150 + Math.random() * 350, x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r; if (isWater(x, z, 2)) { b.pos.set(x, 0, z); b.yaw = Math.random() * 6.28; break; } }
-      }
+      if (b.pos.lengthSq() === 0 || b.pos.distanceTo(P.pos) > 700) { const sp = spotNear(150, 500, 2, 20); if (sp) { b.pos.set(sp.x, 0, sp.z); b.yaw = Math.random() * 6.28; } }
       b.turn += (Math.random() - 0.5) * dt; b.turn *= 0.98;
-      const ahead = fwdOf(b.yaw, 0).multiplyScalar(60).add(b.pos); if (!isWater(ahead.x, ahead.z, 2)) b.turn += 1.2 * dt;
-      b.yaw += b.turn * dt; b.pos.addScaledVector(fwdOf(b.yaw, 0), b.type.speed * dt);
+      fwdInto(_f, b.yaw).multiplyScalar(60).add(b.pos); if (!isWater(_f.x, _f.z, 2)) b.turn += 1.2 * dt;
+      b.yaw += b.turn * dt; b.pos.addScaledVector(fwdInto(_f, b.yaw), b.type.speed * dt);
     }
     b.pos.y = Math.sin(t * 1.3 + b.bob) * 0.12;
     b.mesh.position.copy(b.pos); b.mesh.rotation.set(Math.sin(t * 0.9 + b.bob) * 0.015, b.yaw, Math.sin(t * 1.1 + b.bob) * 0.03);
@@ -847,32 +853,35 @@ function stepBoats(dt, t) {
     // hull frame: strike, bow-wave shove, prop wash
     const dist = b.pos.distanceTo(P.pos);
     if (dist < b.type.L + 60 && P.vel) {
-      const rel = P.pos.clone().sub(b.pos).applyAxisAngle(new THREE.Vector3(0, 1, 0), -b.yaw), W = b.type.W, L = b.type.L, big = b.type === BOAT_TYPES.ship;
+      const rel = _s.copy(P.pos).sub(b.pos).applyAxisAngle(UP, -b.yaw), W = b.type.W, L = b.type.L, big = b.type === BOAT_TYPES.ship;
       if (P.stun <= 0 && Math.abs(rel.x) < W / 2 + 0.6 && Math.abs(rel.z) < L / 2 + 1 && P.pos.y > -b.type.draft - 0.8) strike(b);
       const nearHull = Math.abs(rel.z) < L / 2 + 12 && Math.abs(rel.x) < W / 2 + (big ? 18 : 6) && P.pos.y > -b.type.draft - (big ? 6 : 2);
       if (nearHull) {   // the displaced water pushes you out and down
         const side = Math.sign(rel.x || 1), fall = 1 - Math.min(1, (Math.abs(rel.x) - W / 2) / (big ? 18 : 6));
-        const push = new THREE.Vector3(side * Math.cos(b.yaw), 0, -side * Math.sin(b.yaw)).multiplyScalar(b.type.speed * 0.5 * fall);
-        P.vel.addScaledVector(push, dt * 4); P.vel.y -= fall * (big ? 2.5 : 0.8) * dt;
+        P.vel.addScaledVector(_f.set(side * Math.cos(b.yaw), 0, -side * Math.sin(b.yaw)), b.type.speed * 0.5 * fall * dt * 4); P.vel.y -= fall * (big ? 2.5 : 0.8) * dt;
         P.shake = Math.max(P.shake || 0, fall * (big ? 0.6 : 0.2));
       }
       const astern = rel.z > L / 2 - 2 && rel.z < L / 2 + (big ? 90 : 25) && Math.abs(rel.x) < W * 0.8 && P.pos.y > -b.type.draft - 4;
       if (astern) {   // prop wash: turbulence, a shove astern, a lot of air
         const k = 1 - (rel.z - L / 2) / (big ? 90 : 25);
         P.vel.x += (Math.random() - 0.5) * 6 * k * dt; P.vel.y += (Math.random() - 0.3) * 5 * k * dt; P.vel.z += (Math.random() - 0.5) * 6 * k * dt;
-        P.vel.addScaledVector(fwdOf(b.yaw, 0), -b.type.speed * 0.35 * k * dt * 3);
+        P.vel.addScaledVector(fwdInto(_f, b.yaw), -b.type.speed * 0.35 * k * dt * 3);
         P.shake = Math.max(P.shake || 0, k * (big ? 0.8 : 0.3)); P.wash = Math.max(P.wash || 0, k);
         for (let i = 0; i < (big ? 4 : 1); i++) emitBubble(P.pos.x + (Math.random() - .5) * 3, P.pos.y + (Math.random() - .5) * 2, P.pos.z + (Math.random() - .5) * 3);
       }
     }
   }
 }
+function hurt(k, msg) {
+  if (P.stun > 0) return; thud(k); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
+  flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180);
+  say(P.hp > 0 ? msg : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
+  if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500);
+}
 function nearestBoat() { let best = null, bd = 1e9; for (const b of boats) { const d = b.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = b; } } return { b: best, d: bd }; }
 function strike(b) {
-  thud(b.type === BOAT_TYPES.ship ? 1 : 0.7); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.speed = 0.3; P.pitch = -0.6; if (P.vel) { P.vel.addScaledVector(fwdOf(b.yaw, 0), b.type.speed * 0.8); P.vel.y = -(b.type === BOAT_TYPES.ship ? 5 : 2.5); } P.shake = 1.2;
-  flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180);
-  say(P.hp > 0 ? `STRUCK BY A ${b.type.name.toUpperCase()}\nDIVE WHEN THE WATER HUMS` : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
-  if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500);
+  hurt(b.type === BOAT_TYPES.ship ? 1.2 : 0.7, `STRUCK BY A ${b.type.name.toUpperCase()}\nDIVE WHEN THE WATER HUMS`);
+  if (P.vel) { P.vel.addScaledVector(fwdOf(b.yaw), b.type.speed * 0.8); P.vel.y = -(b.type === BOAT_TYPES.ship ? 5 : 2.5); }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1281,7 +1290,7 @@ function stepAmbient(dt, t) {
   updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
   if (grassCenter.distanceTo(new THREE.Vector2(P.pos.x, P.pos.z)) > 28) rebuildGrass(P.pos.x, P.pos.z);
   shaftSeeds.forEach((s, i) => { const a = s.a + t * 0.01, x = camPos.x + Math.cos(a) * s.r, z = camPos.z + Math.sin(a) * s.r;
-    _m.makeRotationY(Math.atan2(camPos.x - x, camPos.z - z) + Math.sin(t * 0.3 + s.s) * 0.2); _m.scale(new THREE.Vector3(s.w, 26 + Math.sin(t * 0.2 + s.s) * 4, 1)); _m.setPosition(x, 0, z); shafts.setMatrixAt(i, _m); });
+    placeInstance(shafts, i, x, 0, z, 0, Math.atan2(camPos.x - x, camPos.z - z) + Math.sin(t * 0.3 + s.s) * 0.2, 0, s.w, 26 + Math.sin(t * 0.2 + s.s) * 4, 1); });
   shafts.instanceMatrix.needsUpdate = true;
   { const a = snow.geometry.attributes.position.array, hb = snowBox / 2;
     for (let i = 0; i < a.length; i += 3) { a[i + 1] -= 0.08 * dt; for (let k = 0; k < 3; k++) { const d = a[i + k] - camPos.getComponent(k); if (d > hb) a[i + k] -= snowBox; else if (d < -hb) a[i + k] += snowBox; } }
@@ -1304,10 +1313,10 @@ jellyMesh.frustumCulled = false; scene.add(jellyMesh);
 const jellies = Array.from({ length: JELLIES }, () => ({ p: new THREE.Vector3(), ph: Math.random() * 6.28, s: 0.6 + Math.random() * 1.2 }));
 function stepJellies(dt, t) {
   for (let i = 0; i < JELLIES; i++) { const j = jellies[i];
-    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const a = Math.random() * 6.28, r = 20 + Math.random() * 90; j.p.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); const f = floorAt(j.p.x, j.p.z); if (f > -3) { j.p.set(0, 0, 0); _m.makeScale(0.001, 0.001, 0.001); jellyMesh.setMatrixAt(i, _m); continue; } j.p.y = f * (0.3 + Math.random() * 0.5); }
+    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const sp = spotNear(20, 110, 3); if (!sp) { placeInstance(jellyMesh, i, 0, 9999, 0); continue; } j.p.set(sp.x, sp.f * (0.3 + Math.random() * 0.5), sp.z); }
     const f = floorAt(j.p.x, j.p.z);
     j.p.y = THREE.MathUtils.clamp(j.p.y + Math.sin(t * 0.3 + j.ph) * 0.08 * dt + 0.02 * dt, f + 1, -1.5); j.p.x += Math.sin(t * 0.1 + j.ph) * 0.05 * dt; j.p.z += Math.cos(t * 0.13 + j.ph) * 0.05 * dt;
-    _e.set(Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2); _m.makeRotationFromEuler(_e); _m.scale(new THREE.Vector3(j.s, j.s, j.s)); _m.setPosition(j.p.x, j.p.y, j.p.z); jellyMesh.setMatrixAt(i, _m); }
+    placeInstance(jellyMesh, i, j.p.x, j.p.y, j.p.z, Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2, j.s); }
   jellyMesh.instanceMatrix.needsUpdate = true;
 }
 
@@ -1315,7 +1324,7 @@ function stepJellies(dt, t) {
 function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
   let k = 0;
   for (const s of schools) {
-    if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const a = Math.random() * 6.28, r = 25 + Math.random() * 60; s.c.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); s.c.y = Math.min(-1.5, floorAt(s.c.x, s.c.z) + 2 + Math.random() * 3); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
+    if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + Math.random() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
     const pd = s.c.distanceTo(P.pos);
     if (pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3;   // a charge scatters the school
     s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * 3 : s.base) - s.spread) * Math.min(1, 3 * dt);
