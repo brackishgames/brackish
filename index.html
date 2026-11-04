@@ -482,6 +482,8 @@ const BOAT_TYPES = {
 for (const t of Object.values(BOAT_TYPES)) t.geo = hullGeometry(t.L, t.W, t.draft, t.free, t !== BOAT_TYPES.skiff);
 
 function buildStructures() {
+  for (const m of world.meshes) scene.remove(m); world.meshes = []; world.buoys = []; world.wrecks = [];
+  const add = m => { m.frustumCulled = false; scene.add(m); world.meshes.push(m); return m; };
   const M = new THREE.Matrix4(), piles = [], decks = [];
   for (const br of bridges) {
     for (let i = 0; i + 1 < br.pts.length; i++) {
@@ -500,10 +502,10 @@ function buildStructures() {
   }
   const pileMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.1, 1.3, 1, 8).translate(0, 0.5, 0), structMat, Math.max(1, piles.length));
   piles.forEach((p, i) => { M.makeScale(1, -p.f + 2.5, 1); M.setPosition(p.x, p.f - 1, p.z); pileMesh.setMatrixAt(i, M); });
-  pileMesh.count = piles.length; pileMesh.frustumCulled = false; scene.add(pileMesh);
+  pileMesh.count = piles.length; add(pileMesh);
   const deckMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(14, 1.6, 1), structMat, Math.max(1, decks.length));
   decks.forEach((d, i) => { M.makeRotationY(d.yaw); M.scale(new THREE.Vector3(1, 1, d.len)); M.setPosition(d.x, d.h, d.z); deckMesh.setMatrixAt(i, M); });
-  deckMesh.count = decks.length; deckMesh.frustumCulled = false; scene.add(deckMesh);
+  deckMesh.count = decks.length; add(deckMesh);
 
   // channel markers: buoy at the surface, chain to a sinker on the bottom
   const buoys = [];
@@ -517,7 +519,7 @@ function buildStructures() {
   buoys.forEach((b, i) => { M.makeScale(1, -b.f, 1); M.makeRotationZ(0.06); M.scale(new THREE.Vector3(1, -b.f, 1)); M.setPosition(b.x, b.f, b.z); chainMesh.setMatrixAt(i, M);
     M.makeTranslation(b.x, b.f + 0.6, b.z); sinkerMesh.setMatrixAt(i, M); });
   buoyMesh.count = chainMesh.count = sinkerMesh.count = buoys.length;
-  for (const m of [buoyMesh, chainMesh, sinkerMesh]) { m.frustumCulled = false; scene.add(m); }
+  for (const m of [buoyMesh, chainMesh, sinkerMesh]) add(m);
   world.buoys = buoys; world.buoyMesh = buoyMesh;
 
   // wrecks and rubble
@@ -525,12 +527,12 @@ function buildStructures() {
     const [x, z] = toXZ(...w.ll), f = floorAt(x, z); if (f > -1) continue;
     if (w.kind === 'rubble') { const n = 14, g = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), structMat, n);
       for (let i = 0; i < n; i++) { const rx = x + (Math.random() - .5) * 40, rz = z + (Math.random() - .5) * 40, s = 2 + Math.random() * 5; M.makeRotationFromEuler(new THREE.Euler(Math.random(), Math.random() * 6, Math.random())); M.scale(new THREE.Vector3(s, s * 0.6, s * 1.5)); M.setPosition(rx, floorAt(rx, rz) + s * 0.2, rz); g.setMatrixAt(i, M); }
-      g.frustumCulled = false; scene.add(g); }
-    else { const t = BOAT_TYPES[w.kind], m = new THREE.Mesh(t.geo, structMat); m.scale.setScalar(w.s); m.position.set(x, f + t.draft * w.s * 0.6, z); m.rotation.set(0.15, Math.random() * 6, 0.55 + Math.random() * 0.4); m.frustumCulled = false; scene.add(m); }
+      add(g); }
+    else { const t = BOAT_TYPES[w.kind], m = new THREE.Mesh(t.geo, structMat); m.scale.setScalar(w.s); m.position.set(x, f + t.draft * w.s * 0.6, z); m.rotation.set(0.15, Math.random() * 6, 0.55 + Math.random() * 0.4); add(m); }
     world.wrecks.push({ x, z, name: w.name });
   }
 }
-const world = { buoys: [], wrecks: [], buoyMesh: null };
+const world = { buoys: [], wrecks: [], buoyMesh: null, meshes: [] };
 
 // ═══════════════════════════════════════════════════════════════════
 //  WILDLIFE  —  the player's body, wild animals that loom out of the
@@ -947,7 +949,7 @@ async function loadBridges() {
       out.push({ name: e.tags?.name || 'bridge', pts }); }
     if (out.length < 3) throw new Error('too few bridges');
     bridges = out;
-  } catch (e) { console.warn('bridges fallback:', e.message); bridges = BRIDGES_FALLBACK.map(b => ({ name: b.name, pts: b.pts.map(p => toXZ(...p)) })); }
+  } catch (e) { console.warn('bridges: keeping fallback set:', e.message); return; }
   for (const b of bridges) { if (b.name === 'bridge') continue; const [x, z] = b.pts[Math.floor(b.pts.length / 2)]; if (!POIS.some(p => p[2] === b.name)) { const [lat, lon] = toLL(x, z); POIS.push([lat, lon, b.name]); } }
 }
 async function boot() {
@@ -962,15 +964,16 @@ async function boot() {
   loadmsg.textContent = 'DOWNLOADING BATHYMETRY';
   try { const [o, i] = await Promise.all([load('outer', 0), load('inner', 1)]); demUniforms.uDemO.value = o; demUniforms.uDemI.value = i; }
   catch (e) { loadmsg.textContent = 'NOAA UNREACHABLE: ' + e.message; throw e; }
-  bar.style.width = '100%'; loadmsg.textContent = 'FETCHING BRIDGES';
-  await loadBridges();
-  buildStructures();
-  miniImg = demImage(180); bigImg = demImage(560);
+  bar.style.width = '100%';
+  const stage = async (msg, fn) => { loadmsg.textContent = msg; try { await fn(); } catch (e) { loadmsg.textContent = 'ERROR IN ' + msg + ': ' + e.message; console.error(e); throw e; } };
+  bridges = BRIDGES_FALLBACK.map(b => ({ name: b.name, pts: b.pts.map(p => toXZ(...p)) }));
+  await stage('BUILDING STRUCTURES', () => buildStructures());
+  await stage('DRAWING CHARTS', () => { miniImg = demImage(180); bigImg = demImage(560); });
+  // OpenStreetMap bridges arrive in the background and replace the fallback set
+  loadBridges().then(() => { try { buildStructures(); say('BRIDGES UPDATED FROM OPENSTREETMAP', 2.5); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
   P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) + 1.5, -6);
-  becomeSpecies(speciesById.cownose);
-  camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos);
-  rebuildGrass(P.pos.x, P.pos.z); resize();
+  await stage('WAKING THE BAY', () => { becomeSpecies(speciesById.cownose); camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos); rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); $('title').classList.remove('gone');
   frame();
 }
