@@ -1397,7 +1397,7 @@ const grass = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.06, 0.75).transl
   vertexShader: GLSL_COMMON + `varying float vD, vY, vU;
     void main(){ vec3 p = position; vec3 o = (instanceMatrix * vec4(0,0,0,1)).xyz; p.x += sin(uTime * 1.1 + o.x * 0.7 + o.z * 0.4) * uv.y * uv.y * 0.22; p.z += cos(uTime * 0.9 + o.x * 0.3) * uv.y * uv.y * 0.12;
       vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vY = w.y; vU = uv.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: GLSL_COMMON + `varying float vD, vY, vU; void main(){ float b = (0.22 + 0.45 * vU) * mix(0.4, 1.0, depthLight(vY)); gl_FragColor = outB(applyFog(b, vD)); }` }), GRASS_MAX);
+  fragmentShader: GLSL_COMMON + `varying float vD, vY, vU; void main(){ float b = (0.12 + 0.26 * vU) * mix(0.4, 1.0, depthLight(vY)); gl_FragColor = outB(applyFog(b, vD)); }` }), GRASS_MAX);
 grass.frustumCulled = false; grass.count = 0; scene.add(grass);
 const ROCK_MAX = 1600, FAN_MAX = 1200;
 const rocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), structMat, ROCK_MAX); rocks.frustumCulled = false; rocks.count = 0; scene.add(rocks);
