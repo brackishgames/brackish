@@ -392,10 +392,10 @@ const creatureFrag = GLSL_COMMON + /* glsl */`
   uniform float uGlow, uMode; varying vec3 vW; varying float vD; varying vec2 vUv;
   void main() {
     vec3 n = normalize(cross(dFdx(vW), dFdy(vW))); vec3 v = normalize(cameraPosition - vW); if (dot(n, v) < 0.0) n = -n;
-    float l = 0.12 + 0.26 * max(dot(n, normalize(vec3(0.2, 1.0, 0.1))), 0.0);
-    float rim = pow(1.0 - max(dot(n, v), 0.0), 1.8) * (0.3 + 0.7 * smoothstep(-0.7, 0.5, n.y));   // top-lit outline: undersides fall away
+    float l = 0.07 + 0.2 * max(dot(n, normalize(vec3(0.2, 1.0, 0.1))), 0.0);
+    float rim = pow(1.0 - max(dot(n, v), 0.0), 2.6) * (0.3 + 0.7 * smoothstep(-0.7, 0.5, n.y));   // top-lit outline: undersides fall away
     float light = vW.y > 0.0 ? (0.2 + 0.8 * uSun) : mix(0.5, 1.0, depthLight(vW.y));
-    float b = (l * light + rim * 0.95) * (vW.y > 0.0 ? max(uGlow, 0.9) : uGlow);   // hulls and decks are lit in the air
+    float b = (l * light + rim * 1.05) * (vW.y > 0.0 ? max(uGlow, 0.9) : uGlow);   // hulls and decks are lit in the air
     if (uMode == 1.0) { float e = smoothstep(0.82, 1.0, vUv.x) + smoothstep(0.80, 0.86, vUv.y) * step(vUv.y, 0.87) + (1.0 - smoothstep(0.0, 0.07, vUv.y)); b = b * (1.0 - 0.35 * vUv.x) + 0.35 * clamp(e, 0.0, 1.0) * uGlow; }
     gl_FragColor = outB(applyFog(min(b, 1.0), vD));
   }`;
@@ -417,8 +417,8 @@ const SPECIES = [
   { id: 'snook', name: 'Snook', kind: 'fish', len: 0.9, fat: 0.13, dorsal: 0.6, pect: 0.4, fluke: 'v', cruise: 1, max: 4, turn: 2, alt: 0.3, zone: 'shallow', freq: 5, amp: 0.1 },
   { id: 'redfish', name: 'Redfish', kind: 'fish', len: 0.8, fat: 0.16, dorsal: 0.5, pect: 0.4, fluke: 'v', cruise: 0.9, max: 3.5, turn: 2, alt: 0.25, zone: 'bottom', freq: 5, amp: 0.1 },
   { id: 'bull', name: 'Bull Shark', kind: 'fish', len: 2.4, fat: 0.2, dorsal: 1.3, pect: 1.2, fluke: 'shark', cruise: 1.8, max: 6, turn: 1.2, alt: 0.8, zone: 'deep', freq: 2.2, amp: 0.11 },
-  { id: 'hammer', name: 'Great Hammerhead', kind: 'fish', len: 3.4, fat: 0.17, dorsal: 1.7, pect: 1, fluke: 'shark', hammer: true, cruise: 1.8, max: 6, turn: 1.0, alt: 0.9, zone: 'deep', freq: 2, amp: 0.1 },
-  { id: 'goliath', name: 'Goliath Grouper', kind: 'fish', len: 2.0, fat: 0.3, round: 0.55, dorsal: 0.7, pect: 0.7, fluke: 'v', cruise: 0.6, max: 2.5, turn: 1, alt: 0.5, zone: 'structure', freq: 1.6, amp: 0.07 },
+  { id: 'hammer', name: 'Great Hammerhead', kind: 'fish', len: 3.4, fat: 0.13, dorsal: 1.7, pect: 1, fluke: 'shark', hammer: true, cruise: 1.8, max: 6, turn: 1.0, alt: 0.9, zone: 'deep', freq: 2, amp: 0.1 },
+  { id: 'goliath', name: 'Goliath Grouper', kind: 'fish', len: 2.0, fat: 0.26, round: 0.55, dorsal: 0.7, pect: 0.7, fluke: 'v', cruise: 0.6, max: 2.5, turn: 1, alt: 0.5, zone: 'structure', freq: 1.6, amp: 0.07 },
   { id: 'loggerhead', name: 'Loggerhead Turtle', kind: 'turtle', len: 1.0, cruise: 0.8, max: 2.5, turn: 1.2, alt: 0.5, zone: 'any', freq: 1.6, amp: 0.3 },
   { id: 'mullet', name: 'Striped Mullet', kind: 'fish', len: 0.45, fat: 0.14, dorsal: 0.4, pect: 0.3, fluke: 'v', cruise: 1, max: 3, turn: 2.5, alt: 0.2, zone: 'shallow', freq: 6, amp: 0.1 },
 ];
