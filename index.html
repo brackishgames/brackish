@@ -1841,7 +1841,7 @@ function drawPanel() {
   const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
     const b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.min(cols, 64));
     let y = H - 14 - lines.length * 10; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center'); y += 10; } }
-  const card = $('chapter'), oc = opa(card); if (oc > 0.01) {   // chapter card
+  const card = $('chapter'), oc = opa(card) * (mapOpen ? 0 : 1) * (1 - oHelp); if (oc > 0.01) {   // chapter card
     const txt = card.textContent, sc = [...txt].length * 12 <= W - 10 ? 2 : 1; wrap(txt, Math.floor((W - 8) / (6 * sc))).forEach((l, i) => pText(l, cx, Math.round(H * 0.36) + i * 9 * sc, 240 * oc, 'center', sc)); }
   if (oHelp > 0.01) {   // help
     let y = Math.max(4, Math.round(H * 0.14)); const big = W > 140; pText('HOW TO SWIM', cx, y, 240 * oHelp, 'center', big ? 2 : 1); y += big ? 24 : 14;
