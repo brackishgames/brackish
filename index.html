@@ -26,7 +26,7 @@
   #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s; z-index: 8; }
   #chapter { position: fixed; top: 38%; left: 0; right: 0; text-align: center; font-size: 26px; letter-spacing: 10px; text-transform: uppercase;
     text-shadow: 0 0 10px #ffb000, 0 0 30px #ff900088; opacity: 0; pointer-events: none; transition: opacity 1.2s; z-index: 8; }
-  #flash { position: fixed; inset: 0; background: #ff5a00; opacity: 0; pointer-events: none; transition: opacity .15s; mix-blend-mode: screen; }
+  #flash { position: fixed; inset: 0; background: radial-gradient(ellipse at center, #ff5a0000 30%, #ff5a00 100%); opacity: 0; pointer-events: none; transition: opacity .15s; mix-blend-mode: screen; }
   .panel { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 14px; background: #000000e6; z-index: 10; letter-spacing: 4px; text-transform: uppercase; transition: opacity .5s; }
   .panel.gone { opacity: 0; pointer-events: none; }
@@ -615,7 +615,7 @@ function becomeSpecies(sp) {
 
 const WILD_N = 46, wild = [];
 function pickSpecies(deep) {
-  const pool = SPECIES.filter(s => s.id !== 'mullet' && (deep ? ['deep', 'any', 'surface', 'structure'].includes(s.zone) : ['shallow', 'any', 'surface', 'bottom', 'structure'].includes(s.zone)));
+  const pool = SPECIES.filter(s => s.id !== 'mullet' && !(PREDATORS.has(s.id) && story.ch < 2) && (deep ? ['deep', 'any', 'surface', 'structure'].includes(s.zone) : ['shallow', 'any', 'surface', 'bottom', 'structure'].includes(s.zone)));
   return pool[Math.floor(Math.random() * pool.length)];
 }
 function spawnWild(w, first = false) {
@@ -653,12 +653,17 @@ function stepWild(dt, t) {
     const d = w.pos.distanceTo(P.pos); if (d > 200) { spawnWild(w); continue; }
     w.cool = Math.max(0, (w.cool || 0) - dt);
     const rel = relation(w); let v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph)); let ty = null;
-    if (rel === 'hunt' && d < 45 && w.cool <= 0 && started) {
-      steerTo(w, P.pos.x, P.pos.z, 2.2); v = w.sp.max * 0.85; ty = P.pos.y;
-      if (d < 2.4 && P.stun <= 0) { thud(0.8); P.hp = Math.max(0, P.hp - 1); P.stun = 1.5; P.pitch = -0.5; w.cool = 30; flash.style.opacity = 0.9; setTimeout(() => flash.style.opacity = 0, 180);
-        say(P.hp > 0 ? `${w.sp.name.toUpperCase()}\nit has your scent. put on speed.` : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
+    const otherHunter = wild.some(o => o !== w && o.hunting);
+    if (rel === 'hunt' && d < 45 && w.cool <= 0 && started && (!otherHunter || w.hunting)) {
+      if (!w.hunting) { w.hunting = true; w.huntT = 0; say(`${w.sp.name.toUpperCase()}\nsomething has your scent. put on speed.`, 3); }
+      w.huntT += dt;
+      if (w.huntT > 8 || d > 35) { w.hunting = false; w.cool = 25; }   // it loses interest if you keep away
+      steerTo(w, P.pos.x, P.pos.z, 2.2); v = w.sp.max * 0.75; ty = P.pos.y;
+      if (d < 2.4 && P.stun <= 0) { thud(0.8); P.hp = Math.max(0, P.hp - 1); P.stun = 1.5; P.pitch = -0.5; w.cool = 30; w.hunting = false; flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180);
+        say(P.hp > 0 ? `${w.sp.name.toUpperCase()}\nbitten. it will circle back.` : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
         if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500); }
-    } else if (rel === 'flee' && d < 30) {
+    } else { w.hunting = false; }
+    if (rel === 'flee' && d < 30) {
       steerTo(w, 2 * w.pos.x - P.pos.x, 2 * w.pos.z - P.pos.z, 3); v = w.sp.max;
     } else if (rel === 'curious' && d < 70 && w.cool <= 0) {
       w.curT = (w.curT || 0) + dt; if (w.curT > 40) { w.cool = 60; w.curT = 0; }
@@ -804,7 +809,7 @@ function stepBoats(dt, t) {
 function nearestBoat() { let best = null, bd = 1e9; for (const b of boats) { const d = b.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = b; } } return { b: best, d: bd }; }
 function strike(b) {
   thud(b.type === BOAT_TYPES.ship ? 1 : 0.7); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.speed = 0.3; P.pitch = -0.6; if (P.vel) { P.vel.addScaledVector(fwdOf(b.yaw, 0), b.type.speed * 0.8); P.vel.y = -(b.type === BOAT_TYPES.ship ? 5 : 2.5); } P.shake = 1.2;
-  flash.style.opacity = 0.9; setTimeout(() => flash.style.opacity = 0, 180);
+  flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180);
   say(P.hp > 0 ? `STRUCK BY A ${b.type.name.toUpperCase()}\nDIVE WHEN THE WATER HUMS` : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
   if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500);
 }
@@ -1134,7 +1139,8 @@ function stepHud(dt) {
     nearestPoi = best; }
   tr.textContent = nearestPoi;
   const { b, d } = nearestBoat(); const danger = b && d < (b.type === BOAT_TYPES.ship ? 220 : 60) && P.pos.y > -2.5;
-  warn.textContent = danger ? `▲ DIVE` : ''; warn.style.opacity = danger ? 1 : 0;
+  const hunter = wild.find(w => w.hunting);
+  warn.textContent = danger ? `▲ DIVE` : hunter ? `▲ ${hunter.sp.name.toUpperCase()} · SPEED` : ''; warn.style.opacity = danger || hunter ? 1 : 0;
   const landmarks = [];
   if (story.goal) landmarks.push({ name: 'goal', bearing: bearingTo(...story.goal), dist: Math.hypot(story.goal[0] - P.pos.x, story.goal[1] - P.pos.z), goal: true });
   for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 8000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
