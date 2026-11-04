@@ -62,6 +62,7 @@ function drawPanel() {
   }
   if (photo) {   // photo mode: the bay and nothing else
     dotPass.uniforms.uDim.value = 0; const hint = Math.max(0, Math.min(1, 4 - photo.t)), saved = Math.max(0, 1.5 - (photo.t - photo.savedT));
+    if (hint > 0) pText(photo.spot.toUpperCase(), cx, H - 22, 190 * hint, 'center');
     if (hint > 0) pText(pad.active ? 'STICKS ORBIT · A SAVE · B EXIT' : 'MOUSE ORBIT · WHEEL ZOOM · ENTER SAVE · O EXIT', cx, H - 12, 150 * hint, 'center');
     if (saved > 0) pText('SAVED TO DOWNLOADS', cx, 6, 200 * Math.min(1, saved), 'center');
     panel.tex.needsUpdate = true; return;
@@ -97,6 +98,7 @@ function drawPanel() {
     if (goal) { const raw = ((goal.bearing - hdg + 540) % 360) - 180, off = Math.abs(raw) > 52, gx = cx + Math.round(THREE.MathUtils.clamp(raw, -52, 52) * ppd);
       const label = goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + 'KM' : Math.round(goal.dist / 10) * 10 + 'M';
       pText(off ? (raw > 0 ? '►' : '◄') : '◆', gx, ST + 1, 255, 'center', 1, true); pText(label, gx + (raw > 0 ? -4 : 4), ST + 1, 190, raw > 0 ? 'right' : 'left', 1, true); }
+    { const spot = photoSpot(); if (spot) { pGain = 1; pText(`◆ ${pad.active ? 'R3' : 'O'} PHOTO`, W - SL, ST + 9 + ((performance.now() - lastSaved) / 1000 < 2 ? 7 : 0), 130 + 40 * Math.sin(t * 2), 'right', 1, true); pGain = hudGain; } }   /* a moment worth keeping */
     const ow = opa(warn); if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, ST + 20, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center');
     { const MS = Math.max(22, Math.min(46, Math.floor(H * 0.2))), mx = W - MS - SL, my = H - MS - SB, span = 3000;
       if (!panel.mini || panel.miniS !== MS || t - (panel.miniT || 0) > 0.5) { panel.mini = Bay.chart(P.pos.x, P.pos.z, span, MS, panel.mini && panel.miniS === MS ? panel.mini : undefined); panel.miniS = MS; panel.miniT = t; panel.miniC = [P.pos.x, P.pos.z]; }

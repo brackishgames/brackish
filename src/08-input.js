@@ -8,7 +8,7 @@ const keys = {};
 //    Y / △ the map, LB the creature you have been, START pause, BACK help. Buttons go through the keyboard handler.
 const pad = { turn: 0, throttle: 0, climb: 0, burst: false, lookX: 0, lookY: 0, active: false, held: {}, sony: false, ref: null };
 const PAD_KEYS = { 0: () => (menu || mapOpen || !started || photo) ? 'Enter' : null, 1: () => photo ? 'KeyO' : menu ? 'Escape' : helpOpen ? 'KeyH' : mapOpen ? 'KeyM' : null, 2: () => started && !menu && !mapOpen ? 'KeyE' : null,
-  3: () => 'KeyM', 4: () => 'Tab', 8: () => 'KeyH', 9: () => 'KeyP', 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
+  3: () => 'KeyM', 4: () => 'Tab', 11: () => started && !menu ? 'KeyO' : null, 8: () => 'KeyH', 9: () => 'KeyP', 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
 const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst   □ ability   R STICK look   △ map   OPTIONS pause' : 'L STICK steer   RT swim   A burst   X ability   R STICK look   Y map   START pause';
 addEventListener('gamepadconnected', e => { pad.sony = /054c|dualsense|dualshock|playstation|wireless controller/i.test(e.gamepad.id); if (started) say('CONTROLLER CONNECTED', 2); });
 addEventListener('gamepaddisconnected', () => { pad.active = false; pad.ref = null; bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help'; if (started) say('CONTROLLER DISCONNECTED', 2); });
@@ -48,7 +48,17 @@ document.addEventListener('pointerlockchange', () => { if (!document.pointerLock
 let mapOpen = false, mapSel = 0, helpOpen = false, started = false, paused = false;
 // ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
 let menu = null, photo = null;
-function startPhoto() { closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9 }; lockPointer(); }
+// photo opportunities: the game picks the moments, not the player. a landmark or wreck close by, inside the fever,
+// a leap together with the pod, the surface at dawn.
+function photoSpot() {
+  if (!started) return null;
+  for (const w of world.wrecks) if (Math.hypot(w.x - P.pos.x, w.z - P.pos.z) < 70) return w.name;
+  if (feverR(P.pos) < 1.2) return 'THE FEVER';
+  if (wild.some(o => o.partner && o.air)) return 'TOGETHER';
+  if (dayClock > 5.4 && dayClock < 7.2 && P.pos.y > -1.2) return 'DAWN';
+  return null;
+}
+function startPhoto() { const spot = photoSpot(); if (!spot) return; closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9, spot }; lockPointer(); }
 function endPhoto() { photo = null; }
 addEventListener('wheel', e => { if (photo) photo.dist = THREE.MathUtils.clamp(photo.dist * (e.deltaY > 0 ? 1.1 : 0.9), 1.2, 60); }, { passive: true });
 const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -83,7 +93,7 @@ function menuItems() {
     { label: () => 'HOW TO SWIM', act: () => { closeMenu(); helpOpen = true; help.classList.remove('gone'); } },
     { label: () => 'FAST TRAVEL', act: () => { closeMenu(); toggleMap(); } },
     { label: () => 'JOURNAL', act: () => { menu.kind = 'journal'; menu.sel = 0; } },
-    { label: () => 'PHOTO MODE', act: startPhoto },
+    ...(photoSpot() ? [{ label: () => 'PHOTO MODE · ' + photoSpot().toUpperCase(), act: startPhoto }] : []),
     { label: () => 'RESTART CHAPTER', act: restartChapter },
     { label: () => 'NEW GAME', act: () => { menu.kind = 'confirm'; menu.sel = 0; } }];
 }
@@ -104,7 +114,7 @@ addEventListener('keydown', e => {
   if (started && needFull() && !menu) openMenu('main');
   if (started && menu) { menuKey(e.code); return; }
   if (photo) { if (e.code === 'Enter') photo.shot = true; else if (['KeyO', 'Escape', 'KeyP'].includes(e.code)) endPhoto(); return; }
-  if (started && e.code === 'KeyO' && !mapOpen && !helpOpen) { startPhoto(); return; }
+  if (started && e.code === 'KeyO' && !mapOpen && !helpOpen) { startPhoto(); return; }   /* only where there is something to take */
   if (started && (e.code === 'KeyP' || (e.code === 'Escape' && !isFull()))) { if (mapOpen) toggleMap(); if (helpOpen) { helpOpen = false; help.classList.add('gone'); } openMenu('main'); return; }
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
