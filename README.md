@@ -2,6 +2,8 @@
 
 <img src="logo.svg" alt="Brackish" width="520">
 
+Play it at https://brackishgames.github.io/brackish/
+
 You are an animal in Tampa Bay. The whole thing is drawn the way the old Pioneer car stereos drew
 their dolphin screensaver: blue dots on black, amber text for the readouts.
 
@@ -19,4 +21,5 @@ and churn the water for ninety metres behind them. The tide runs through the pas
 Arrows swim and up means up. Space is speed. Tab cycles the creatures you have already been, M opens the
 map for fast travel between places you've found, and H shows the help.
 
-Open `index.html` in Chrome. There is no build step. three.js loads from a CDN.
+To run it locally, open `index.html` in Chrome. There is no build step. three.js loads from a CDN.
+Every push to `main` deploys the site through the workflow in `.github/workflows`.

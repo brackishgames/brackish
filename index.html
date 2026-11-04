@@ -8,6 +8,7 @@
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
     font-family: "Courier New", Courier, monospace; color: #ffb000; }
   canvas.gl { display: block; }
+  body:not(.playing) .hud, body:not(.playing) #compass, body:not(.playing) #mini { visibility: hidden; }
   .hud { position: fixed; pointer-events: none; white-space: pre; font-size: 13px; line-height: 1.6;
     letter-spacing: 2px; text-shadow: 0 0 6px #ff9000, 0 0 14px #ff700088; text-transform: uppercase; }
   #tl { top: 14px; left: 18px; }
@@ -876,7 +877,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); }
   } };
-function startGame() { started = true; $('title').classList.add('gone'); story.begin(0); }
+function startGame() { started = true; document.body.classList.add('playing'); $('title').classList.add('gone'); story.begin(0); }
 
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
