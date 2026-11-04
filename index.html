@@ -950,14 +950,17 @@ function pickSpecies(deep) {
   const pool = SPECIES.filter(s => s.id !== 'mullet' && !(PREDATORS.has(s.id) && story.ch < 2) && (deep ? ['deep', 'any', 'surface', 'structure'].includes(s.zone) : ['shallow', 'any', 'surface', 'bottom', 'structure'].includes(s.zone)));
   return pool[Math.floor(Math.random() * pool.length)];
 }
+function setWild(w, sp, x, y, z) {   // put a wild slot into the water as this species, here
+  if (w.mesh) w.mesh.visible = false;
+  w.mesh = w.meshes[sp.id] ??= (() => { const m = creatureMesh(sp, PREDATORS.has(sp.id) ? 0.68 : 0.95); scene.add(m); return m; })();
+  w.mesh.visible = true; w.sp = sp; w.pos.set(x, y, z); w.yaw = Math.random() * 6.28; w.pitch = 0; w.turn = 0; w.ph = Math.random() * 6;
+  w.hunting = false; w.interest = 0; w.warned = false; w.feverPass = 0; w.cool = 0;
+}
 function spawnWild(w, first = false) {
   const spot = spotNear(first ? 20 : 70, first ? 110 : 130, 2); if (!spot) return;
   { const { x, z, f } = spot;
     const sp = pickSpecies(f < -8);
-    if (w.mesh) { w.mesh.visible = false; }
-    w.mesh = w.meshes[sp.id] ??= (() => { const m = creatureMesh(sp, PREDATORS.has(sp.id) ? 0.68 : 0.95); scene.add(m); return m; })();
-    w.mesh.visible = true; w.sp = sp; w.pos.set(x, Math.min(-1.2, f + 1.5 + Math.random() * Math.max(0.5, -f - 3)), z);
-    w.yaw = Math.random() * 6.28; w.pitch = 0; w.turn = 0; w.ph = Math.random() * 6; return;
+    setWild(w, sp, x, Math.min(-1.2, f + 1.5 + Math.random() * Math.max(0.5, -f - 3)), z); return;
   }
 }
 for (let i = 0; i < WILD_N; i++) wild.push({ id: i, meshes: {}, mesh: null, sp: null, pos: new THREE.Vector3(), yaw: 0, pitch: 0, turn: 0, ph: 0 });
@@ -1543,8 +1546,8 @@ const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('s
 const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
 let sayTimer = 0;
 const tipQueue = [];
-function tip(id, text) { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text }); }
-function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started) return; const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), 5, 'TIP'); }
+function tip(id, text, label = 'TIP') { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text, label }); }
+function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started) return; const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), q.label === 'TIP' ? 5 : 7, q.label); }
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
 bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help';
 
@@ -1557,7 +1560,23 @@ const bearingTo = (x, z) => ((Math.atan2(x - P.pos.x, -(z - P.pos.z)) * 180 / Ma
 // checkpoints: discovered places you can fast travel to
 const checkpoints = [{ name: 'Skyway north', x: START[0], z: START[1] }];
 let lastCheckpoint = checkpoints[0];
-function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
+// what a place is, once, the first time you reach it. all of it is true.
+const LORE = {
+  'Sunshine Skyway': 'In May 1980 a freighter hit the old span in a squall and 1,200 feet of it fell into the bay. Thirty-five people died.',
+  'Skyway main span': 'The new span is held up by cables from two towers. The piers are ringed with rock so no ship can reach them again.',
+  'USCGC Blackthorn': 'A Coast Guard buoy tender. In January 1980 it collided with a tanker under the Skyway and capsized. Twenty-three men died. It was sunk out here as a reef.',
+  'Egmont Key': 'A lighthouse has stood here since 1848. In 1898 the army built Fort Dade around it for a war with Spain.',
+  'Fort Dade ruins': 'The gun batteries of Fort Dade. The beach has eaten into them for a century.',
+  'Fort De Soto': 'Built in 1898 to guard the mouth of the bay. Its guns never fired at an enemy.',
+  'Johns Pass': 'A hurricane opened this pass in 1848. Nobody dug it.',
+  'Gandy Bridge': 'In 1924 it was the first bridge across the bay, and for a while the longest toll bridge in the world.',
+  'Howard Frankland': 'The bridge across the middle of the bay. People here call it the Frankenstein.',
+  'Courtney Campbell': 'The causeway across the top of Old Tampa Bay, opened in 1934.',
+  'Apollo Beach': 'The power plant at Big Bend runs its warm water out here. In a cold snap, hundreds of manatees crowd into it.',
+  'Egmont Channel': 'The ship channel is dredged through the pass. Everything that comes into the bay comes through here.',
+  'Old Skyway rubble': 'When the old bridge was taken down, some of it was dropped here. Now it is reef.',
+};
+function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); if (LORE[name]) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
   P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; P.air = 1; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
@@ -1638,14 +1657,14 @@ const CHAPTERS = [
 ];
 const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
-    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i];
+    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter'); if (i > 0) fade.style.opacity = 1;
     setTimeout(() => {
       if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock;
       if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
       card.textContent = c.title; card.style.opacity = 1; bell();
       setTimeout(() => { fade.style.opacity = 0; }, 900);
-      setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.title); }, 1000);
+      setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); }, 1000);   // each new body is another life the bay has kept
       if (i === 3) fever.moving = true;
     }, i === 0 ? 50 : 700);
   },
@@ -1665,6 +1684,10 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     let done = false;
     if (c.goal && !c.follow) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
     if (c.breaths && !c.goal) done = false;
+    if (c.follow && this.followT > 50 && !this.hammer) {   // great hammerheads follow the cownose migrations, taking the ones at the edge
+      this.hammer = true; const w = wild.filter(o => !o.hunting).sort((a, b) => b.pos.distanceTo(P.pos) - a.pos.distanceTo(P.pos))[0], back = fwdOf(fever.yaw).multiplyScalar(-75).add(fever.c);
+      if (w) { setWild(w, speciesById.hammer, back.x, fever.c.y - 3, back.z); w.yaw = fever.yaw; w.feverPass = 20; say('something is following the fever. stay in the middle of them.', 4); }
+    }
     if (c.follow) { const d = Math.hypot(fever.c.x - P.pos.x, fever.c.z - P.pos.z); fever.speed = d > 80 ? 0.6 : 2.6; if (d < 90) { const q = Math.floor(this.followT / 30); this.followT += dt; if (Math.floor(this.followT / 30) > q && q < 3) say(['the fever carries you west', 'the bottom falls away under you', 'the bay is behind you now'][q], 3); } if (d < 90 && !sprinting()) P.speed = Math.max(P.speed, fever.speed + 0.2); if (d > 140 && sayTimer <= 0) say('the fever is pulling away', 2); done = c.done(); }
     if (c.surface) { this.surfaceT = P.pos.y > -0.35 ? this.surfaceT + dt : 0; done = this.surfaceT > 4; }
     if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && Math.random() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
