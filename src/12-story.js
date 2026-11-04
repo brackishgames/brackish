@@ -67,6 +67,6 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
 const TITLE_HINT = 'PRESS ENTER OR CLICK';
 function startGame(save) { if (canFull && !DEV) goFull(); started = true; lockPointer(); document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
-  if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3) fever.moving = true; return; }
+  if (save) { logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3 && !save.fever) fever.moving = true; return; }
   story.begin(0); }
 function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }

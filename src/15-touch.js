@@ -13,7 +13,7 @@ function cycleCreature(dir = 1) {
 function setTitleHint() {
   const ch = loadedSave ? CHAPTERS[loadedSave.ch].title : null;
   $('titlehint').textContent = MOBILE ? (ch ? 'TAP TO CONTINUE' : 'TAP TO BEGIN')
-    : TITLE_HINT;
+    : ch ? 'ENTER OR CLICK TO CONTINUE' : TITLE_HINT;
   $('restart').style.display = 'none';
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture

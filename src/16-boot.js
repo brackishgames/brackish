@@ -50,7 +50,7 @@ async function boot() {
   P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); dayClock = CHAPTERS[0].clock ?? dayClock; if (DEV && new URLSearchParams(location.search).has('clock')) dayClock = +new URLSearchParams(location.search).get('clock');   // ?dev&clock=22 to explore at night
   loadedSave = await loadGame(); if (loadedSave) loadedSave.ch = Math.min(loadedSave.ch, CHAPTERS.length - 2);   // older saves can point past the last chapter
   setTitleHint();
-  await stage('WAKING THE BAY', () => { becomeSpecies(speciesById.cownose); camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos); rebuildGrass(P.pos.x, P.pos.z); resize(); });
+  await stage('WAKING THE BAY', () => { if (loadedSave) applySave(loadedSave); else { becomeSpecies(speciesById.cownose); cameraBehind(); } rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); $('title').classList.remove('gone');
   frame();
 }
