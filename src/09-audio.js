@@ -117,7 +117,29 @@ function thud(k = 1) {
   oneShot((ac, t) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(26, t + 0.4); const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.8 * k, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.6); o.connect(g).connect(audio.master); o.start(t); o.stop(t + 0.65); });
   burst({ f0: 300, f1: 1200, f2: 200, attack: 0.03, length: 0.7, g: 0.4 * k });
 }
-function bell() {   // chapter card: one soft tone
+// chimes, chosen by ear: a struck bell is a sine whose brightness fades faster than its body
+function fmBell({ f = 196, ratio = 1.41, index = 2.2, decay = 4, g = 0.3, pan = 0, lp = 2200, when = 0 }) {
+  oneShot((ac, t) => { const car = ac.createOscillator(), mod = ac.createOscillator(), mg = ac.createGain(), vg = ac.createGain(), fl = ac.createBiquadFilter();
+    car.frequency.value = f; mod.frequency.value = f * ratio; mg.gain.setValueAtTime(f * index, t); mg.gain.exponentialRampToValueAtTime(f * 0.05, t + decay * 0.5);
+    mod.connect(mg).connect(car.frequency); fl.type = 'lowpass'; fl.frequency.value = lp; fl.Q.value = 0.4;
+    vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(g, t + 0.008); vg.gain.exponentialRampToValueAtTime(0.0005, t + decay);
+    let out = vg; if (pan && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; vg.connect(p); out = p; }
+    car.connect(fl).connect(vg); out.connect(audio.master); car.start(t); mod.start(t); car.stop(t + decay + 0.1); mod.stop(t + decay + 0.1); }, when);
+}
+function chimeStart() {   // a new chapter, a new body: one low bell, and the bottom gives it back twice, darker and further each time
+  fmBell({ f: 131, ratio: 1.37, index: 1.6, decay: 6, g: 0.34, lp: 1400 });
+  fmBell({ f: 131, ratio: 1.37, index: 1.2, decay: 4.5, g: 0.1, pan: -0.5, lp: 600, when: 0.9 });
+  fmBell({ f: 131, ratio: 1.37, index: 1, decay: 4, g: 0.04, pan: 0.5, lp: 350, when: 1.9 });
+  burst({ buf: 'brown', type: 'lowpass', f0: 440, f1: 330, f2: 90, q: 0.3, attack: 0.4, length: 4.5, g: 0.05 });
+}
+function chimeCheckpoint() {   // a place found: two pings a fifth apart, rising, and the bubbles going up
+  fmBell({ f: 294, ratio: 1.41, index: 1.5, decay: 2.2, g: 0.22 });
+  fmBell({ f: 440, ratio: 1.41, index: 1.3, decay: 2.6, g: 0.2, when: 0.18 });
+  for (let i = 0; i < 7; i++) oneShot((ac, t) => { const o = ac.createOscillator(), gg = ac.createGain(), f = 500 + i * 90 + Math.random() * 120;
+    o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 2.4, t + 0.06); gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(0.06 * (1 - i / 7 * 0.6), t + 0.006); gg.gain.exponentialRampToValueAtTime(0.0004, t + 0.07);
+    o.connect(gg).connect(audio.master); o.start(t); o.stop(t + 0.08); }, 0.25 + i * (0.07 + Math.random() * 0.06));
+}
+function bell() {   // the ending cards: one soft tone
   for (const [f, d, g] of [[220, 0, 0.14], [330, 0.02, 0.07]]) oneShot((ac, t) => { const o = ac.createOscillator(); o.frequency.value = f; const gg = ac.createGain(); gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(g, t + 0.03); gg.gain.exponentialRampToValueAtTime(0.0004, t + 3); o.connect(gg).connect(audio.master); o.start(t); o.stop(t + 3.1); }, d);
 }
 function groan() {   // something very large, very far away
