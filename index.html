@@ -123,9 +123,9 @@
   <p class="lore">boats hum before they arrive. dive.
 depths are real NOAA soundings. tide, water temperature and currents are live from NOAA.
 buried clams give a heart back. shrimp clouds refill the burst.
-a shark that has you stays on you until you lose it: get far away, get deep into the fever, or bury yourself.
-at night, keep out of the lights on the flats. burying will not hide you there.
-dolphins, manatees and turtles need air. the bar shows how long you have.
+a shark that has you stays on you until you lose it: get far away, or get deep into the fever.
+at night, keep out of the lights on the flats.
+dolphins and manatees need air. the bar shows how long you have.
 the surface is not the end of the world.</p><small>H to close</small></div>
 <div id="map"><div><h2>FAST TRAVEL — ↑↓ pick · ENTER go · M close</h2><ul id="cplist"></ul></div><canvas id="bigmap" width="560" height="560"></canvas></div>
 <div class="hud" id="tl"></div>
@@ -670,18 +670,10 @@ function stepStrokes(dt) { for (const m of creatureMats) m.uniforms.uPhase.value
 // cruise and burst speeds are the real animals' (m/s): cruise is what they hold all day, max a short sprint
 const SPECIES = [
   { id: 'cownose', name: 'Cownose Ray', kind: 'ray', span: 0.9, len: 0.6, pointy: 1.0, tail: 0.9, cruise: 1.0, max: 3.6, turn: 1.8, alt: 0.4, zone: 'shallow', freq: 2.6, amp: 0.55 },
-  { id: 'manta', name: 'Manta Ray', kind: 'ray', span: 3.8, len: 2.6, pointy: 0.75, tail: 1.9, lobes: true, cruise: 0.7, max: 6.7, turn: 1.1, alt: 0.9, zone: 'deep', freq: 2.0, amp: 0.62 },
-  { id: 'eagle', name: 'Spotted Eagle Ray', kind: 'ray', span: 2.4, len: 1.4, pointy: 1.3, tail: 3.0, cruise: 1.0, max: 4.5, turn: 1.4, alt: 0.7, zone: 'any', freq: 2.2, amp: 0.6 },
-  { id: 'stingray', name: 'Southern Stingray', kind: 'ray', undulate: true, span: 1.3, len: 1.2, pointy: 0.5, tail: 1.5, cruise: 0.4, max: 2.0, turn: 1.6, alt: 0.3, zone: 'bottom', freq: 2.4, amp: 0.4 },
   { id: 'dolphin', name: 'Bottlenose Dolphin', kind: 'fish', len: 2.6, fat: 0.23, dorsal: 1, pect: 1, fluke: 'h', cruise: 2.0, max: 8.3, turn: 1.5, alt: 0.8, zone: 'surface', freq: 3, amp: 0.08 },
   { id: 'manatee', name: 'West Indian Manatee', kind: 'fish', len: 3.0, fat: 0.42, round: 0.45, dorsal: 0, pect: 0.6, fluke: 'paddle', cruise: 1.3, max: 6.7, turn: 0.8, alt: 0.6, zone: 'shallow', freq: 1.2, amp: 0.06 },
-  { id: 'tarpon', name: 'Tarpon', kind: 'fish', len: 1.8, fat: 0.15, dorsal: 0.6, pect: 0.5, fluke: 'v', cruise: 1.0, max: 7.0, turn: 1.6, alt: 0.5, zone: 'any', freq: 4, amp: 0.1 },
-  { id: 'snook', name: 'Snook', kind: 'fish', len: 0.9, fat: 0.13, dorsal: 0.6, pect: 0.4, fluke: 'v', cruise: 0.8, max: 5.5, turn: 2, alt: 0.3, zone: 'shallow', freq: 5, amp: 0.1 },
-  { id: 'redfish', name: 'Redfish', kind: 'fish', len: 0.8, fat: 0.16, dorsal: 0.5, pect: 0.4, fluke: 'v', cruise: 0.8, max: 5.0, turn: 2, alt: 0.25, zone: 'bottom', freq: 5, amp: 0.1 },
   { id: 'bull', name: 'Bull Shark', kind: 'fish', len: 2.4, fat: 0.2, dorsal: 1.3, pect: 1.2, fluke: 'shark', cruise: 0.8, max: 5.5, turn: 1.2, alt: 0.8, zone: 'deep', freq: 2.2, amp: 0.11 },
   { id: 'hammer', name: 'Great Hammerhead', kind: 'fish', len: 3.4, fat: 0.13, dorsal: 1.7, pect: 1, fluke: 'shark', hammer: true, cruise: 0.8, max: 6.0, turn: 1.0, alt: 0.9, zone: 'deep', freq: 2, amp: 0.1 },
-  { id: 'goliath', name: 'Goliath Grouper', kind: 'fish', len: 2.0, fat: 0.26, round: 0.55, dorsal: 0.7, pect: 0.7, fluke: 'v', cruise: 0.4, max: 3.0, turn: 1, alt: 0.5, zone: 'structure', freq: 1.6, amp: 0.07 },
-  { id: 'loggerhead', name: 'Loggerhead Turtle', kind: 'turtle', len: 1.0, cruise: 0.6, max: 3.0, turn: 1.2, alt: 0.5, zone: 'any', freq: 1.6, amp: 0.3 },
   { id: 'mullet', name: 'Striped Mullet', kind: 'fish', len: 0.45, fat: 0.14, dorsal: 0.4, pect: 0.3, fluke: 'v', cruise: 0.6, max: 3.5, turn: 2.5, alt: 0.2, zone: 'shallow', freq: 6, amp: 0.1 },
 ];
 const speciesById = Object.fromEntries(SPECIES.map(s => [s.id, s]));
@@ -1009,10 +1001,10 @@ function stepWild(dt, t) {
       w.huntT += dt; const L = w.lunge; L.t += dt;
       const lose = why => { w.hunting = false; w.cool = 30; w.interest = 0; w.warned = false; if (why) say(why, 2.5); };
       // once it is on you it stays on you, like the law: you have to break contact long enough for it to lose you
-      const why = rel !== 'hunt' || d > 120 ? 'gone' : fr < 0.85 ? 'fever' : hammer && pFloor > -3 ? 'shallow' : P.hidden ? 'buried' : d > 28 ? 'far' : '';
-      if (!why) { w.track = Math.min(1, w.track + 0.5 * dt); w.seen.copy(P.pos); } else w.track -= dt / (why === 'fever' ? 2 : why === 'buried' ? 3 : 6);   // among a thousand others it can't hold on to you
+      const why = rel !== 'hunt' || d > 120 ? 'gone' : fr < 0.85 ? 'fever' : hammer && pFloor > -3 ? 'shallow' : d > 28 ? 'far' : '';
+      if (!why) { w.track = Math.min(1, w.track + 0.5 * dt); w.seen.copy(P.pos); } else w.track -= dt / (why === 'fever' ? 2 : 6);   // among a thousand others it can't hold on to you
       if (why === 'gone') lose('');
-      else if (w.track <= 0) { lose({ fever: 'it loses you among a thousand others', shallow: 'it will not follow you into the shallows', buried: 'it passes over you', far: 'you lost it' }[why]); if (why === 'fever') w.feverPass = 6; }
+      else if (w.track <= 0) { lose({ fever: 'it loses you among a thousand others', shallow: 'it will not follow you into the shallows', far: 'you lost it' }[why]); if (why === 'fever') w.feverPass = 6; }
       if (w.hunting) huntHeat = Math.max(huntHeat, w.track);
       if (!w.hunting) {}
       else if (why) { steerTo(w, w.seen.x, w.seen.z, 2); v = w.sp.max * (why === 'far' ? 0.85 : 0.6); ty = w.seen.y; L.phase = 'stalk'; L.t = 0; }   // searching where it last had you
@@ -1199,10 +1191,10 @@ function stepFever(dt, t) {
   feverMesh.instanceMatrix.needsUpdate = true;
 }
 
-const AIR = new Set(['dolphin', 'loggerhead', 'manatee', 'tarpon']);   // the bodies that come up to breathe
-const HOLD = { dolphin: 75, manatee: 120, loggerhead: 240 };   // seconds of air, in proportion to the real animals; a tarpon gulps air but does not need it
-const ABILITY = { cownose: 'sense', manta: 'sense', eagle: 'sense', dolphin: 'echo', bull: 'strike', hammer: 'strike', snook: 'strike',
-  stingray: 'settle', goliath: 'settle', redfish: 'settle', loggerhead: 'breathe', manatee: 'breathe', tarpon: 'breathe', mullet: 'leap' };
+const AIR = new Set(['dolphin', 'manatee']);   // the bodies that come up to breathe
+const HOLD = { dolphin: 75, manatee: 120 };   // seconds of air, in proportion to the real animals
+const ABILITY = { cownose: 'sense', dolphin: 'echo', bull: 'strike', hammer: 'strike',
+  manatee: 'breathe', mullet: 'leap' };
 const ABILITY_CD = { sense: 3, echo: 2, strike: 1.2, settle: 0.4, breathe: 2, leap: 1.5 };
 const pulses = [];
 function act() {
@@ -1276,7 +1268,7 @@ function hurt(k, msg) {
 }
 function nearestBoat() { let best = null, bd = 1e9; for (const b of boats) { const d = b.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = b; } } return { b: best, d: bd }; }
 // ── night gigging: a skiff poled over the flats with a light shining on the bottom. what the light finds, the gig takes.
-//    burying is no help: giggers look for exactly that outline. a gig reaches about two metres; deeper water or darkness is safe.
+//    giggers look for exactly a ray's outline. a gig reaches about two metres; deeper water or darkness is safe.
 const gigLight = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   vertexShader: `varying float vY; void main(){ vY = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: GLSL_COMMON + `varying float vY; void main(){ float b = 0.3 * (1.0 + vY) * (0.9 + 0.1 * sin(uTime * 7.0)); gl_FragColor = outB(b); }` }));
@@ -1302,7 +1294,7 @@ function stepGig(dt, t) {
   if (P.lit && gig.inT > 1.4 && gig.strikeT <= 0) {   // a second and a half in the light is all they need to see you
     gig.strikeT = 3; gig.inT = 0.5; stab(gig.bow.x, gig.bow.z);
     for (let i = 0; i < 14; i++) { const k = i / 14; emitBubble(gig.bow.x + (P.pos.x - gig.bow.x) * k, P.pos.y * k, gig.bow.z + (P.pos.z - gig.bow.z) * k); }
-    if (r < 0.8 + (P.sp.span ?? P.sp.len) * 0.35 && P.stun <= 0) hurt(0.6, 'GIGGED\nthey look for your outline in the light. burying will not hide you.'); else say('it missed', 1.2);
+    if (r < 0.8 + (P.sp.span ?? P.sp.len) * 0.35 && P.stun <= 0) hurt(0.6, 'GIGGED\nthey look for your outline in the light. stay out of it.'); else say('it missed', 1.2);
   }
 }
 function strike(b) {
@@ -1646,18 +1638,12 @@ const CHAPTERS = [
     lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
   { title: 'VI · THE POD', species: 'dolphin', start: [27.6185, -82.66117], goal: () => toXZ(27.6205, -82.6555), radius: 120,
     lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and the pod is racing the ships to the Skyway.', 'Beat them to the main span. Breathe when you need to.'] },
-  { title: 'VII · THE PILINGS', species: 'goliath', start: [27.59952, -82.65175], goal: () => toXZ(27.598, -82.652), radius: 50,
-    lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
-  { title: 'VIII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
+  { title: 'VII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. E to strike into a school. Eight will do.'] },
-  { title: 'IX · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
+  { title: 'VIII · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
-  { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53356, -82.76642], breaths: 3, goal: () => toXZ(27.535, -82.769), radius: 120,
-    lines: ['A loggerhead turtle swims the long way, out past Anna Maria into the Gulf.', 'You must breathe. Surface three times on the way.', 'The beam marks open water.'] },
-  { title: 'XI · THE DEEP', species: 'hammer', clock: 13, start: [27.7, -82.93419], goal: () => toXZ(27.70, -82.937), radius: 60,
-    lines: ['Twenty metres down on the shelf, something lies on the bottom.', 'You are a great hammerhead, and nothing here is afraid of you except the thing in the wreck.', 'Find it.'] },
-  { title: 'XII · DAWN', species: 'manta', start: [27.52, -83.17], surface: true, clock: 5.6,
-    lines: ['A manta ray four metres across moves like a slow bird.', 'This is the last body. Rise with it.', 'Break the surface at dawn.'] },
+  { title: 'IX · DAWN', species: 'cownose', start: [27.60629, -82.75359], surface: true, clock: 5.6,
+    lines: ['Spring. The fever comes back to the bay.', 'You are a cownose ray again, in the pass where you began.', 'Rise. Break the surface at dawn.'] },
   { title: 'FREE SWIM', free: true,
     lines: ['The bay is yours, and every body you have been.', 'TAB to change. M for the map and fast travel.', 'There are things on the bottom nobody talks about.'] },
 ];
@@ -1672,6 +1658,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
       setTimeout(() => { fade.style.opacity = 0; }, 900);
       setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); }, 1000);   // each new body is another life the bay has kept
       if (i === 3) fever.moving = true;
+      if (i === CHAPTERS.length - 2) { fever.seg = 0; fever.t = 0; fever.moving = false; fever.c.set(FEVER_PATH[0][0], fever.c.y, FEVER_PATH[0][1]); }   // spring: the fever is back in the hole
     }, i === 0 ? 50 : 700);
   },
   ending() {
@@ -1836,7 +1823,7 @@ function stepAmbient(dt, t) {
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
       const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
-      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' || P.sp.id === 'tarpon') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
+      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
       if (!fish.alive) _m.scale(GONE);
       _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }
@@ -2164,7 +2151,7 @@ async function boot() {
   loadBridges().then(() => { try { buildStructures(); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
   P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); dayClock = CHAPTERS[0].clock ?? dayClock; if (DEV && new URLSearchParams(location.search).has('clock')) dayClock = +new URLSearchParams(location.search).get('clock');   // ?dev&clock=22 to explore at night
-  loadedSave = await loadGame();
+  loadedSave = await loadGame(); if (loadedSave) loadedSave.ch = Math.min(loadedSave.ch, CHAPTERS.length - 2);   // older saves can point past the last chapter
   setTitleHint();
   await stage('WAKING THE BAY', () => { becomeSpecies(speciesById.cownose); camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos); rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); $('title').classList.remove('gone');

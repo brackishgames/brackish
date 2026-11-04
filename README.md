@@ -17,15 +17,14 @@ the hole off the north tip of Egmont Key is 25 m, and the Gulf reaches 30 m abou
 pulled from OpenStreetMap, with the Skyway, Gandy, Howard Frankland and Courtney Campbell built in for when
 that request fails.
 
-The story runs twelve chapters and you get a new body in most of them: cownose ray, bottlenose dolphin,
-goliath grouper, bull shark, manatee, loggerhead, great hammerhead, manta. After the last chapter you can
-swim anywhere as any of them. Sharks hunt you when you're small. Ships shove you aside with their bow wave
+The story runs nine chapters across four bodies: a cownose ray, a bottlenose dolphin, a bull shark and a
+West Indian manatee, each moving at the real animal's speed. You start as the ray and end as it. After the
+last chapter you can swim anywhere as any of them. Sharks hunt a ray on its own; the fever hides you. Ships shove you aside with their bow wave
 and churn the water for ninety metres behind them. The tide runs through the pass. The sun comes up.
 
-Press Enter and the game goes full screen. W and S swim forward and back, A and D turn, Space rises and C dives (the arrow keys work too). Shift is a
-burst of speed. E is your animal's ability: a ray senses the electric field of living things around it, a
-dolphin echolocates, a shark strikes, a stingray settles into the sand and goes unseen, a turtle or manatee
-takes a breath. Tab cycles the creatures you have already been, M opens the map for fast travel between places
+Press Enter or click and the game goes full screen; leave full screen, or press P, to pause. W and S swim forward and back, A and D turn, Space rises and C dives (the arrow keys work too). Shift is a
+burst of speed. E is your animal's ability: a ray senses the electric field of clams buried in the sand, a
+dolphin echolocates, a shark strikes, a manatee takes a breath. A gamepad works too. Tab cycles the creatures you have already been, M opens the map for fast travel between places
 you've found, and H shows the help. On a phone, drag anywhere to swim and use the round buttons.
 
 To run it locally, open `index.html` in Chrome. There is no build step. three.js loads from a CDN.
