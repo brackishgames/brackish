@@ -957,9 +957,14 @@ function becomeSpecies(sp) {
 }
 
 const WILD_N = 46, wild = [];
+// how often you meet each animal here, shallow vs deep: rays are everywhere in summer, dolphins come and go, manatees keep to the
+// shallows, bull sharks work the estuary, a hammerhead is rare. predators wait until chapter III. a dolphin draws its pod.
+const WILD_ACTIVE = MOBILE ? 8 : 14;
+const MEET = { cownose: [6, 2], dolphin: [1.2, 1.6], manatee: [1, 0], bull: [0.5, 0.8], hammer: [0, 0.35] };
 function pickSpecies(deep) {
-  const pool = SPECIES.filter(s => s.id !== 'mullet' && !(PREDATORS.has(s.id) && story.ch < 2) && (deep ? ['deep', 'any', 'surface', 'structure'].includes(s.zone) : ['shallow', 'any', 'surface', 'bottom', 'structure'].includes(s.zone)));
-  return pool[Math.floor(Math.random() * pool.length)];
+  const w = Object.entries(MEET).map(([id, [sh, dp]]) => [id, (PREDATORS.has(id) && story.ch < 2 ? 0 : deep ? dp : sh) * (id === 'dolphin' && P.sp?.id === 'dolphin' ? 4 : 1)]);
+  let r = Math.random() * w.reduce((a, [, v]) => a + v, 0); for (const [id, v] of w) { r -= v; if (r <= 0) return speciesById[id]; }
+  return speciesById.cownose;
 }
 function setWild(w, sp, x, y, z) {   // put a wild slot into the water as this species, here
   if (w.mesh) w.mesh.visible = false;
@@ -996,6 +1001,7 @@ function stepWild(dt, t) {
   huntHeat = 0; let hunters = 0; for (const o of wild) if (o.hunting) hunters++;
   const frP = feverR(P.pos), floorP = floorAt(P.pos.x, P.pos.z);
   for (const w of wild) {
+    if (w.id >= WILD_ACTIVE) { if (w.mesh) w.mesh.visible = false; continue; }   // a quiet bay: only so many animals within sight at once
     if (!w.sp) { spawnWild(w, true); continue; }
     const d = w.pos.distanceTo(P.pos); if (d > 200) { spawnWild(w); continue; }
     w.cool = Math.max(0, (w.cool || 0) - dt);
@@ -1559,7 +1565,7 @@ const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx =
 let sayTimer = 0;
 const tipQueue = [];
 function tip(id, text, label = 'TIP') { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text, label }); }
-function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started) return; const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), q.label === 'TIP' ? 5 : 7, q.label); }
+function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started || performance.now() - sayEndT < 4000 || huntHeat > 0) return;   /* never on top of another line, never mid-hunt */ const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), q.label === 'TIP' ? 5 : 7, q.label); }
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
 bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help';
 
@@ -1588,7 +1594,7 @@ const LORE = {
   'Egmont Channel': 'The ship channel is dredged through the pass. Everything that comes into the bay comes through here.',
   'Old Skyway rubble': 'When the old bridge was taken down, some of it was dropped here. Now it is reef.',
 };
-function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); if (LORE[name]) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
+function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); hudWakeT = WU.uTime.value; if (LORE[name]) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
   P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; P.air = 1; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
@@ -1615,7 +1621,7 @@ function stepGoalBeam(t) {
 const SAVE_KEY = 'brackish.save', SAVE_SALT = 'egmont-25m-' + location.host;
 async function sha(text) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
 let saveTimer = 0, loadedSave = null;
-let lastSaved = -1e9;
+let lastSaved = -1e9, hudWakeT = 0, hudGain = 1, sayEndT = 0;
 async function saveGame() {
   if (!started || DEV) return;   // dev mode never overwrites a real save
   lastSaved = performance.now();
@@ -1663,7 +1669,7 @@ const CHAPTERS = [
 ];
 const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
-    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i];
+    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter'); if (i > 0) fade.style.opacity = 1;
     setTimeout(() => {
       if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock;
@@ -1692,7 +1698,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.goal && !c.follow) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
     if (c.breaths && !c.goal) done = false;
     if (c.follow && this.followT > 50 && !this.hammer) {   // great hammerheads follow the cownose migrations, taking the ones at the edge
-      this.hammer = true; const w = wild.filter(o => !o.hunting).sort((a, b) => b.pos.distanceTo(P.pos) - a.pos.distanceTo(P.pos))[0], back = fwdOf(fever.yaw).multiplyScalar(-75).add(fever.c);
+      this.hammer = true; const w = wild.filter(o => !o.hunting && o.id < WILD_ACTIVE).sort((a, b) => b.pos.distanceTo(P.pos) - a.pos.distanceTo(P.pos))[0], back = fwdOf(fever.yaw).multiplyScalar(-75).add(fever.c);
       if (w) { setWild(w, speciesById.hammer, back.x, fever.c.y - 3, back.z); w.yaw = fever.yaw; w.feverPass = 20; say('something is following the fever. stay in the middle of them.', 4); }
     }
     if (c.follow) { const d = Math.hypot(fever.c.x - P.pos.x, fever.c.z - P.pos.z); fever.speed = d > 80 ? 0.4 : 1.0; if (d < 90) { const q = Math.floor(this.followT / 30); this.followT += dt; if (Math.floor(this.followT / 30) > q && q < 3) say(['the fever carries you west', 'the bottom falls away under you', 'the bay is behind you now'][q], 3); } if (d < 90 && !sprinting()) P.speed = Math.max(P.speed, fever.speed + 0.2); if (d > 140 && sayTimer <= 0) say('the fever is pulling away', 2); done = c.done(); }
@@ -1884,7 +1890,7 @@ function stepHud(dt) {
   if (story.goal) landmarks.push({ name: 'goal', bearing: bearingTo(...story.goal), dist: Math.hypot(story.goal[0] - P.pos.x, story.goal[1] - P.pos.z), goal: true });
   for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 8000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
   drawCompass(landmarks);
-  if (sayTimer > 0) { sayTimer -= dt; if (sayTimer <= 0) storyEl.style.opacity = 0; }
+  if (sayTimer > 0) { sayTimer -= dt; if (sayTimer <= 0) { storyEl.style.opacity = 0; sayEndT = performance.now(); } }
 }
 function frame() {
   booting = false;
@@ -1957,7 +1963,8 @@ function panelResize(w, h) {
   panel.tex.minFilter = panel.tex.magFilter = THREE.NearestFilter; panel.tex.unpackAlignment = 1; panel.tex.needsUpdate = true;
   dotPass.uniforms.tText.value = panel.tex; panel.map = null;
 }
-function pDot(x, y, v) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= panel.w || y >= panel.h || v <= 0) return; const i = (panel.h - 1 - y) * panel.w + x; if (v > panel.data[i]) panel.data[i] = Math.min(255, v); }
+let pGain = 1;   // the HUD draws through this so it can fade when the water is quiet
+function pDot(x, y, v) { x |= 0; y |= 0; v *= pGain; if (x < 0 || y < 0 || x >= panel.w || y >= panel.h || v <= 0) return; const i = (panel.h - 1 - y) * panel.w + x; if (v > panel.data[i]) panel.data[i] = Math.min(255, v); }
 function pText(str, x, y, v = 230, align = 'left', scale = 1, small = false) {   // small = the 3×5 readout font
   const F = small ? FONT3 : FONT, gw = small ? 3 : 5, gh = small ? 5 : 7, adv = gw + 1;
   const chars = [...String(str).toUpperCase()], w = chars.length * adv * scale - scale;
@@ -2008,7 +2015,10 @@ function drawPanel() {
     for (const el of ps) { const o = oTitle * opa(el), small = el.tagName === 'SMALL';
       for (const l of wrap(el.textContent, cols)) { pText(l, cx, y, (small ? 120 : 215) * o, 'center'); y += 10; } y += 5; }
   }
+  { const urgent = huntHeat > 0 || (P.air ?? 1) < 0.999 || P.hp < 3 || P.lit || opa(warn) > 0.01 || (P.sta ?? 1) < 0.999 || t - (story.beganAt || 0) < 20;
+    if (urgent) hudWakeT = t; const quiet = t - hudWakeT; hudGain += ((quiet > 10 ? 0.22 : 1) - hudGain) * Math.min(1, fadeDt * (quiet > 10 ? 0.4 : 4)); }   // quiet water, quiet screen
   if (document.body.classList.contains('playing') && !mapOpen && !menu && oHelp < 0.05) {   // HUD, inset clear of notches and rounded corners
+    pGain = hudGain;
     pText(tl.textContent, SL, ST + 2, 230, 'left', 1, true); pText(tr.textContent, W - SL, ST + 2, 180, 'right', 1, true);
     { const age = (performance.now() - lastSaved) / 1000; if (age < 2) pText('SAVED', W - SL, ST + 9, 150 * Math.min(1, 2 - age), 'right', 1, true); }
     const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(SL + i * 4 + x, ST + 9, on ? 220 : 60); }
@@ -2041,9 +2051,11 @@ function drawPanel() {
     if (document.body.classList.contains('touch')) {
       for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
         pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tAct: '◆', tMap: 'M', tCreature: '⇄' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
+      pGain = 1;
       if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
     }
   }
+  pGain = 1;
   const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen || menu ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
     const ts = settings.bigText && W > 200 ? 2 : 1, b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.floor(Math.min(cols, 64) / ts));
     let y = H - 14 - SB - lines.length * 10 * ts; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center', ts); y += 10 * ts; } }
