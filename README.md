@@ -1,8 +1,6 @@
-# Brackish
+<h1 align="center"><img src="logo.png" alt="Brackish" width="380"></h1>
 
-<img src="og.png" alt="Brackish" width="600">
-
-Play it at https://brackishgames.github.io/brackish/
+<p align="center">Play it at <a href="https://brackishgames.github.io/brackish/">brackishgames.github.io/brackish</a></p>
 
 <img src="screenshots/title.png" width="32%"> <img src="screenshots/hole.png" width="32%"> <img src="screenshots/map.png" width="32%">
 
