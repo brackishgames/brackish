@@ -785,7 +785,7 @@ function stepGoalBeam(t) {
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════
 const CHAPTERS = [
-  { title: 'I · THE HOLE OFF EGMONT', lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'], start: [27.610, -82.738], goal: () => toXZ(27.605, -82.761), radius: 70, species: 'cownose' },
+  { title: 'I · THE HOLE OFF EGMONT', lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'], start: [27.607, -82.751], goal: () => toXZ(27.604, -82.764), radius: 60, species: 'cownose' },
   { title: 'II · THE CHANNEL', lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'], start: [27.616, -82.690], goal: () => toXZ(27.624, -82.642), radius: 90 },
   { title: 'III · THE FEVER', lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'], start: [27.600, -82.722], goal: () => [fever.c.x, fever.c.z], radius: 60 },
   { title: 'IV · THE GULF', lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'], follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 300 && lastFloor < -14 },
@@ -840,7 +840,7 @@ function stepPlayer(dt) {
   if (P.speed > sp.cruise * 1.3 && Math.random() < 0.25) emitBubble(P.pos.x, P.pos.y, P.pos.z);
 }
 function stepCamera(dt) {
-  const size = P.mesh.userData.size, dist = 4.5 + size * 2.6, h = 1.4 + size * 0.6;
+  const size = P.mesh.userData.size, dist = 3.2 + size * 2.6, h = 1.1 + size * 0.6;
   const back = fwdOf(P.yaw, 0).multiplyScalar(-dist); back.y = h;
   const side = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)).multiplyScalar(0.9 + size * 0.35);
   const want = P.pos.clone().add(back).add(side);
