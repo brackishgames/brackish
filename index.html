@@ -1392,7 +1392,8 @@ const grass = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.06, 0.75).transl
 grass.frustumCulled = false; grass.count = 0; scene.add(grass);
 const ROCK_MAX = 1600, FAN_MAX = 1200;
 const rocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), structMat, ROCK_MAX); rocks.frustumCulled = false; rocks.count = 0; scene.add(rocks);
-const fans = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.9, 1.1).translate(0, 0.55, 0), grass.material, FAN_MAX); fans.frustumCulled = false; fans.count = 0; scene.add(fans);
+const fanGeo = mergeGeometries([new THREE.CircleGeometry(0.55, 12, 0, Math.PI).translate(0, 0.35, 0).toNonIndexed(), new THREE.PlaneGeometry(0.05, 0.4).translate(0, 0.2, 0).toNonIndexed()], false);
+const fans = new THREE.InstancedMesh(fanGeo, grass.material, FAN_MAX); fans.frustumCulled = false; fans.count = 0; scene.add(fans);
 const hash2 = (x, z) => { let n = Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
 function rebuildGrass(px, pz) {
   const m = new THREE.Matrix4(), R = 70, step = 1.4; let k = 0; const cx = Math.round(px / step) * step, cz = Math.round(pz / step) * step;
