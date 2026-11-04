@@ -113,10 +113,14 @@ function drawPanel() {
   const card = $('chapter'), oc = 0; if (oc > 0.01) {   // titles are shown once, with the story at the bottom   // chapter card
     const txt = card.textContent, sc = [...txt].length * 12 <= W - 10 ? 2 : 1; wrap(txt, Math.floor((W - 8) / (6 * sc))).forEach((l, i) => pText(l, cx, Math.round(H * 0.36) + i * 9 * sc, 240 * oc, 'center', sc)); }
   if (oHelp > 0.01) {   // help
-    let y = Math.max(4, Math.round(H * 0.14)); const big = W > 140; pText('HOW TO SWIM', cx, y, 240 * oHelp, 'center', big ? 2 : 1); y += big ? 24 : 14;
-    const ks = [...help.querySelectorAll('.keys > *')], keyX = Math.max(4, cx - 72), descX = keyX + 40, maxD = Math.max(8, Math.floor((W - descX - 3) / 6));
+    const ks = [...help.querySelectorAll('.keys > *')], keyW = Math.max(...ks.filter((_, i) => i % 2 === 0).map(k => k.textContent.length)) * 6 + 6;
+    const keyX = Math.max(4, cx - 80), descX = keyX + keyW, maxD = Math.max(8, Math.floor((W - descX - 3) / 6));
+    let rows = 0; for (let i = 1; i < ks.length; i += 2) rows += wrap(ks[i].textContent, maxD).length;
+    const big = W > 140 && H > 150, listH = (big ? 24 : 14) + rows * 10 + (ks.length / 2) * 2;   // measure first: centre it when there is room, shrink when there is not
+    let y = Math.max(4, Math.round((H - listH - 70) / 2)); pText('HOW TO SWIM', cx, y, 240 * oHelp, 'center', big ? 2 : 1); y += big ? 24 : 14;
     for (let i = 0; i + 1 < ks.length; i += 2) { pText(ks[i].textContent, keyX, y, 230 * oHelp); for (const l of wrap(ks[i + 1].textContent, maxD)) { pText(l, descX, y, 180 * oHelp); y += 10; } y += 2; }
-    y += 6; for (const l of wrap(help.querySelector('.lore').textContent, cols)) { pText(l, cx, y, 150 * oHelp, 'center'); y += 10; }
+    y += 6; for (const note of help.querySelector('.lore').textContent.split('\n')) { const ls = wrap(note.trim(), cols); if (y + ls.length * 10 > H - 18) break;   // only what fits
+      for (const l of ls) { pText(l, cx, y, 150 * oHelp, 'center'); y += 10; } }
     pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, y + 6, 110 * oHelp, 'center');
   }
   if (menu && !oHelp && !oMap) {   // paused
