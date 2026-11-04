@@ -568,34 +568,62 @@ function targetY(sp, f, t, ph) {
   switch (sp.zone) { case 'surface': return -1.0 - Math.max(0, Math.sin(t * 0.25 + ph)) * Math.min(6, -f - 2);
     case 'bottom': return f + sp.alt + 0.2; case 'structure': return f + 1 + sp.alt; case 'deep': return f * 0.5 - 1; default: return f * 0.45 - 1 + Math.sin(t * 0.2 + ph) * 1.2; }
 }
+const PREDATORS = new Set(['bull', 'hammer']);
+const isBig = sp => (sp.span ?? sp.len) >= 2;
+function relation(w) {
+  if (PREDATORS.has(w.sp.id) && !PREDATORS.has(P.sp.id) && !isBig(P.sp)) return 'hunt';
+  if (!PREDATORS.has(w.sp.id) && !isBig(w.sp) && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin')) return 'flee';
+  if (w.sp.id === 'dolphin' && !PREDATORS.has(P.sp.id)) return 'curious';
+  return 'neutral';
+}
+function steerTo(w, tx, tz, rate) {
+  const want = Math.atan2(-(tx - w.pos.x), -(tz - w.pos.z)); let d = want - w.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+  w.turn = THREE.MathUtils.clamp(d * 2.5, -rate, rate);
+}
 function stepWild(dt, t) {
   for (const w of wild) {
     if (!w.sp) { spawnWild(w, true); continue; }
     const d = w.pos.distanceTo(P.pos); if (d > 200) { spawnWild(w); continue; }
-    w.turn += (Math.random() - 0.5) * dt * 1.5; w.turn *= 0.985;
+    w.cool = Math.max(0, (w.cool || 0) - dt);
+    const rel = relation(w); let v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph)); let ty = null;
+    if (rel === 'hunt' && d < 45 && w.cool <= 0 && started) {
+      steerTo(w, P.pos.x, P.pos.z, 2.2); v = w.sp.max * 0.85; ty = P.pos.y;
+      if (d < 2.4 && P.stun <= 0) { P.hp = Math.max(0, P.hp - 1); P.stun = 1.5; P.pitch = -0.5; w.cool = 30; flash.style.opacity = 0.9; setTimeout(() => flash.style.opacity = 0, 180);
+        say(P.hp > 0 ? `${w.sp.name.toUpperCase()}\nit has your scent. put on speed.` : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
+        if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500); }
+    } else if (rel === 'flee' && d < 30) {
+      steerTo(w, 2 * w.pos.x - P.pos.x, 2 * w.pos.z - P.pos.z, 3); v = w.sp.max;
+    } else if (rel === 'curious' && d < 70 && w.cool <= 0) {
+      w.curT = (w.curT || 0) + dt; if (w.curT > 40) { w.cool = 60; w.curT = 0; }
+      const side = (w.ph > 3 ? 1 : -1) * 3.5, f = fwdOf(P.yaw, 0); steerTo(w, P.pos.x + f.x * 4 + Math.cos(P.yaw) * side, P.pos.z + f.z * 4 - Math.sin(P.yaw) * side, 2.5);
+      v = d > 8 ? w.sp.max * 0.7 : P.speed + 0.3; ty = P.pos.y + 0.5;
+    } else {
+      w.turn += (Math.random() - 0.5) * dt * 1.5; w.turn *= 0.985;
+      if (w.sp.zone !== 'surface' && d < 6 && w.sp.len < 2) w.turn += 3 * dt;   // small things shy away
+    }
     const ahead = fwdOf(w.yaw, 0).multiplyScalar(8).add(w.pos);
     if (floorAt(ahead.x, ahead.z) > -2.2) w.turn += 2.5 * dt;
-    if (w.sp.zone !== 'surface' && d < 6 && w.sp.len < 2) w.turn += 3 * dt;   // small things shy away
     w.yaw += w.turn * dt;
-    const f = floorAt(w.pos.x, w.pos.z), ty = THREE.MathUtils.clamp(targetY(w.sp, f, t, w.ph), f + w.sp.alt, -0.6);
+    const f = floorAt(w.pos.x, w.pos.z); if (ty === null) ty = targetY(w.sp, f, t, w.ph);
+    ty = THREE.MathUtils.clamp(ty, f + w.sp.alt, -0.6);
     const dy = ty - w.pos.y; w.pitch += (THREE.MathUtils.clamp(dy * 0.4, -0.5, 0.5) - w.pitch) * Math.min(1, 2 * dt);
-    const v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph));
     w.pos.addScaledVector(fwdOf(w.yaw, w.pitch), v * dt);
     w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, -0.5);
     w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, -w.turn * 0.5);
-    w.mesh.material.uniforms.uFlap.value = 0.8;
+    w.mesh.material.uniforms.uFlap.value = 0.6 + 0.4 * Math.min(1, v / w.sp.max);
   }
 }
 
 // mullet schools
+function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
 const fishGeo = new THREE.BufferGeometry();
 fishGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.14, 0, 0.045, 0.02, 0, -0.045, 0.02, 0, 0, 0.11, 0, 0.055, 0.17, 0, -0.055, 0.17], 3));
 fishGeo.setIndex([0, 1, 2, 1, 3, 2, 3, 4, 5]);
 const SCHOOLS = 7, FISH_PER = 55;
 const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMat({ glow: 0.8 }), SCHOOLS * FISH_PER);
 fishMesh.frustumCulled = false; scene.add(fishMesh);
-const schools = Array.from({ length: SCHOOLS }, () => ({ c: new THREE.Vector3(), dir: Math.random() * 6.28, turn: 0, v: 0.6 + Math.random() * 0.6, spread: 2.5 + Math.random() * 3,
-  fish: Array.from({ length: FISH_PER }, () => ({ off: new THREE.Vector3(Math.random() - .5, (Math.random() - .5) * 0.5, Math.random() - .5), ph: Math.random() * 6.28, w: 0.4 + Math.random() * 0.5 })) }));
+const schools = Array.from({ length: SCHOOLS }, () => ({ c: new THREE.Vector3(), dir: Math.random() * 6.28, turn: 0, v: 0.6 + Math.random() * 0.6, spread: 2.5 + Math.random() * 3, base: 0, panic: 0,
+  fish: Array.from({ length: FISH_PER }, () => ({ off: new THREE.Vector3(Math.random() - .5, (Math.random() - .5) * 0.5, Math.random() - .5), ph: Math.random() * 6.28, w: 0.4 + Math.random() * 0.5, alive: true })) }));
 
 // birds: pelican lines and gull wheels, above the surface
 const BIRDS = 90;
@@ -818,8 +846,8 @@ function stepPlayer(dt) {
   const turn = stunned ? 0 : (keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0);
   const climb = stunned ? -0.3 : (keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0);
   const want = keys.Space && !stunned ? sp.max : sp.cruise;
-  P.speed += (want - P.speed) * Math.min(1, (want > P.speed ? 1.2 : 0.6) * dt);
-  P.yawRate += (turn * sp.turn - P.yawRate) * Math.min(1, 3.5 * dt); P.yaw += P.yawRate * dt;
+  P.speed += (want - P.speed) * Math.min(1, (want > P.speed ? 3.5 : 1.2) * dt);
+  P.yawRate += (turn * sp.turn * (keys.Space ? 0.8 : 1) - P.yawRate) * Math.min(1, 9 * dt); P.yaw += P.yawRate * dt;
   // floor avoidance: look ahead and ease the nose up over rising bottom
   const ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z), fHere = floorAt(P.pos.x, P.pos.z);
   let autoPitch = fAhead + sp.alt + 0.6 > P.pos.y ? THREE.MathUtils.clamp((fAhead + sp.alt + 0.8 - P.pos.y) * 0.5, 0, 0.7) : 0;
@@ -828,7 +856,7 @@ function stepPlayer(dt) {
     autoPitch = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.25, -0.35, 0.35);
   }
   const wantPitch = climb ? climb * 0.6 : autoPitch;
-  P.pitch += (wantPitch - P.pitch) * Math.min(1, 2.5 * dt);
+  P.pitch += (wantPitch - P.pitch) * Math.min(1, (climb ? 6 : 2.5) * dt);
   P.roll += (-P.yawRate * 0.6 - P.roll) * Math.min(1, 3 * dt);
   const fwd = fwdOf(P.yaw, P.pitch), next = P.pos.clone().addScaledVector(fwd, P.speed * dt);
   if (floorAt(next.x, next.z) > -sp.alt - 0.5) { P.speed = Math.max(0.3, P.speed * 0.5); P.yaw += 0.8 * dt; } else P.pos.copy(next);
@@ -846,9 +874,9 @@ function stepCamera(dt) {
   const want = P.pos.clone().add(back).add(side);
   // keep the camera clearly on one side of the surface
   if (P.pos.y > -0.6) want.y = Math.max(want.y, 1.0 + size * 0.3); else want.y = Math.min(want.y, -0.5);
-  camPos.lerp(want, Math.min(1, 3 * dt));
+  camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3, 0)), Math.min(1, 5 * dt));
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3, 0)), Math.min(1, 8 * dt));
   camera.position.copy(camPos); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
@@ -868,13 +896,21 @@ function stepAmbient(dt, t) {
     bubbles.geometry.attributes.position.needsUpdate = true; }
   if (world.buoyMesh) { world.buoys.forEach((b, i) => { _m.makeRotationZ(Math.sin(t * 0.8 + b.ph) * 0.08); _m.setPosition(b.x, Math.sin(t * 1.1 + b.ph) * 0.2 - 0.4, b.z); world.buoyMesh.setMatrixAt(i, _m); }); world.buoyMesh.instanceMatrix.needsUpdate = true; }
   // mullet schools
+function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
   let k = 0;
   for (const s of schools) {
-    if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const a = Math.random() * 6.28, r = 25 + Math.random() * 60; s.c.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); s.c.y = Math.min(-1.5, floorAt(s.c.x, s.c.z) + 2 + Math.random() * 3); }
-    s.turn += (Math.random() - 0.5) * dt * 2; s.turn *= 0.98; s.dir += s.turn * dt; s.c.x += -Math.sin(s.dir) * s.v * dt; s.c.z += -Math.cos(s.dir) * s.v * dt;
+    if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const a = Math.random() * 6.28, r = 25 + Math.random() * 60; s.c.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); s.c.y = Math.min(-1.5, floorAt(s.c.x, s.c.z) + 2 + Math.random() * 3); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
+    const pd = s.c.distanceTo(P.pos);
+    if (pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3;   // a charge scatters the school
+    s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * 3 : s.base) - s.spread) * Math.min(1, 3 * dt);
+    if (s.panic > 0) { steerToSchool(s, 2 * s.c.x - P.pos.x, 2 * s.c.z - P.pos.z); }
+    s.turn += (Math.random() - 0.5) * dt * 2; s.turn *= 0.98; s.dir += s.turn * dt; const sv = s.v * (s.panic > 0 ? 4 : 1); s.c.x += -Math.sin(s.dir) * sv * dt; s.c.z += -Math.cos(s.dir) * sv * dt;
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
-      _m.setPosition(s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, s.c.y + fish.off.y * s.spread, s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6); fishMesh.setMatrixAt(k++, _m); }
+      const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
+      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' || P.sp.id === 'tarpon') && Math.abs(fx - P.pos.x) < 1 && Math.abs(fz - P.pos.z) < 1 && Math.abs(fy - P.pos.y) < 1) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
+      if (!fish.alive) _m.scale(new THREE.Vector3(0.001, 0.001, 0.001));
+      _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }
   fishMesh.instanceMatrix.needsUpdate = true;
   // birds
@@ -891,7 +927,7 @@ function stepAmbient(dt, t) {
 }
 function stepHud(dt) {
   const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
-  tl.textContent = `${P.sp.name}\nDEPTH ${Math.max(0, -P.pos.y).toFixed(1).padStart(5)} m\nFLOOR ${(-f).toFixed(1).padStart(5)} m\n${'♥'.repeat(P.hp)}${'·'.repeat(3 - P.hp)}\n${lat.toFixed(4)} N  ${(-lon).toFixed(4)} W${vex > 1 ? '\nDEPTH ×' + vex : ''}`;
+  tl.textContent = `${P.sp.name}\nDEPTH ${Math.max(0, -P.pos.y).toFixed(1).padStart(5)} m\nFLOOR ${(-f).toFixed(1).padStart(5)} m\n${'♥'.repeat(P.hp)}${'·'.repeat(3 - P.hp)}${P.fed ? '   FED ' + P.fed : ''}\n${lat.toFixed(4)} N  ${(-lon).toFixed(4)} W${vex > 1 ? '\nDEPTH ×' + vex : ''}`;
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }
