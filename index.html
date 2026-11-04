@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>BAY RAY</title>
+<title>BRACKISH</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
@@ -46,9 +46,9 @@
 </script>
 </head>
 <body>
-<div id="load" class="panel"><h1>BAY RAY</h1><div class="bar"><i id="bar"></i></div><p id="loadmsg">CONNECTING TO NOAA NCEI</p>
+<div id="load" class="panel"><h1>BRACKISH</h1><div class="bar"><i id="bar"></i></div><p id="loadmsg">CONNECTING TO NOAA NCEI</p>
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
-<div id="title" class="panel gone"><h1>BAY RAY</h1>
+<div id="title" class="panel gone"><h1>BRACKISH</h1>
   <p>TAMPA BAY · THE GULF · TO SCALE</p>
   <p id="titlehint">ARROWS  swim        SPACE  fast
 M  map · fast travel      TAB  creatures you have been
@@ -124,7 +124,7 @@ const START = toXZ(27.632, -82.665);
 //  DATA  —  NOAA float TIFFs + OSM bridges, cached in IndexedDB.
 // ═══════════════════════════════════════════════════════════════════
 const bar = document.getElementById('bar'), loadmsg = document.getElementById('loadmsg');
-function idb() { return new Promise((res, rej) => { const r = indexedDB.open('bayray', 1); r.onupgradeneeded = () => r.result.createObjectStore('dem'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+function idb() { return new Promise((res, rej) => { const r = indexedDB.open('brackish', 1); r.onupgradeneeded = () => r.result.createObjectStore('dem'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 async function cached(key, fetcher) {
   let db = null; try { db = await idb(); } catch { return fetcher(); }
   const hit = await new Promise(res => { const rq = db.transaction('dem').objectStore('dem').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined); });
