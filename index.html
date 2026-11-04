@@ -69,8 +69,7 @@ ENTER  begin</p><small>H for help any time</small></div>
     <b>← →</b><span>turn</span><b>↑ ↓</b><span>up · down</span>
     <b>SPACE</b><span>burst, while the dots last</span><b>TAB</b><span>become a creature you have been</span>
     <b>M</b><span>map and fast travel</span><b>ENTER</b><span>next line of the story</span>
-    <b>N</b><span>sound on · off</span><b>V</b><span>depth ×3 · true scale</span>
-    <b>− =</b><span>dot size</span><b>H</b><span>this screen</span>
+    <b>N</b><span>sound on · off</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
 sharks lose interest if you keep away.
@@ -901,9 +900,7 @@ addEventListener('keydown', e => {
     if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
   if (e.code === 'Tab') { const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) say('you have not yet become anyone else', 2); else { const i = list.indexOf(P.sp); becomeSpecies(list[(i + (e.shiftKey ? list.length - 1 : 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); } }
   if (e.code === 'Enter') story.advance();
-  if (e.code === 'KeyV') { vex = vex === 1 ? 3 : 1; demUniforms.uVex.value = vex; grassCenter.set(1e9, 1e9); }
   if (e.code === 'KeyN') toggleAudio();
-  if (e.code === 'Minus') { pitchCss = Math.max(2, pitchCss - 1); resize(); } if (e.code === 'Equal') { pitchCss = Math.min(8, pitchCss + 1); resize(); }
 });
 addEventListener('keyup', e => keys[e.code] = false);
 
@@ -1350,7 +1347,7 @@ function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz 
 function stepHud(dt) {
   const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
   const sta = P.sta ?? 1, bar = sta < 0.999 ? '   ' + '▮'.repeat(Math.round(sta * 8)) + '▯'.repeat(8 - Math.round(sta * 8)) : '';
-  tl.textContent = `${Math.max(0, -P.pos.y).toFixed(1)} m  ·  floor ${(-f).toFixed(0)} m   ${'♥'.repeat(P.hp)}${bar}${P.fed ? '  fed ' + P.fed : ''}${vex > 1 ? '  ×' + vex : ''}`;
+  tl.textContent = `${Math.max(0, -P.pos.y).toFixed(1)} m  ·  floor ${(-f).toFixed(0)} m   ${'♥'.repeat(P.hp)}${bar}${P.fed ? '  fed ' + P.fed : ''}`;
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }
