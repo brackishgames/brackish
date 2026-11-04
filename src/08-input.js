@@ -7,7 +7,7 @@ const keys = {};
 //    left stick steers, RT swims, LT eases off, A / ✕ bursts, X / □ is the ability, right stick looks around,
 //    Y / △ the map, LB the creature you have been, START pause, BACK help. Buttons go through the keyboard handler.
 const pad = { turn: 0, throttle: 0, climb: 0, burst: false, lookX: 0, lookY: 0, active: false, held: {}, sony: false, ref: null };
-const PAD_KEYS = { 0: () => (menu || mapOpen || !started) ? 'Enter' : null, 1: () => menu ? 'Escape' : helpOpen ? 'KeyH' : mapOpen ? 'KeyM' : null, 2: () => started && !menu && !mapOpen ? 'KeyE' : null,
+const PAD_KEYS = { 0: () => (menu || mapOpen || !started || photo) ? 'Enter' : null, 1: () => photo ? 'KeyO' : menu ? 'Escape' : helpOpen ? 'KeyH' : mapOpen ? 'KeyM' : null, 2: () => started && !menu && !mapOpen ? 'KeyE' : null,
   3: () => 'KeyM', 4: () => 'Tab', 8: () => 'KeyH', 9: () => 'KeyP', 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
 const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst   □ ability   R STICK look   △ map   OPTIONS pause' : 'L STICK steer   RT swim   A burst   X ability   R STICK look   Y map   START pause';
 addEventListener('gamepadconnected', e => { pad.sony = /054c|dualsense|dualshock|playstation|wireless controller/i.test(e.gamepad.id); if (started) say('CONTROLLER CONNECTED', 2); });
@@ -36,17 +36,21 @@ const aim = { yaw: null, pitch: 0, look: false, lookYaw: 0, lookPitch: 0, lookT:
 const mouseSteering = () => settings.mouseSteer && !MOBILE && document.pointerLockElement === document.documentElement;
 function lockPointer() { if (!MOBILE && settings.mouseSteer && started && !document.pointerLockElement) try { document.documentElement.requestPointerLock()?.catch?.(() => {}); } catch {} }
 addEventListener('mousemove', e => {
-  if (!started || paused) return; const s = 0.0022 * settings.mouse, dy = e.movementY * (settings.invertY ? -1 : 1);
+  if (!started || (paused && !photo)) return; const s = 0.0022 * settings.mouse, dy = e.movementY * (settings.invertY ? -1 : 1);
+  if (photo) { photo.yaw -= e.movementX * s; photo.pitch = Math.max(-1.3, Math.min(1.3, photo.pitch + dy * s)); return; }
   if (aim.look) { aim.lookYaw -= e.movementX * s; aim.lookPitch = Math.max(-0.8, Math.min(0.8, aim.lookPitch - dy * s)); aim.lookT = 0; }
   else if (mouseSteering()) { aim.yaw = (aim.yaw ?? P.yaw) - e.movementX * s; aim.pitch = Math.max(-0.9, Math.min(0.9, aim.pitch - dy * s)); }
 });
 addEventListener('mousedown', e => { if (e.button === 2 && started) aim.look = true; });
 addEventListener('mouseup', e => { if (e.button === 2) aim.look = false; });
 addEventListener('contextmenu', e => { if (started) e.preventDefault(); });
-document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && started && !menu && settings.mouseSteer && !MOBILE) openMenu('main'); });   // ESC lets the mouse go: that's a pause
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && started && !menu && settings.mouseSteer && !MOBILE) { endPhoto(); openMenu('main'); } });   // ESC lets the mouse go: that's a pause
 let mapOpen = false, mapSel = 0, helpOpen = false, started = false, paused = false;
 // ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
-let menu = null;
+let menu = null, photo = null;
+function startPhoto() { closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9 }; lockPointer(); }
+function endPhoto() { photo = null; }
+addEventListener('wheel', e => { if (photo) photo.dist = THREE.MathUtils.clamp(photo.dist * (e.deltaY > 0 ? 1.1 : 0.9), 1.2, 60); }, { passive: true });
 const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
 const onOff = v => v ? 'ON' : 'OFF';
 function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; aim.look = false; if (document.pointerLockElement) document.exitPointerLock?.(); }
@@ -55,22 +59,33 @@ function resume() { closeMenu(); if (canFull && !DEV && !isFull() && !pad.active
 function restartChapter() { closeMenu(); if (story.ch === 0) travelTo({ name: CHAPTERS[0].title, x: START[0], z: START[1] }); story.begin(story.ch); resume(); }
 function menuItems() {
   if (menu.kind === 'settings') return [
-    { label: () => 'VOLUME  ' + '◆'.repeat(settings.volume) + '·'.repeat(10 - settings.volume), adj: d => settings.volume = clampI(settings.volume + d, 0, 10) },
-    { label: () => `TURN SPEED  ${(settings.turn / 100).toFixed(1)}X`, adj: d => settings.turn = clampI(settings.turn + d * 10, 50, 150) },
+    { label: () => 'VOLUME  ' + '◆'.repeat(settings.volume) + '·'.repeat(10 - settings.volume), adj: d => settings.volume = d === 'cycle' ? (settings.volume + 1) % 11 : clampI(settings.volume + d, 0, 10) },
+    { label: () => 'AMBIENCE  ' + '◆'.repeat(settings.amb) + '·'.repeat(10 - settings.amb), adj: d => settings.amb = d === 'cycle' ? (settings.amb + 1) % 11 : clampI(settings.amb + d, 0, 10) },
+    { label: () => 'EFFECTS  ' + '◆'.repeat(settings.fx) + '·'.repeat(10 - settings.fx), adj: d => settings.fx = d === 'cycle' ? (settings.fx + 1) % 11 : clampI(settings.fx + d, 0, 10) },
+    { label: () => `SOUND CAPTIONS  ${onOff(settings.captions)}`, adj: () => settings.captions = !settings.captions },
+    { label: () => `TURN SPEED  ${(settings.turn / 100).toFixed(1)}X`, adj: d => settings.turn = d === 'cycle' ? (settings.turn >= 150 ? 50 : settings.turn + 10) : clampI(settings.turn + d * 10, 50, 150) },
     { label: () => `SCREEN SHAKE  ${onOff(settings.shake)}`, adj: () => settings.shake = !settings.shake },
     { label: () => `HIT FLASH  ${onOff(settings.flash)}`, adj: () => settings.flash = !settings.flash },
     { label: () => `MOUSE STEERING  ${onOff(settings.mouseSteer)}`, adj: () => settings.mouseSteer = !settings.mouseSteer },
-    { label: () => `MOUSE SPEED  ${settings.mouse.toFixed(1)}X`, adj: d => settings.mouse = Math.round(clampI(settings.mouse * 10 + d, 3, 30)) / 10 },
+    { label: () => `MOUSE SPEED  ${settings.mouse.toFixed(1)}X`, adj: d => settings.mouse = d === 'cycle' ? (settings.mouse >= 3 ? 0.3 : Math.round(settings.mouse * 10 + 1) / 10) : Math.round(clampI(settings.mouse * 10 + d, 3, 30)) / 10 },
     { label: () => `INVERT Y  ${onOff(settings.invertY)}`, adj: () => settings.invertY = !settings.invertY },
     { label: () => `LARGE TEXT  ${onOff(settings.bigText)}`, adj: () => settings.bigText = !settings.bigText },
     { label: () => 'SHOW TIPS AGAIN', act: () => { settings.tips = {}; say('tips will show again', 1.5); } },
     { label: () => 'BACK', act: () => { menu.kind = 'main'; menu.sel = 1; } }];
+  if (menu.kind === 'journal') return [...checkpoints.filter(c => LORE[c.name]).map(c => ({ label: () => c.name.toUpperCase(), act: () => { menu.kind = 'note'; menu.note = c.name; menu.back = menu.sel; menu.sel = 0; } })),
+    { label: () => 'BACK', act: () => { menu.kind = 'main'; menu.sel = 4; } }];
+  if (menu.kind === 'note') return [{ label: () => 'BACK', act: () => { menu.kind = 'journal'; menu.sel = menu.back || 0; } }];
+  if (menu.kind === 'confirm') return [{ label: () => 'NO, KEEP SWIMMING', act: () => { menu.kind = 'main'; menu.sel = 0; } },
+    { label: () => 'YES, START OVER', act: () => { try { localStorage.removeItem(SAVE_KEY); } catch {} location.reload(); } }];
   return [
     { label: () => 'RESUME', act: resume },
     { label: () => 'SETTINGS', act: () => { menu.kind = 'settings'; menu.sel = 0; } },
     { label: () => 'HOW TO SWIM', act: () => { closeMenu(); helpOpen = true; help.classList.remove('gone'); } },
     { label: () => 'FAST TRAVEL', act: () => { closeMenu(); toggleMap(); } },
-    { label: () => 'RESTART CHAPTER', act: restartChapter }];
+    { label: () => 'JOURNAL', act: () => { menu.kind = 'journal'; menu.sel = 0; } },
+    { label: () => 'PHOTO MODE', act: startPhoto },
+    { label: () => 'RESTART CHAPTER', act: restartChapter },
+    { label: () => 'NEW GAME', act: () => { menu.kind = 'confirm'; menu.sel = 0; } }];
 }
 function menuKey(code) {
   const items = menuItems(), it = items[menu.sel];
@@ -78,8 +93,9 @@ function menuKey(code) {
   else if (code === 'ArrowDown' || code === 'KeyS') menu.sel = (menu.sel + 1) % items.length;
   else if ((code === 'ArrowLeft' || code === 'KeyA') && it.adj) it.adj(-1);
   else if ((code === 'ArrowRight' || code === 'KeyD') && it.adj) it.adj(1);
-  else if (code === 'Enter' || code === 'Space') { if (it.act) it.act(); else if (it.adj) it.adj(1); }
-  else if (code === 'Escape' || code === 'Backspace' || code === 'KeyP') { if (menu.kind === 'settings') { menu.kind = 'main'; menu.sel = 1; } else if (code !== 'Escape' || !needFull()) resume(); }
+  else if (code === 'Enter' || code === 'Space') { if (it.act) it.act(); else if (it.adj) it.adj('cycle'); }   /* a tap or Enter steps a slider round, so touch can reach every value */
+  else if (code === 'Escape' || code === 'Backspace' || code === 'KeyP') {
+    if (menu.kind === 'note') { menu.kind = 'journal'; menu.sel = menu.back || 0; } else if (menu.kind !== 'main') { menu.kind = 'main'; menu.sel = 0; } else if (code !== 'Escape' || !needFull()) resume(); }
   saveSettings();
 }
 addEventListener('keydown', e => {
@@ -87,6 +103,8 @@ addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', 'KeyC'].includes(e.code)) e.preventDefault();
   if (started && needFull() && !menu) openMenu('main');
   if (started && menu) { menuKey(e.code); return; }
+  if (photo) { if (e.code === 'Enter') photo.shot = true; else if (['KeyO', 'Escape', 'KeyP'].includes(e.code)) endPhoto(); return; }
+  if (started && e.code === 'KeyO' && !mapOpen && !helpOpen) { startPhoto(); return; }
   if (started && (e.code === 'KeyP' || (e.code === 'Escape' && !isFull()))) { if (mapOpen) toggleMap(); if (helpOpen) { helpOpen = false; help.classList.add('gone'); } openMenu('main'); return; }
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }

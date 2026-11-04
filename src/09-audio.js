@@ -1,5 +1,5 @@
 'use strict';
-let audio = null, audioOn = true;
+let audio = null, audioOn = true, ENGINES = null, ENGINE_SHIP = null;
 // ── SOUND. No music: the bay itself. Everything is synthesized from noise and sines, scheduled on
 //    the audio clock, ramped from silence, and scaled by distance. The world is heard through a
 //    low-pass that closes with depth and opens at the surface.
@@ -17,9 +17,10 @@ function startAudio() {
   const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 3; comp.attack.value = 0.015; comp.release.value = 0.35;
   const water = ac.createBiquadFilter(); water.type = 'lowpass'; water.frequency.value = 1400; water.Q.value = 0.2;
   master.connect(water).connect(comp).connect(ac.destination);
-  audio = { ac, master, water, white: seamlessNoise(ac, 6, 0.0), brown: seamlessNoise(ac, 8, 0.985), pink: seamlessNoise(ac, 7, 0.9), nextT: {} };
+  const amb = ac.createGain(), fx = ac.createGain(); amb.connect(master); fx.connect(master);   /* the sea on one bus, everything that happens on the other */
+  audio = { ac, master: fx, fx, main: master, amb, water, white: seamlessNoise(ac, 6, 0.0), brown: seamlessNoise(ac, 8, 0.985), pink: seamlessNoise(ac, 7, 0.9), nextT: {} };
   const bed = (buf, type, freq, q, g) => { const src = ac.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = 0.9 + Math.random() * 0.2; const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
-    const gg = ac.createGain(); gg.gain.value = g; src.connect(f).connect(gg).connect(master); src.start(); return { f, g: gg, src }; };
+    const gg = ac.createGain(); gg.gain.value = g; src.connect(f).connect(gg).connect(amb); src.start(); return { f, g: gg, src }; };
   const lfo = (target, hz, depth, type = 'sine') => { const o = ac.createOscillator(); o.type = type; o.frequency.value = hz; const g = ac.createGain(); g.gain.value = depth; o.connect(g).connect(target); o.start(); return o; };
   // the ocean: a broad noise bed that swells like a slow sea, darker with depth
   audio.sea = bed(audio.brown, 'lowpass', 220, 0.3, 0.45); lfo(audio.sea.g.gain, 0.07, 0.12); lfo(audio.sea.f.frequency, 0.045, 60);
@@ -34,15 +35,16 @@ function startAudio() {
   //   ship: a slow five-blade prop, a thrum you feel at seven beats a second, heard for kilometres
   //   cruiser, skiff: fast small props, a whine of a hundred-odd hertz and a lot of hiss, heard for a few hundred metres
   //   gig skiff: no engine at all, or a trolling motor's thin electric whine you only hear close
-  const ENGINE = { ship: { tone: 26, wave: 'triangle', blade: 7, hiss: 700, range: 1500, g: 0.55 }, cruiser: { tone: 78, wave: 'sawtooth', blade: 13, hiss: 1800, range: 420, g: 0.3 },
+  const ENGINE = ENGINES = { ship: { tone: 26, wave: 'triangle', blade: 7, hiss: 700, range: 1500, g: 0.55 }, cruiser: { tone: 78, wave: 'sawtooth', blade: 13, hiss: 1800, range: 420, g: 0.3 },
     skiff: { tone: 128, wave: 'sawtooth', blade: 21, hiss: 2800, range: 320, g: 0.26 }, troll: { tone: 820, wave: 'sine', blade: 0, hiss: 0, range: 45, g: 0.05 } };
-  const voice = (src, kind) => { const e = ENGINE[kind], out = ac.createGain(); out.gain.value = 0; const pan = ac.createStereoPanner ? ac.createStereoPanner() : null; (pan ? (out.connect(pan), pan) : out).connect(master);
+  const voice = (src, kind) => { const e = ENGINE[kind], out = ac.createGain(); out.gain.value = 0; const pan = ac.createStereoPanner ? ac.createStereoPanner() : null; (pan ? (out.connect(pan), pan) : out).connect(fx);
     const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150; lp.Q.value = 0.9; lp.connect(out);
     const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.type = o2.type = e.wave; o1.frequency.value = o2.frequency.value = e.tone; o2.detune.value = 11;
     const body = ac.createGain(); body.gain.value = 0.6; o1.connect(body); o2.connect(body); body.connect(lp);
     let hiss = null; if (e.hiss) { const n = ac.createBufferSource(); n.buffer = audio.white; n.loop = true; const hf = ac.createBiquadFilter(); hf.type = 'bandpass'; hf.frequency.value = e.hiss; hf.Q.value = 0.7; hiss = ac.createGain(); hiss.gain.value = 0.18; n.connect(hf).connect(hiss).connect(out); n.start(); }
     if (e.blade) { const b = ac.createOscillator(); b.frequency.value = e.blade * (0.95 + Math.random() * 0.1); const bd = ac.createGain(); bd.gain.value = 0.45; b.connect(bd).connect(body.gain); if (hiss) { const bh = ac.createGain(); bh.gain.value = 0.15; b.connect(bh).connect(hiss.gain); } b.start(); }
     o1.start(); o2.start(); return { src, e, out, pan, lp, o1, o2 }; };
+  ENGINE_SHIP = ENGINE.ship;
   audio.engines = [...boats.map(b => voice(b, b.type === BOAT_TYPES.ship ? 'ship' : b.type === BOAT_TYPES.cruiser ? 'cruiser' : 'skiff')), voice(gig, 'troll')];
   audio.heartNext = 0; audio.nextT.omen = ac.currentTime + 35;
   master.gain.setTargetAtTime(masterLevel(), ac.currentTime, 2.5); audio.level = masterLevel();
@@ -62,7 +64,7 @@ function panAt(x, z) {   // -1 left .. 1 right of where you are looking, narrowe
   camera.getWorldDirection(_ear); const dx = x - camPos.x, dz = z - camPos.z, d = Math.hypot(dx, dz) || 1, side = (dx * -_ear.z + dz * _ear.x) / (d * (Math.hypot(_ear.x, _ear.z) || 1));
   return THREE.MathUtils.clamp(side * (0.2 + 0.8 * THREE.MathUtils.smoothstep(40 - d, 0, 35)), -1, 1);
 }
-function stab(x, z) {   // a gig going in: the plunk of the shaft, the hiss of its wake
+function stab(x, z) { caption('stab', 'GIG', x, z);   // a gig going in: the plunk of the shaft, the hiss of its wake
   const p = panAt(x, z); burst({ buf: 'white', type: 'bandpass', f0: 1800, f1: 3000, f2: 900, q: 1.2, attack: 0.005, length: 0.18, g: 0.35, pan: p });
   burst({ buf: 'pink', type: 'bandpass', f0: 600, f1: 1400, f2: 300, q: 0.9, attack: 0.02, length: 0.6, g: 0.3, when: 0.03, pan: p });
 }
@@ -70,10 +72,13 @@ function blow(sharp) {   // a breath at the surface: the blowhole's crack and th
   burst({ buf: 'white', type: 'highpass', f0: 1800, f1: 2400, f2: 1200, q: 0.5, attack: 0.01, length: sharp ? 0.35 : 0.6, g: sharp ? 0.32 : 0.18 });
   burst({ buf: 'pink', type: 'bandpass', f0: 500, f1: 900, f2: 700, q: 0.7, attack: 0.25, length: 0.9, g: 0.12, when: sharp ? 0.35 : 0.55 });
 }
-function whump(x, z, k = 1) {   // a big body moving water right beside you: felt as much as heard
+const captions = new Map();
+const captionsOn = () => settings.captions || settings.volume === 0;
+function caption(key, text, x, z, secs = 1.5) { if (captionsOn()) captions.set(key, { text, x, z, until: performance.now() + secs * 1000 }); }
+function whump(x, z, k = 1) { caption('whump', 'WATER MOVES', x, z);   // a big body moving water right beside you: felt as much as heard
   burst({ buf: 'brown', type: 'lowpass', f0: 160, f1: 110, f2: 40, q: 0.7, attack: 0.05, length: 0.9, g: 0.55 * k, pan: panAt(x, z) });
 }
-function flush(x, z, k = 1) {   // a school bolting: a hundred tails at once
+function flush(x, z, k = 1) { caption('flush', 'SCHOOL BOLTS', x, z);   // a school bolting: a hundred tails at once
   burst({ buf: 'pink', type: 'bandpass', f0: 700, f1: 2200, f2: 500, q: 0.6, attack: 0.04, length: 0.7, g: 0.28 * k, pan: panAt(x, z) });
 }
 function whoosh(k = 1) { burst({ f0: 400, f1: 1600, f2: 300, attack: 0.12, length: 1.0, g: 0.45 * k }); }
@@ -152,7 +157,9 @@ function creak() {   // steel under load: a wreck, a piling
   burst({ buf: 'brown', type: 'bandpass', f0: 520, f1: 470, f2: 400, q: 12, attack: 0.3, length: 1.6, g: 0.12, when: 0.5 });
 }
 const masterLevel = () => audioOn ? 0.5 * settings.volume / 10 * (paused ? 0.35 : 1) : 0;
-function stepVolume() { if (!audio) return; const v = masterLevel(); if (Math.abs(v - (audio.level ?? -1)) > 1e-3) { audio.level = v; audio.master.gain.setTargetAtTime(v, now(), 0.25); } }
+function stepVolume() { if (!audio) return; const v = masterLevel(), mix = settings.amb * 100 + settings.fx;
+  if (Math.abs(v - (audio.level ?? -1)) > 1e-3) { audio.level = v; audio.main.gain.setTargetAtTime(v, now(), 0.25); }
+  if (mix !== audio.mix) { audio.mix = mix; audio.amb.gain.setTargetAtTime(settings.amb / 10, now(), 0.1); audio.fx.gain.setTargetAtTime(settings.fx / 10, now(), 0.1); } }
 const every = (key, secs, fn) => { const t = now(); if (!audio.nextT[key] || t > audio.nextT[key]) { audio.nextT[key] = t + secs; fn(); } };
 function stepAudio(above) {
   if (!audio) return; const t = now(), depth = Math.max(0, -P.pos.y), k = 0.25, nearSurf = THREE.MathUtils.clamp(1 - depth / 2.5, 0, 1);
@@ -182,6 +189,7 @@ function stepAudio(above) {
   P.wash = Math.max(0, (P.wash || 0) - 0.02); audio.tick = (audio.tick || 0) + 1;
   if (audio.tick % 4 === 0) for (const v of audio.engines) {   // fifteen times a second is plenty for an engine
     const on = v.src === gig ? gig.on : true, d = v.src.pos.distanceTo(P.pos), n = on ? THREE.MathUtils.clamp(1 - d / v.e.range, 0, 1) : 0;
+    if (n > 0.3) caption('eng' + audio.engines.indexOf(v), v.src === gig ? 'MOTOR' : v.e === ENGINE_SHIP ? 'SHIP' : 'ENGINE', v.src.pos.x, v.src.pos.z, 0.6);
     if (d < 120 && P.pos.y > -4 && v.src !== gig && started) tip('dive', () => `${kn('dive')} dives. a hull only reaches the top few metres.`);
     v.out.gain.setTargetAtTime(n * n * v.e.g * (above ? 0.6 : 1) * (1 + 0.8 * (P.wash || 0) * n), t, k);   // in air the hull hides the prop
     v.lp.frequency.setTargetAtTime(120 + 2600 * n * n * n, t, 0.3);
@@ -194,7 +202,7 @@ function stepAudio(above) {
     if (w.sp.id === 'manatee' && d < 22) every('manatee' + w.id, 2 + Math.random() * 6, () => squeak(d)); }
   if (above) for (const fl of flocks) { const d = fl.c.distanceTo(P.pos); if (d < 220 && fl.kind === 'wheel') every('gull' + fl.ph, 1.5 + Math.random() * 5, () => gull(d)); }
   for (const bu of world.buoys) { const d = Math.hypot(bu.x - P.pos.x, bu.z - P.pos.z); if (d < 18) every('buoy' + bu.ph, 2 + Math.random() * 4, () => clank(d)); }
-  if (!above && depth > 4) every('omen', 30 + Math.random() * 45, () => (lastFloor < -12 || Math.random() < 0.4) ? groan() : creak());
+  if (!above && depth > 4) every('omen', 30 + Math.random() * 45, () => { caption('omen', 'SOMETHING GROANS', camPos.x, camPos.z, 2.5); (lastFloor < -12 || Math.random() < 0.4) ? groan() : creak(); });
   // hunted: a heartbeat
   const hunterW = wild.find(w => w.hunting); if (hunterW && t > audio.heartNext) { audio.heartNext = t + (hunterW.lunge && hunterW.lunge.phase !== 'stalk' ? 0.42 : 0.75); for (const [dl, g] of [[0, 0.5], [0.16, 0.32]]) oneShot((ac, tt) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(58, tt); o.frequency.exponentialRampToValueAtTime(36, tt + 0.12); const gg = ac.createGain(); gg.gain.setValueAtTime(0, tt); gg.gain.linearRampToValueAtTime(g, tt + 0.015); gg.gain.exponentialRampToValueAtTime(0.0005, tt + 0.22); o.connect(gg).connect(audio.master); o.start(tt); o.stop(tt + 0.25); }, dl); }
 }

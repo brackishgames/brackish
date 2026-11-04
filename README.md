@@ -22,10 +22,13 @@ West Indian manatee, each moving at the real animal's speed. You start as the ra
 last chapter you can swim anywhere as any of them. Sharks hunt a ray on its own; the fever hides you. Ships shove you aside with their bow wave
 and churn the water for ninety metres behind them. The tide runs through the pass. The sun comes up.
 
-Press Enter or click and the game goes full screen; leave full screen, or press P, to pause. W and S swim forward and back, A and D turn, Space rises and C dives (the arrow keys work too). Shift is a
-burst of speed. E is your animal's ability: a ray senses the electric field of clams buried in the sand, a
-dolphin echolocates, a shark strikes, a manatee takes a breath. A gamepad works too. Tab cycles the creatures you have already been, M opens the map for fast travel between places
-you've found, and H shows the help. On a phone, drag anywhere to swim and use the round buttons.
+Press Enter or click and the game goes full screen and takes the mouse. Move the mouse to steer, W and S swim forward and
+back, Space rises and C dives (A and D and the arrows steer too), and hold the right button to look around. Shift is a burst.
+E is your animal's ability: a ray senses the electric field of clams buried in the sand, a dolphin echolocates, a shark
+strikes, a manatee takes a breath. Tab cycles the creatures you have been, M opens the map, O is photo mode, H the help,
+and Esc or P pauses (settings, the journal of places you've found, new game). A controller works over USB or Bluetooth:
+left stick steers, RT swims, A bursts, X is the ability, the right stick looks around. On a phone, drag anywhere to swim
+and use the round buttons.
 
 To run it locally, open `index.html` in Chrome. There is no build step. three.js loads from a CDN.
 Every push to `main` deploys the site through the workflow in `.github/workflows`.

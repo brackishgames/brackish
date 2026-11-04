@@ -46,6 +46,7 @@ tbtn('tBurst', el => { keys.ShiftLeft = true; el.classList.add('on'); }, el => {
 tbtn('tAct', () => { if (started) act(); });
 tbtn('tMap', () => { if (started) toggleMap(); });
 tbtn('tCreature', () => { if (started) cycleCreature(1); });
+tbtn('tPause', () => { if (started && !menu) openMenu('main'); });
 mapEl.addEventListener('pointerdown', e => { e.stopPropagation(); const li = e.target.closest('li'); if (li) { const i = [...li.parentNode.children].indexOf(li); travelTo(checkpoints[i]); } toggleMap(); });
 help.addEventListener('pointerdown', e => { e.stopPropagation(); helpOpen = false; help.classList.add('gone'); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; touch.turn = touch.climb = 0; } });

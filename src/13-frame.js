@@ -96,7 +96,18 @@ function stepPlayer(dt) {
   if (P.speed > sp.cruise * 1.3) for (let i = 0; i < 2; i++) if (Math.random() < 0.5) emitBubble(P.pos.x + (Math.random() - .5) * (sp.span ?? sp.len) * 0.8, P.pos.y - 0.1, P.pos.z + 0.3);
   else if (Math.random() < 0.04) emitBubble(P.pos.x, P.pos.y, P.pos.z);
 }
+function stepPhotoCam(dt) {   // photo mode: orbit and zoom around the body; keys, sticks, mouse and wheel all work
+  const k = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0), z = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0), u = (keys.Space ? 1 : 0) - (keys.KeyC ? 1 : 0);
+  photo.yaw += (k * 1.2 - pad.lookX * 1.6 - pad.turn * 1.2) * dt; photo.pitch = THREE.MathUtils.clamp(photo.pitch + (u * 0.9 + pad.lookY * 1.2) * dt, -1.3, 1.3);
+  photo.dist = THREE.MathUtils.clamp(photo.dist * (1 + (z - pad.climb) * dt), 1.2, 60); photo.t += dt;
+  camPos.set(P.pos.x + Math.sin(photo.yaw) * Math.cos(photo.pitch) * photo.dist, P.pos.y + Math.sin(photo.pitch) * photo.dist, P.pos.z + Math.cos(photo.yaw) * Math.cos(photo.pitch) * photo.dist);
+  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.3);
+  camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(P.pos);
+  above = camPos.y > 0; aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
+  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+}
 function stepCamera(dt) {
+  if (photo) { stepPhotoCam(dt); return; }
   const size = P.mesh.userData.size, dist = 2.4 + size * 2.5 + P.speed * 0.12, h = 1.0 + size * 0.6;
   P.idleCam = (keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const drift = started ? Math.sin(WU.uTime.value * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(WU.uTime.value * 0.07) * 0.5;
@@ -188,7 +199,7 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t; stepStrokes(dt);
   stepQuality(); pollPad(); if (started && needFull() && !menu) openMenu('main');
-  paused = started && (mapOpen || helpOpen || !!menu || needFull());   // a real pause: sharks, boats and lights wait too
+  paused = started && (mapOpen || helpOpen || !!menu || !!photo || needFull());   // a real pause: sharks, boats and lights wait too
   stepVolume(); stepTips();
   if (started && !paused) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
@@ -199,6 +210,7 @@ function frame() {
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
   stepCamera(dt); stepLogo(dt); stepGoalBeam(t); if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); } stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
+  if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; renderer.domElement.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `brackish-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }, 'image/png'); }   /* the frame just drawn, before it is cleared */
 }
 
 // seagrass (instanced blades in the shallows)

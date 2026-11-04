@@ -82,6 +82,7 @@
   #tAct { right: calc(124px + env(safe-area-inset-right)); bottom: calc(34px + env(safe-area-inset-bottom)); width: 64px; height: 64px; }
   #tMap { right: calc(20px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; }
   #tCreature { right: calc(76px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; font-size: 16px; }
+  #tPause { right: calc(132px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; }
   #stick { position: fixed; z-index: 6; width: 112px; height: 112px; margin: -56px 0 0 -56px; border: 1px solid #e8f1ff33; border-radius: 50%; display: none; pointer-events: none; }
   #stick i { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: #e8f1ff1f; border: 1px solid #e8f1ff66; }
   .restart { margin-top: 18px; padding: 8px 16px; border: 1px solid #e8f1ff44; border-radius: 3px; }
@@ -118,7 +119,7 @@
     <b>MOUSE</b><span>steer · hold right button to look</span><b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
     <b>SPACE C</b><span>rise · dive · arrows too</span>
     <b>SHIFT</b><span>burst, while the dots last</span><b>E</b><span>sense or echo: finds buried clams</span><b>TAB</b><span>become a creature you have been</span>
-    <b>M P H</b><span>map · pause · this screen</span>
+    <b>M P O H</b><span>map · pause · photo · this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
 clams give a heart back. shrimp refill the burst.
@@ -134,7 +135,7 @@ dolphins and manatees need air.</p><small>H to close</small></div>
 <div id="story"></div>
 <canvas id="mini" width="180" height="180"></canvas>
 <div id="flash"></div>
-<div id="touch"><div id="stick"><i></i></div><div class="tbtn" id="tBurst">BURST</div><div class="tbtn" id="tAct">ACT</div><div class="tbtn" id="tMap">MAP</div><div class="tbtn" id="tCreature">⇄</div></div>
+<div id="touch"><div id="stick"><i></i></div><div class="tbtn" id="tBurst">BURST</div><div class="tbtn" id="tAct">ACT</div><div class="tbtn" id="tMap">MAP</div><div class="tbtn" id="tCreature">⇄</div><div class="tbtn" id="tPause">II</div></div>
 <div id="fade"></div>
 <div id="chapter"></div>
 <script type="module">

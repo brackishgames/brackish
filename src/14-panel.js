@@ -60,6 +60,12 @@ function drawPanel() {
     if (/ERROR|UNREACHABLE/.test(loadmsg.textContent)) wrap(loadmsg.textContent, cols).forEach((l, i) => pText(l, cx, by + 6 + i * 10, 200 * oLoad, 'center'));
     panel.tex.needsUpdate = true; return;
   }
+  if (photo) {   // photo mode: the bay and nothing else
+    dotPass.uniforms.uDim.value = 0; const hint = Math.max(0, Math.min(1, 4 - photo.t)), saved = Math.max(0, 1.5 - (photo.t - photo.savedT));
+    if (hint > 0) pText(pad.active ? 'STICKS ORBIT · A SAVE · B EXIT' : 'MOUSE ORBIT · WHEEL ZOOM · ENTER SAVE · O EXIT', cx, H - 12, 150 * hint, 'center');
+    if (saved > 0) pText('SAVED TO DOWNLOADS', cx, 6, 200 * Math.min(1, saved), 'center');
+    panel.tex.needsUpdate = true; return;
+  }
   if (oTitle > 0.01) {   // title text, under the bubble logo
     const ps = [$('titlehint'), $('restart')].filter(el => el && el.style.display !== 'none');   // the title is the logo and one prompt
     let y = Math.round(H * 0.6);
@@ -67,7 +73,7 @@ function drawPanel() {
       for (const l of wrap(el.textContent, cols)) { pText(l, cx, y, (small ? 120 : 215) * o, 'center'); y += 10; } y += 5; }
   }
   { const urgent = huntHeat > 0 || (P.air ?? 1) < 0.999 || P.hp < 3 || P.lit || opa(warn) > 0.01 || (P.sta ?? 1) < 0.999 || t - (story.beganAt || 0) < 20;
-    if (urgent) hudWakeT = t; const quiet = t - hudWakeT; hudGain += ((quiet > 10 ? 0.22 : 1) - hudGain) * Math.min(1, fadeDt * (quiet > 10 ? 0.4 : 4)); }   // quiet water, quiet screen
+    if (urgent) hudWakeT = t; const quiet = t - hudWakeT; hudGain += ((quiet > 10 ? 0.4 : 1) - hudGain) * Math.min(1, fadeDt * (quiet > 10 ? 0.4 : 4)); }   // quiet water, quiet screen
   if (document.body.classList.contains('playing') && !mapOpen && !menu && oHelp < 0.05) {   // HUD, inset clear of notches and rounded corners
     pGain = hudGain;
     pText(tl.textContent, SL, ST + 2, 230, 'left', 1, true); pText(tr.textContent, W - SL, ST + 2, 180, 'right', 1, true);
@@ -100,10 +106,14 @@ function drawPanel() {
       for (let k = 2; k <= 4; k++) pDot(mx + px2 + 0.5 + hx * k, my + py2 + 0.5 + hz * k, 200);
       const L = Bay.live; if (L.ok) { const kt = (_cur.length() * 1.944).toFixed(1), tide = L.level != null ? (L.level >= 0 ? '+' : '') + L.level.toFixed(1) + 'M' + (L.rising == null ? '' : L.rising ? '▲' : '▼') : '';
         pText('NOAA LIVE', mx + MS, my - 20, 150, 'right', 1, true); pText([tide, L.temp != null ? L.temp.toFixed(0) + '°C' : ''].filter(Boolean).join(' '), mx + MS, my - 14, 190, 'right', 1, true); pText(kt + 'KT', mx + MS, my - 8, 160, 'right', 1, true); } }
+    if (captions.size) { pGain = 1; const nowMs = performance.now(), sides = { l: 0, r: 0, c: 0 };   /* what you'd hear, shown on the side it came from */
+      for (const [k, c] of captions) { const left = c.until - nowMs; if (left <= 0) { captions.delete(k); continue; } const side = panAt(c.x, c.z), s = side < -0.3 ? 'l' : side > 0.3 ? 'r' : 'c', v = 170 * Math.min(1, left / 400);
+        if (s === 'l') pText('◄ ' + c.text, SL, Math.round(H * 0.42) + 10 * sides.l++, v, 'left', 1, true); else if (s === 'r') pText(c.text + ' ►', W - SL, Math.round(H * 0.42) + 10 * sides.r++, v, 'right', 1, true); else pText(c.text, cx, ST + 30 + 8 * sides.c++, v, 'center', 1, true); }
+      pGain = hudGain; }
     const ob = opa(bl); if (ob > 0.01 && W > 120) pText(bl.textContent, SL, H - 7 - SB, 120 * ob, 'left', 1, true);
     if (document.body.classList.contains('touch')) {
-      for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
-        pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tAct: '◆', tMap: 'M', tCreature: '⇄' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
+      for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature', 'tPause']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
+        pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tAct: '◆', tMap: 'M', tCreature: '⇄', tPause: 'II' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
       pGain = 1;
       if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
     }
@@ -126,9 +136,13 @@ function drawPanel() {
     pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, y + 6, 110 * oHelp, 'center');
   }
   if (menu && !oHelp && !oMap) {   // paused
-    const sc = W > 160 ? 2 : 1, items = menuItems(); let y = Math.round(H * 0.26);
-    pText(menu.kind === 'settings' ? 'SETTINGS' : 'PAUSED', cx, y, 240, 'center', sc); y += 7 * sc + 14; menu.rows = [];
-    items.forEach((it, i) => { const on = i === menu.sel; pText((on ? '► ' : '  ') + it.label() + (on ? ' ◄' : '  '), cx, y, on ? 255 : 150, 'center'); menu.rows.push([y - 2, y + 8]); y += 12; });
+    const sc = W > 160 && H > 130 ? 2 : 1, items = menuItems(), TITLE = { settings: 'SETTINGS', journal: 'JOURNAL', confirm: 'START OVER?', note: (menu.note || '').toUpperCase() }[menu.kind] || 'PAUSED';
+    const note = menu.kind === 'note' ? wrap(LORE[menu.note] || '', Math.min(cols, 60)) : menu.kind === 'confirm' ? ['your progress here will be wiped.'] : [];
+    const fit = Math.max(3, Math.floor((H - 7 * sc - 40 - note.length * 10) / 12)), first = Math.max(0, Math.min(menu.sel - (fit >> 1), items.length - fit));   /* long lists scroll with the selection */
+    let y = Math.max(4, Math.round((H - (7 * sc + 14 + note.length * 10 + Math.min(fit, items.length) * 12 + 20)) / 2));
+    pText(TITLE, cx, y, 240, 'center', sc); y += 7 * sc + 14; menu.rows = [];
+    for (const l of note) { pText(l, cx, y, 190, 'center'); y += 10; } if (note.length) y += 8;
+    items.forEach((it, i) => { if (i < first || i >= first + fit) { menu.rows.push([-99, -99]); return; } const on = i === menu.sel; pText((on ? '► ' : '  ') + it.label() + (on ? ' ◄' : '  '), cx, y, on ? 255 : 150, 'center'); menu.rows.push([y - 2, y + 8]); y += 12; });
     pText(pad.active ? 'A CHOOSE   ◄ ► CHANGE   B BACK' : 'ENTER OR CLICK TO CHOOSE   ◄ ► CHANGE   ESC BACK', cx, y + 8, 110, 'center');
     panel.tex.needsUpdate = true; return;
   }

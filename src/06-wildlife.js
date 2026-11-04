@@ -110,7 +110,7 @@ function stepWild(dt, t) {
       const f = fwdOf(w.hd, 0), sx = P.pos.x + f.x * ahead + Math.cos(w.hd) * side, sz = P.pos.z + f.z * ahead - Math.sin(w.hd) * side; steerTo(w, sx, sz, w.sp.turn);
       const along = (sx - w.pos.x) * -Math.sin(w.yaw) + (sz - w.pos.z) * -Math.cos(w.yaw);   // how far its place is ahead of it
       v = d > 8 ? w.sp.max * 0.7 : THREE.MathUtils.clamp(P.speed + along * 0.5, w.sp.cruise * 0.4, w.sp.max * 0.9); ty = P.pos.y + 0.5 + (((w.ph * 5.17) % 1) - 0.5) * 3;
-      w.clickT = (w.clickT || 0) - dt; if (w.clickT <= 0 && d < 25) { w.clickT = 1.2 + Math.random() * 2.5; for (let n = 0; n < 2 + Math.random() * 5; n++) setTimeout(() => click(d), n * 35); }
+      w.clickT = (w.clickT || 0) - dt; if (w.clickT <= 0 && d < 25) { w.clickT = 1.2 + Math.random() * 2.5; caption('click' + w.id, 'CLICKS', w.pos.x, w.pos.z, 1.2); for (let n = 0; n < 2 + Math.random() * 5; n++) setTimeout(() => click(d), n * 35); }
     } else {
       w.wT = (w.wT || 0) - dt; if (w.wT <= 0) { w.wT = 1.5 + Math.random() * 3; w.turnGoal = (Math.random() - 0.5) * 0.8; }
       w.turn += ((w.turnGoal || 0) - w.turn) * Math.min(1, 1.2 * dt);
