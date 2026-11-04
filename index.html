@@ -297,13 +297,13 @@ function updateClipmap(px, pz) { for (const m of clipLevels) { const s = m.mater
 const sky = new THREE.Mesh(new THREE.SphereGeometry(25000, 24, 12), mat({ side: THREE.BackSide, depthWrite: false,
   vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: GLSL_COMMON + `varying vec3 vDir;
-    void main(){ float h = max(vDir.y, 0.0); float b = mix(0.30, 0.04, pow(h, 0.45));
+    void main(){ float h = max(vDir.y, 0.0); float b = mix(0.34, 0.10, pow(h, 0.5));
       b += 0.5 * pow(max(dot(vDir, normalize(vec3(-0.7, 0.12, -0.3))), 0.0), 90.0);
       b = mix(b, uFogB, step(uFogB, 0.001));   // under water the sky is black
       gl_FragColor = vec4(vec3(b), 1.0); }` }));
 sky.frustumCulled = false; scene.add(sky);
 
-const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 48), mat({ side: THREE.DoubleSide,
+const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 48), mat({ side: THREE.DoubleSide, transparent: true,
   vertexShader: GLSL_COMMON + `varying vec3 vW;
     void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
   fragmentShader: GLSL_COMMON + `varying vec3 vW;
@@ -311,12 +311,14 @@ const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 48), ma
       float vD = length(cameraPosition - vW);
       float a = sin(vW.x * 0.45 + uTime * 0.9) * sin(vW.z * 0.38 - uTime * 0.7);
       float c = sin(vW.x * 0.11 - vW.z * 0.13 + uTime * 0.35);
-      float p = 0.5 + 0.5 * (a * 0.7 + c * 0.3), b;
-      if (gl_FrontFacing) {   // seen from the air: dark water, sparkle, brighter toward the horizon
+      float p = 0.5 + 0.5 * (a * 0.7 + c * 0.3), b, alpha = 1.0;
+      if (gl_FrontFacing) {   // seen from the air: dark glassy water you can see into, sparkle toward the horizon
         vec3 v = normalize(cameraPosition - vW); float g = 1.0 - max(v.y, 0.0);
-        b = 0.09 + 0.18 * g * g + 0.6 * pow(p, 7.0) * (0.4 + 0.6 * g);
+        float s2 = sin(vW.x * 1.7 + uTime * 1.3) * sin(vW.z * 1.4 - uTime * 1.1);
+        b = 0.07 + 0.16 * g * g + 0.35 * pow(max(s2, 0.0), 6.0) * (0.3 + 0.7 * g) + 0.15 * pow(p, 4.0) * g;
+        alpha = 0.45 + 0.5 * g * g;
       } else b = 0.14 + 0.6 * pow(p, 5.0);
-      gl_FragColor = vec4(vec3(applyFog(b, vD)), 1.0);
+      gl_FragColor = vec4(vec3(applyFog(b, vD)), alpha);
     }` }));
 surface.rotation.x = -Math.PI / 2; surface.frustumCulled = false; scene.add(surface);
 
@@ -745,9 +747,10 @@ function drawCompass(landmarks) {
   for (let d = -60; d <= 60; d += 5) { const deg = ((Math.round(hdg / 5) * 5 + d) % 360 + 360) % 360, x = W / 2 + (deg - hdg + 540) % 360 * pxPerDeg - 180 * pxPerDeg;
     if (x < 0 || x > W) continue; const major = deg % 30 === 0; cctx.beginPath(); cctx.moveTo(x, 28); cctx.lineTo(x, major ? 40 : 34); cctx.stroke();
     if (major) cctx.fillText({ 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[deg] ?? deg, x, 50); }
-  for (const lm of landmarks) { const rel = ((lm.bearing - hdg + 540) % 360) - 180; if (Math.abs(rel) > 60) continue; const x = W / 2 + rel * pxPerDeg;
+  const shown = landmarks.filter(l => l.goal).concat(landmarks.filter(l => !l.goal).sort((a, b) => a.dist - b.dist).slice(0, 5)); let row = 0;
+  for (const lm of shown) { const rel = ((lm.bearing - hdg + 540) % 360) - 180; if (Math.abs(rel) > 60) continue; const x = W / 2 + rel * pxPerDeg; const ly = lm.goal ? 27 : (row++ % 2 ? 12 : 22);
     cctx.fillStyle = lm.goal ? '#fff' : '#ffb000'; cctx.beginPath(); if (lm.goal) { cctx.moveTo(x, 4); cctx.lineTo(x + 5, 11); cctx.lineTo(x, 18); cctx.lineTo(x - 5, 11); } else { cctx.moveTo(x, 14); cctx.lineTo(x + 4, 20); cctx.lineTo(x - 4, 20); } cctx.fill();
-    cctx.font = lm.goal ? '11px "Courier New"' : '9px "Courier New"'; cctx.fillText(lm.name.toUpperCase() + (lm.dist > 500 ? ' ' + (lm.dist / 1000).toFixed(1) + 'KM' : ''), x, lm.goal ? 27 : 12); cctx.font = '11px "Courier New"'; }
+    cctx.font = lm.goal ? '11px "Courier New"' : '9px "Courier New"'; cctx.fillText(lm.name.toUpperCase() + (lm.dist > 500 ? ' ' + (lm.dist / 1000).toFixed(1) + 'KM' : ''), x, ly); cctx.font = '11px "Courier New"'; }
   cctx.fillStyle = '#fff'; cctx.fillRect(W / 2 - 1, 26, 2, 16);
 }
 const headingDeg = () => ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
@@ -880,7 +883,7 @@ function stepHud(dt) {
   warn.textContent = danger ? `▲ ${b.type.name} · ${Math.round(d)} m · DIVE` : ''; warn.style.opacity = danger ? 1 : 0;
   const landmarks = [];
   if (story.goal) landmarks.push({ name: 'goal', bearing: bearingTo(...story.goal), dist: Math.hypot(story.goal[0] - P.pos.x, story.goal[1] - P.pos.z), goal: true });
-  for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 12000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
+  for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 8000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
   drawCompass(landmarks);
   if (sayTimer > 0) { sayTimer -= dt; if (sayTimer <= 0) storyEl.style.opacity = 0; }
   if (miniImg) drawMap(mctx, miniImg, 180, false);
