@@ -61,7 +61,7 @@
 <div id="load" class="panel"><h1>BRACKISH</h1><div class="bar"><i id="bar"></i></div><p id="loadmsg">CONNECTING TO NOAA NCEI</p>
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
-  <p>TAMPA BAY · THE GULF · TO SCALE</p>
+  <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
   <p id="titlehint">ARROWS  swim        SPACE  burst
 M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small></div>
@@ -225,8 +225,8 @@ const DotShader = {
       float mask = 1.0 - smoothstep(r - 0.3, r + 0.05, d);
       vec3 unlit = vec3(0.004, 0.010, 0.028) * (1.0 - smoothstep(0.7, 0.95, d));
       vec3 col = palette(b) * mask;
-      if (am > 0.03) { float ra = 0.5 + 0.45 * am, ma = 1.0 - smoothstep(ra - 0.3, ra + 0.05, d); col = mix(col, vec3(0.92, 0.97, 1.0) * (0.6 + 0.4 * am), ma); }
-      vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = 1.0 - 0.45 * smoothstep(0.25, 0.75, length(vc));
+      if (am > 0.03) { float ra = 0.5 + 0.45 * am, ma = 1.0 - smoothstep(ra - 0.3, ra + 0.05, d); col = mix(col, vec3(0.72, 0.84, 1.0) * (0.42 + 0.38 * am), ma); }
+      vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = 1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc));
       gl_FragColor = vec4((col + unlit) * vig, 1.0);
     }`,
 };
@@ -253,7 +253,7 @@ const GLSL_COMMON = /* glsl */`
   uniform float uTime, uFogD, uFogB, uSun; uniform vec3 uSunDir;
   float fogF(float d) { float k = d * uFogD; return 1.0 - exp(-k * k); }
   float applyFog(float b, float d) { return mix(b, uFogB, fogF(d)); }
-  float depthLight(float y) { return exp(min(y, 0.0) * 0.045) * (0.12 + 0.88 * uSun + 0.12 * smoothstep(0.0, 0.15, -uSunDir.y)); }
+  float depthLight(float y) { return exp(min(y, 0.0) * 0.06) * (0.12 + 0.88 * uSun + 0.12 * smoothstep(0.0, 0.15, -uSunDir.y)); }
   vec3 moonDir() { return normalize(vec3(-uSunDir.x, max(0.3, -uSunDir.y), -uSunDir.z)); }
   float moonUp() { return smoothstep(0.0, 0.15, -uSunDir.y); }
   vec4 outB(float b) { return vec4(b, 0.0, 0.0, 1.0); }
@@ -605,12 +605,15 @@ const logo = (() => {
         float life = (1.0 - rise * 0.8) * (1.0 - leave);
         float go = max(uGo, 0.0), d = go + h(aSeed) * 0.6;   // on start they all let go: rise, wander, fade
         if (uGo >= 0.0) { p.y += d * d * 0.9; p += (vec3(h(aSeed + 1.0), 0.0, h(aSeed + 2.0)) - 0.5) * d * 1.6; p.x += sin(uTime * 4.0 + aSeed) * d * 0.15; }
-        vFade = (uGo < 0.0 ? life : 1.0 - smoothstep(1.2, 3.4, d)); vCol = aCol;
+        float drip = step(h(aSeed + 7.0), 0.07), dt2 = fract(uTime * 0.035 + h(aSeed + 8.0));   // a few bubbles bleed slowly downward
+        if (uGo < 0.0) { p -= uUp * drip * dt2 * uSpacing * 9.0; life *= 1.0 - drip * smoothstep(0.4, 1.0, dt2); }
+        float drop = step(0.985, fract(sin(floor(uTime * 6.0) * 12.9 + aSeed * 3.1) * 4375.5));   // rare dropouts, like a failing segment
+        vFade = (uGo < 0.0 ? life * (1.0 - 0.85 * drop) : 1.0 - smoothstep(1.2, 3.4, d)); vCol = aCol;
         vec4 cp = projectionMatrix * viewMatrix * vec4(p, 1.0);
         if (uGo < 0.0 && cp.w > 0.0) { vec2 ndc = cp.xy / cp.w; vec2 px = floor((ndc * 0.5 + 0.5) * uGrid) + 0.5; cp.xy = (px / uGrid * 2.0 - 1.0) * cp.w; }   // snap to the dot matrix
         gl_PointSize = uSize; gl_Position = cp; }`,
     fragmentShader: GLSL_COMMON + `varying vec2 vCol; varying float vFade;
-      void main() { if (length(gl_PointCoord - 0.5) > 0.5) discard; float f = vFade * (0.85 + 0.15 * sin(uTime * 3.0)); gl_FragColor = vec4(vCol.x * f, vCol.y * f, 0.0, 1.0); }` });
+      void main() { if (length(gl_PointCoord - 0.5) > 0.5) discard; float f = vFade * (0.8 + 0.2 * sin(uTime * 0.9)); gl_FragColor = vec4(vCol.x * f * 0.72, vCol.y * f, 0.0, 1.0); }` });
   const mesh = new THREE.Points(g, m); mesh.frustumCulled = false; mesh.renderOrder = 10; scene.add(mesh);
   return { mesh, m, release: () => { if (m.uniforms.uGo.value < 0) m.uniforms.uGo.value = 0; } };
 })();
@@ -718,7 +721,7 @@ function spawnWild(w, first = false) {
   { const { x, z, f } = spot;
     const sp = pickSpecies(f < -8);
     if (w.mesh) { w.mesh.visible = false; }
-    w.mesh = w.meshes[sp.id] ??= (() => { const m = creatureMesh(sp, 0.95); scene.add(m); return m; })();
+    w.mesh = w.meshes[sp.id] ??= (() => { const m = creatureMesh(sp, PREDATORS.has(sp.id) ? 0.68 : 0.95); scene.add(m); return m; })();
     w.mesh.visible = true; w.sp = sp; w.pos.set(x, Math.min(-1.2, f + 1.5 + Math.random() * Math.max(0.5, -f - 3)), z);
     w.yaw = Math.random() * 6.28; w.pitch = 0; w.turn = 0; w.ph = Math.random() * 6; return;
   }
@@ -1025,7 +1028,7 @@ function startAudio() {
   const em = ac.createGain(); em.gain.value = 0.5; e1.connect(em); e2.connect(em); em.connect(ef);
   const thump = ac.createOscillator(); thump.type = 'square'; thump.frequency.value = 9; const tg = ac.createGain(); tg.gain.value = 0; thump.connect(tg); tg.connect(ef);
   e1.start(); e2.start(); thump.start(); audio.engine = { g: eg, f: ef, o1: e1, o2: e2, thump: tg };
-  audio.heartNext = 0;
+  audio.heartNext = 0; audio.nextT.omen = ac.currentTime + 35;
   master.gain.setTargetAtTime(0.5, ac.currentTime, 2.5);
 }
 const now = () => audio.ac.currentTime;
@@ -1081,6 +1084,15 @@ function thud(k = 1) {
 function bell() {   // chapter card: one soft tone
   for (const [f, d, g] of [[220, 0, 0.14], [330, 0.02, 0.07]]) oneShot((ac, t) => { const o = ac.createOscillator(); o.frequency.value = f; const gg = ac.createGain(); gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(g, t + 0.03); gg.gain.exponentialRampToValueAtTime(0.0004, t + 3); o.connect(gg).connect(audio.master); o.start(t); o.stop(t + 3.1); }, d);
 }
+function groan() {   // something very large, very far away
+  oneShot((ac, t) => { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(48 + Math.random() * 10, t); o.frequency.linearRampToValueAtTime(30 + Math.random() * 6, t + 4.5);
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 180; f.Q.value = 3; const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 5);
+    o.connect(f).connect(g).connect(audio.master); o.start(t); o.stop(t + 5.1); });
+}
+function creak() {   // steel under load: a wreck, a piling
+  burst({ buf: 'brown', type: 'bandpass', f0: 320, f1: 260, f2: 180, q: 9, attack: 0.4, length: 2.2, g: 0.22 });
+  burst({ buf: 'brown', type: 'bandpass', f0: 520, f1: 470, f2: 400, q: 12, attack: 0.3, length: 1.6, g: 0.12, when: 0.5 });
+}
 function toggleAudio() { if (!audio) return; audioOn = !audioOn; audio.master.gain.setTargetAtTime(audioOn ? 0.5 : 0, now(), 0.3); }
 const every = (key, secs, fn) => { const t = now(); if (!audio.nextT[key] || t > audio.nextT[key]) { audio.nextT[key] = t + secs; fn(); } };
 function stepAudio(above) {
@@ -1119,6 +1131,7 @@ function stepAudio(above) {
     if (w.sp.id === 'manatee' && d < 22) every('manatee' + w.ph, 2 + Math.random() * 6, () => squeak(d)); }
   if (above) for (const fl of flocks) { const d = fl.c.distanceTo(P.pos); if (d < 220 && fl.kind === 'wheel') every('gull' + fl.ph, 1.5 + Math.random() * 5, () => gull(d)); }
   for (const bu of world.buoys) { const d = Math.hypot(bu.x - P.pos.x, bu.z - P.pos.z); if (d < 18) every('buoy' + bu.ph, 2 + Math.random() * 4, () => clank(d)); }
+  if (!above && depth > 4) every('omen', 30 + Math.random() * 45, () => (lastFloor < -12 || Math.random() < 0.4) ? groan() : creak());
   // hunted: a heartbeat
   const hunterW = wild.find(w => w.hunting); if (hunterW && t > audio.heartNext) { audio.heartNext = t + (hunterW.lunge && hunterW.lunge.phase !== 'stalk' ? 0.42 : 0.75); for (const [dl, g] of [[0, 0.5], [0.16, 0.32]]) oneShot((ac, tt) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(58, tt); o.frequency.exponentialRampToValueAtTime(36, tt + 0.12); const gg = ac.createGain(); gg.gain.setValueAtTime(0, tt); gg.gain.linearRampToValueAtTime(g, tt + 0.015); gg.gain.exponentialRampToValueAtTime(0.0005, tt + 0.22); o.connect(gg).connect(audio.master); o.start(tt); o.stop(tt + 0.25); }, dl); }
 }
@@ -1382,7 +1395,7 @@ function stepCamera(dt) {
   camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.014, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
 }
 function stepAmbient(dt, t) {
   updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
