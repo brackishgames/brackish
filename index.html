@@ -249,7 +249,7 @@ const DotShader = {
                + texture2D(tScene, uv + 2.0 * vec2(px.x, 0.0)).r + texture2D(tScene, uv - 2.0 * vec2(px.x, 0.0)).r + texture2D(tScene, uv + 2.0 * vec2(0.0, px.y)).r + texture2D(tScene, uv - 2.0 * vec2(0.0, px.y)).r) / 8.0;
       b = clamp(b + 0.7 * (b - m), 0.0, 1.0);          // local contrast: bright things stand off flat fields
       b = pow(b, 1.25);                                 // deepen the mids so the field reads as dark water
-      b = b < 0.055 ? 0.0 : floor(b * 6.0 + 0.5) / 6.0; // OEL drive: a dot is off or lit at one of six levels
+      b = b < 0.022 ? 0.0 : pow(floor(sqrt(b) * 7.0 + 0.5) / 7.0, 2.0);   // OEL drive: off, or one of seven perceptual levels (dense in the darks)
       vec2 f = fract(gl_FragCoord.xy / uPitch) - 0.5;
       float d = length(f) * 2.0, r = 0.5 + 0.45 * b;
       float mask = 1.0 - smoothstep(r - 0.3, r + 0.05, d);
