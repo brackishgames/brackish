@@ -904,25 +904,25 @@ function startAudio() {
   const ac = new (window.AudioContext || window.webkitAudioContext)();
   const master = ac.createGain(); master.gain.value = 0;
   const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 4; comp.attack.value = 0.01; comp.release.value = 0.3;
-  const water = ac.createBiquadFilter(); water.type = 'lowpass'; water.frequency.value = 1800; water.Q.value = 0.3;   // the world through water
+  const water = ac.createBiquadFilter(); water.type = 'lowpass'; water.frequency.value = 1400; water.Q.value = 0.2;   // the world through water
   master.connect(water).connect(comp).connect(ac.destination);
   audio = { ac, master, water, white: seamlessNoise(ac, 6, 0.0), brown: seamlessNoise(ac, 8, 0.985), pink: seamlessNoise(ac, 7, 0.9) };
   const bed = (buf, type, freq, q, g) => { const src = ac.createBufferSource(); src.buffer = buf; src.loop = true; const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const gg = ac.createGain(); gg.gain.value = g; src.connect(f).connect(gg).connect(master); src.start(); return { f, g: gg, src }; };
   const lfo = (target, hz, depth, type = 'sine') => { const o = ac.createOscillator(); o.type = type; o.frequency.value = hz; const g = ac.createGain(); g.gain.value = depth; o.connect(g).connect(target); o.start(); return o; };
   // beds
-  audio.deep = bed(audio.brown, 'lowpass', 160, 0.5, 0.5); lfo(audio.deep.f.frequency, 0.05, 70);
-  audio.rush = bed(audio.pink, 'bandpass', 500, 0.6, 0);     // water moving over your body
-  audio.wind = bed(audio.white, 'bandpass', 900, 0.4, 0); lfo(audio.wind.f.frequency, 0.13, 350); lfo(audio.wind.g.gain, 0.21, 0.08);
+  audio.deep = bed(audio.brown, 'lowpass', 140, 0.3, 0.4); lfo(audio.deep.f.frequency, 0.05, 50);
+  audio.rush = bed(audio.brown, 'lowpass', 500, 0.3, 0);     // water moving over your body
+  audio.wind = bed(audio.pink, 'lowpass', 700, 0.3, 0); lfo(audio.wind.f.frequency, 0.13, 250); lfo(audio.wind.g.gain, 0.21, 0.05);
   audio.lap = bed(audio.pink, 'lowpass', 900, 0.4, 0); lfo(audio.lap.g.gain, 0.35, 0.12);           // waves against the surface
-  audio.flutter = bed(audio.pink, 'bandpass', 1400, 1.2, 0); lfo(audio.flutter.g.gain, 2.4, 0.5, 'triangle');   // a thousand wingbeats
+  audio.flutter = bed(audio.brown, 'bandpass', 700, 0.7, 0); lfo(audio.flutter.g.gain, 2.4, 0.5, 'triangle');   // a thousand wingbeats
   // drone + pad: a low chord that barely moves
   const pad = ac.createGain(); pad.gain.value = 0.07; const pf = ac.createBiquadFilter(); pf.type = 'lowpass'; pf.frequency.value = 320; pad.connect(pf).connect(master); lfo(pf.frequency, 0.03, 120);
   for (const [f, g, det] of [[55, 0.5, 0], [55, 0.4, 3], [82.41, 0.3, -2], [110, 0.2, 2], [164.8, 0.08, 0]]) { const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = f; o.detune.value = det; const og = ac.createGain(); og.gain.value = g; o.connect(og).connect(pad); o.start(); }
   audio.pad = pad;
   // engine voice: two detuned saws, a cylinder thump, through a lowpass that opens as it gets close
   const eg = ac.createGain(); eg.gain.value = 0; const ef = ac.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 120; ef.Q.value = 1.5; ef.connect(eg).connect(master);
-  const e1 = ac.createOscillator(), e2 = ac.createOscillator(); e1.type = e2.type = 'sawtooth'; e1.frequency.value = 40; e2.frequency.value = 40; e2.detune.value = 9;
+  const e1 = ac.createOscillator(), e2 = ac.createOscillator(); e1.type = e2.type = 'triangle'; e1.frequency.value = 40; e2.frequency.value = 40; e2.detune.value = 9;
   const em = ac.createGain(); em.gain.value = 0.5; e1.connect(em); e2.connect(em); em.connect(ef);
   const thump = ac.createOscillator(); thump.type = 'square'; thump.frequency.value = 9; const tg = ac.createGain(); tg.gain.value = 0; thump.connect(tg); tg.connect(ef);
   lfo(tg.gain, 9, 0.0); e1.start(); e2.start(); thump.start();
@@ -930,8 +930,54 @@ function startAudio() {
   // heartbeat when hunted
   const hb = ac.createGain(); hb.gain.value = 0; hb.connect(master); audio.heart = hb; audio.heartNext = 0;
   master.gain.setTargetAtTime(0.6, ac.currentTime, 2.5);
+  startMusic();
 }
 const now = () => audio.ac.currentTime;
+
+// ── MUSIC. Chiptune, slow and wide. Edit the arrays to write new music: notes are MIDI numbers,
+//    0 is a rest, each entry is one eighth note at the tempo below. Tracks loop over their length.
+const MUSIC = {
+  bpm: 76,
+  // i · VI · III · VII in D minor, two bars each: the chord the arpeggio and bass follow
+  chords: [[62, 65, 69], [58, 62, 65], [65, 69, 72], [60, 64, 67], [62, 65, 69], [58, 62, 65], [67, 70, 74], [69, 73, 76]],
+  bass:   [38, 0, 0, 0, 38, 0, 0, 0, 34, 0, 0, 0, 34, 0, 0, 0, 41, 0, 0, 0, 41, 0, 0, 0, 36, 0, 0, 0, 36, 0, 0, 0,
+           38, 0, 0, 0, 38, 0, 0, 0, 34, 0, 0, 0, 34, 0, 0, 0, 43, 0, 0, 0, 43, 0, 0, 0, 45, 0, 0, 0, 45, 0, 0, 0],
+  lead:   [74, 0, 0, 0, 77, 0, 81, 0, 0, 0, 79, 0, 77, 0, 0, 0, 74, 0, 0, 0, 0, 0, 72, 0, 74, 0, 0, 0, 0, 0, 0, 0,
+           72, 0, 0, 0, 74, 0, 77, 0, 0, 0, 76, 0, 74, 0, 0, 0, 72, 0, 0, 0, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+           81, 0, 0, 0, 79, 0, 77, 0, 0, 0, 74, 0, 77, 0, 0, 0, 79, 0, 0, 0, 0, 0, 77, 0, 74, 0, 0, 0, 0, 0, 0, 0,
+           72, 0, 0, 0, 74, 0, 76, 0, 0, 0, 77, 0, 79, 0, 0, 0, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+};
+function pulseWave(ac, duty) {   // a classic chip pulse with the given duty cycle
+  const n = 32, re = new Float32Array(n), im = new Float32Array(n);
+  for (let k = 1; k < n; k++) { re[k] = 0; im[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * duty); }
+  return ac.createPeriodicWave(re, im, { disableNormalization: false });
+}
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+function startMusic() {
+  const ac = audio.ac, bus = ac.createGain(); bus.gain.value = 0; const tone = ac.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2600; tone.Q.value = 0.4;
+  const echo = ac.createDelay(1.0), fb = ac.createGain(), wet = ac.createGain(); echo.delayTime.value = 60 / MUSIC.bpm * 0.75; fb.gain.value = 0.32; wet.gain.value = 0.28;
+  bus.connect(tone).connect(audio.master); tone.connect(echo); echo.connect(fb).connect(echo); echo.connect(wet).connect(audio.master);
+  audio.music = { bus, tone, step: 0, next: ac.currentTime + 0.3, p25: pulseWave(ac, 0.25), p12: pulseWave(ac, 0.125) };
+  const voice = (t, midi, len, wave, g, env = [0.01, 0.12, 0.6, 0.08], vib = 0) => {
+    const o = ac.createOscillator(); if (typeof wave === 'string') o.type = wave; else o.setPeriodicWave(wave); o.frequency.value = mtof(midi);
+    if (vib) { const l = ac.createOscillator(); l.frequency.value = 5.5; const lg = ac.createGain(); lg.gain.value = vib; l.connect(lg).connect(o.detune); l.start(t + 0.15); l.stop(t + len + 0.3); }
+    const a = ac.createGain(); const [at, dc, su, rl] = env;
+    a.gain.setValueAtTime(0, t); a.gain.linearRampToValueAtTime(g, t + at); a.gain.linearRampToValueAtTime(g * su, t + at + dc); a.gain.setValueAtTime(g * su, t + len); a.gain.linearRampToValueAtTime(0, t + len + rl);
+    o.connect(a).connect(bus); o.start(t); o.stop(t + len + rl + 0.02);
+  };
+  audio.music.voice = voice;
+}
+function stepMusic() {
+  const m = audio.music; if (!m) return; const ac = audio.ac, eighth = 60 / MUSIC.bpm / 2;
+  while (m.next < ac.currentTime + 0.25) {
+    const i = m.step, t = m.next, chord = MUSIC.chords[Math.floor(i / 16) % MUSIC.chords.length];
+    const b = MUSIC.bass[i % MUSIC.bass.length]; if (b) m.voice(t, b, eighth * 3.6, 'triangle', 0.5, [0.01, 0.2, 0.7, 0.1]);
+    const arpNote = chord[i % 3] + (i % 6 >= 3 ? 12 : 0); if (i % 2 === 0) m.voice(t, arpNote, eighth * 0.9, m.p25, 0.12, [0.005, 0.08, 0.35, 0.05]);
+    const l = MUSIC.lead[i % MUSIC.lead.length]; if (l) { let len = 1; while (i + len < i + 8 && !MUSIC.lead[(i + len) % MUSIC.lead.length]) len++; m.voice(t, l, eighth * len * 0.9, m.p12, 0.2, [0.012, 0.15, 0.55, 0.12], 9); }
+    if (i % 4 === 2) { const n = ac.createBufferSource(); n.buffer = audio.pink; const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000; const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0003, t + 0.05); n.connect(f).connect(g).connect(m.bus); n.start(t); n.stop(t + 0.06); }
+    m.step++; m.next += eighth;
+  }
+}
 function oneShot(build, when = 0) { if (!audio || !audioOn) return; const t = now() + when; build(audio.ac, t); }
 function whoosh(k = 1) {
   oneShot((ac, t) => { const src = ac.createBufferSource(); src.buffer = audio.pink; const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(1600, t + 0.25); f.frequency.exponentialRampToValueAtTime(300, t + 0.9); f.Q.value = 0.8;
@@ -956,14 +1002,16 @@ function bell() {   // chapter card
 function toggleAudio() { if (!audio) return; audioOn = !audioOn; audio.master.gain.setTargetAtTime(audioOn ? 0.6 : 0, now(), 0.3); }
 function stepAudio(above) {
   if (!audio) return; const t = now(), depth = Math.max(0, -P.pos.y), k = 0.25;
+  stepMusic();
+  if (audio.music) { const hunted = wild.some(w => w.hunting); audio.music.bus.gain.setTargetAtTime(hunted ? 0.0 : started ? 0.22 : 0.26, t, 1.2); audio.music.tone.frequency.setTargetAtTime(above ? 5000 : Math.max(900, 2600 - depth * 60), t, 0.6); }
   // the world through water: deeper is darker, the surface opens it up
-  audio.water.frequency.setTargetAtTime(above ? 9000 : Math.max(500, 2200 - depth * 60), t, 0.4);
+  audio.water.frequency.setTargetAtTime(above ? 6000 : Math.max(450, 1600 - depth * 45), t, 0.4);
   audio.deep.g.gain.setTargetAtTime(above ? 0.06 : 0.35 + Math.min(0.3, depth * 0.015), t, 0.6);
   audio.deep.f.frequency.setTargetAtTime(Math.max(60, 170 - depth * 4), t, 0.8);
   audio.wind.g.gain.setTargetAtTime(above ? 0.22 : 0, t, 0.5);
   audio.lap.g.gain.setTargetAtTime(THREE.MathUtils.clamp(1 - depth / 3, 0, 1) * 0.2 * (above ? 1.4 : 1), t, 0.4);
   const spd = THREE.MathUtils.clamp((P.speed || 0) / (P.sp.max * 1.45), 0, 1);
-  audio.rush.g.gain.setTargetAtTime(spd * spd * 0.28, t, k); audio.rush.f.frequency.setTargetAtTime(350 + spd * 900, t, k);
+  audio.rush.g.gain.setTargetAtTime(spd * spd * 0.2, t, k); audio.rush.f.frequency.setTargetAtTime(250 + spd * 500, t, k);
   audio.pad.gain.setTargetAtTime(above ? 0.03 : 0.07, t, 1);
   // engines: every boat counts; distance muffles, prop wash shakes
   let sum = 0, best = null, bn = 0;
@@ -971,7 +1019,7 @@ function stepAudio(above) {
   const near = Math.min(1, sum), ship = best && best.type === BOAT_TYPES.ship;
   P.wash = Math.max(0, (P.wash || 0) - 0.02);
   audio.engine.g.gain.setTargetAtTime(near * 0.5 * (above ? 0.7 : 1) * (1 + 0.8 * (P.wash || 0)), t, k);
-  audio.engine.f.frequency.setTargetAtTime(90 + 1400 * bn * bn, t, 0.3);
+  audio.engine.f.frequency.setTargetAtTime(80 + 700 * bn * bn, t, 0.3);
   audio.engine.o1.frequency.setTargetAtTime(ship ? 26 + bn * 6 : 55 + bn * 45, t, 0.4); audio.engine.o2.frequency.setTargetAtTime(ship ? 26 + bn * 6 : 55 + bn * 45, t, 0.4);
   audio.engine.thump.gain.setTargetAtTime(ship ? 0.35 * bn : 0.1 * bn, t, 0.3);
   // the fever
