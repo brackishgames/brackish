@@ -2,7 +2,7 @@
 """Draw the BRACKISH marks the way the game draws everything: a brightness field per cell, put through the
 dot shader's palette, its 4x4 ordered dither between seven levels, and round dots sized by brightness.
 
-  python3 tools/marks.py        writes logo.svg, og.svg, avatar.svg, icon.svg; PNGs are rendered from them
+  python3 tools/marks.py        writes brand/logo.svg, og.svg, avatar.svg, icon.svg; the PNGs (brand/, plus og.png and the icons at the root) are rendered from them
 """
 import math, os, re
 
@@ -92,7 +92,7 @@ def water(rows, top=0.16):   # a faint dithered surface glow that sinks to black
     return lambda x, y: top * max(0, 1 - y / (rows * 0.55)) ** 2 * (0.75 + 0.25 * math.sin(x * 0.37 + y * 0.11) * math.sin(x * 0.13 - y * 0.29)) or None
 
 def write(name, board, blur):
-    open(os.path.join(ROOT, name), 'w').write(board.svg(blur)); print('wrote', name)
+    open(os.path.join(ROOT, 'brand', name), 'w').write(board.svg(blur)); print('wrote brand/' + name)
 
 # the game logo: the ray over the wordmark
 b = Board(63, 48, 12); b.ray(31.5, 13.5, 26); b.text('BRACKISH', 36); write('logo.svg', b, 0.45)

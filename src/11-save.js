@@ -25,4 +25,3 @@ function applySave(d) {
   P.fed = d.fed; dayClock = d.clock; P.pos.set(...d.pos); P.yaw = d.yaw; becomeSpecies(speciesById[d.sp] || speciesById.cownose);
   camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6));
 }
-function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch {} }

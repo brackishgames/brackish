@@ -42,5 +42,6 @@ data and the `Bay` API), `02-render` (renderer, dot-matrix post, seafloor, sky a
 (keys, pause menu, gamepad), `09-audio`, `10-hud`, `11-save`, `12-story`, `13-frame` (the main loop, the player,
 the camera), `14-panel` (the dot font and every word on screen), `15-touch` and `16-boot`. A name declared twice
 across files stops the game at load, which is on purpose. Serve the folder (`python3 -m http.server`) and open
-`localhost:8000/?dev` to explore; `tools/marks.py` redraws the logos.
+`localhost:8000/?dev` to explore. `node tools/smoke.mjs` starts the game in headless Chrome against a server on port 18437 and fails on any
+exception; the deploy refuses to ship a script that does not parse. `tools/marks.py` redraws the marks in `brand/`.
 

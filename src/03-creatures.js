@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════════════════════════
 //  CREATURES  —  species registry, procedural bodies, one animated
 //  brightness material (rim-lit silhouettes; flat normals from derivatives).
-//  Modes: 1 ray flap · 2 fish tail · 3 turtle flippers · 4 bird wings
+//  Modes: 1 ray flap · 2 fish tail · 4 bird wings · 5 jelly · 6 vertical fluke
 // ═══════════════════════════════════════════════════════════════════
 const creatureVert = GLSL_COMMON + /* glsl */`
   attribute float aPhase;
@@ -25,11 +25,6 @@ const creatureVert = GLSL_COMMON + /* glsl */`
     else if (uMode == 6.0) {   // dolphins, manatees: the stroke is vertical
       float s = clamp(p.z / uLen + 0.5, 0.0, 1.0); float w = sin(ph - s * 3.6);
       p.y += w * (0.05 + 0.95 * s * s) * uAmp * uLen * 1.3 - sin(ph) * (1.0 - s) * 0.08 * uAmp * uLen; }
-    else if (uMode == 7.0) {   // stingrays (rajiform): a wave runs back along the edge of the disc while the middle stays flat on the sand
-      float s = abs(p.x) / uHalf, c = clamp(p.z / uLen + 0.5, 0.0, 1.0);
-      p.y += sin(ph - c * 7.0) * s * s * uAmp * 0.4 * uHalf * uFlap;
-      float tail = max(0.0, p.z - uLen * 0.5); p.x += sin(ph * 0.5 - c * 3.0) * tail * 0.08; }
-    else if (uMode == 3.0) { p.y += sin(ph) * max(0.0, abs(p.x) - uHalf * 0.45) * 0.5; }
     else if (uMode == 4.0) { p.y += sin(ph) * abs(p.x) * uAmp; }
     else if (uMode == 5.0) { float q = 1.0 + 0.14 * sin(ph); p.xz *= mix(q, 1.0, step(p.y, -0.01)); p.y *= mix(2.0 - q, 1.0, step(p.y, -0.01)); if (p.y < -0.01) p.x += sin(ph * 0.7 + p.y * 3.0) * 0.04 * -p.y; }
     #ifdef USE_INSTANCING
@@ -126,21 +121,16 @@ function fishGeometry(sp) {
   for (const sx of [-1, 1]) parts.push(new THREE.SphereGeometry(0.012 * L + 0.012, 6, 4).translate(sx * (sp.hammer ? 0.15 * L : x(0.88) * 0.9), rh * 0.25, (sp.hammer ? -0.47 : -0.38) * L));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
 }
-function turtleGeometry(sp) {
-  const L = sp.len, parts = [new THREE.SphereGeometry(L * 0.45, 14, 10).scale(1, 0.45, 1.15), new THREE.SphereGeometry(L * 0.14, 8, 6).translate(0, -0.02 * L, -L * 0.6)];
-  for (const sx of [-1, 1]) { parts.push(new THREE.PlaneGeometry(0.5 * L, 0.18 * L).translate(sx * 0.6 * L, 0, -0.15 * L).rotateY(sx * 0.3)); parts.push(new THREE.PlaneGeometry(0.25 * L, 0.14 * L).translate(sx * 0.48 * L, 0, 0.4 * L)); }
-  return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
-}
 function birdGeometry(span = 2.0) {
   const parts = []; for (const sx of [-1, 1]) parts.push(new THREE.PlaneGeometry(span / 2, span * 0.12).translate(sx * span / 4, 0, 0).rotateX(-Math.PI / 2));
   parts.push(new THREE.PlaneGeometry(span * 0.06, span * 0.35).rotateX(-Math.PI / 2));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
 }
 const geoCache = {};
-function creatureGeometry(sp) { return geoCache[sp.id] ??= sp.kind === 'ray' ? rayGeometry(sp) : sp.kind === 'turtle' ? turtleGeometry(sp) : fishGeometry(sp); }
+function creatureGeometry(sp) { return geoCache[sp.id] ??= sp.kind === 'ray' ? rayGeometry(sp) : fishGeometry(sp); }
 function creatureMesh(sp, glow = 1) {
   const size = sp.span ?? sp.len;
-  const m = new THREE.Mesh(creatureGeometry(sp), creatureMat({ mode: sp.kind === 'ray' ? (sp.undulate ? 7 : 1) : sp.kind === 'turtle' ? 3 : (sp.fluke === 'h' || sp.fluke === 'paddle') ? 6 : 2, half: (sp.span ?? sp.len) / 2, len: sp.len, freq: sp.freq, amp: sp.amp, glow }));
+  const m = new THREE.Mesh(creatureGeometry(sp), creatureMat({ mode: sp.kind === 'ray' ? 1 : (sp.fluke === 'h' || sp.fluke === 'paddle') ? 6 : 2, half: (sp.span ?? sp.len) / 2, len: sp.len, freq: sp.freq, amp: sp.amp, glow }));
   m.userData.sp = sp; m.userData.size = size; m.frustumCulled = false; return m;
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.

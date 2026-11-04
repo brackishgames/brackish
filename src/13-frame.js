@@ -15,7 +15,6 @@ function stepPlayer(dt) {
   const throttle = stunned ? 0 : THREE.MathUtils.clamp((keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + pad.throttle + (touch.id !== null || !usingWASD() ? 1 : 0), -1, 1);   // touch and arrow players cruise on their own
 
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
-  if (P.hidden && (turn || climb > 0 || sprinting())) P.hidden = false;
   P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.leapT = Math.max(0, (P.leapT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
   P.idleT = climb ? 0 : (P.idleT || 0) + dt;
 
@@ -35,7 +34,7 @@ function stepPlayer(dt) {
   // burst: Space spends stamina for a real sprint, then it has to come back
   P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = P.hidden ? 0 : throttle < 0 ? -0.35 * sp.cruise : throttle === 0 ? 0.12 * sp.cruise : wantBurst ? sp.max : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : throttle === 0 ? 0.12 * sp.cruise : wantBurst ? sp.max : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
   const thrust = THREE.MathUtils.clamp((wantSpeed - along) * (wantBurst ? 4.0 : 2.2), -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
   const inAir = P.pos.y > 0.0;   // out of the water there is nothing to push against
@@ -46,7 +45,6 @@ function stepPlayer(dt) {
   if (inAir) { P.vel.y -= 9.8 * dt; P.pitch += (Math.atan2(P.vel.y, Math.hypot(P.vel.x, P.vel.z) + 0.01) - P.pitch) * Math.min(1, 6 * dt); }   // a leap: gravity, nose follows the arc
   else {
     P.vel.y += climb * 2.2 * dt * Math.max(1, sp.max * 0.35) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
-    if (P.hidden) P.vel.y -= 2.0 * dt;   // settling into the sand
     const top = AIR.has(sp.id) ? -0.08 : -0.3;   // air-breathers float at the top; everything else stays just under it
     if (P.pos.y > top - 0.5 && P.vel.y > 0 && !wantBurst && !(P.leapT > 0)) P.vel.y = Math.min(P.vel.y, (top - P.pos.y) * 4);   // a rise floats you there; only a burst or a leap breaches
     if (!AIR.has(sp.id) && climb <= 0 && P.pos.y > -0.9) P.vel.y -= 2.0 * dt;   // let go of rise and a fish or a ray slips back down
@@ -83,7 +81,7 @@ function stepPlayer(dt) {
     else if (PREDATORS.has(sp.id) && P.pos.y > -0.6) { emitBubble(P.pos.x - b.x * 0.4, -0.06, P.pos.z - b.z * 0.4); for (const side of [-1, 1]) emitSpray(P.pos.x + rx * side * 0.1, 0.02, P.pos.z + rz * side * 0.1, rx * side * 0.6 - b.x * 0.3, 0.5 + Math.random() * 0.4, rz * side * 0.6 - b.z * 0.3); } } }
   P.mesh.position.copy(P.pos); P.mesh.position.y += surfY;
   P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch + surfPitch, P.roll);
-  P.mesh.material.uniforms.uGlow.value += ((P.lit ? 2.4 : P.hidden ? 0.35 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
+  P.mesh.material.uniforms.uGlow.value += ((P.lit ? 2.4 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
   { const u = P.mesh.material.uniforms, work = THREE.MathUtils.clamp(thrust / (0.6 * sp.max) + 0.15, 0, 1);
     if (sp.kind === 'ray') {   // rays glide between beats when there's little to do
       P.glide = (P.glide || 0) + dt; const gliding = work < 0.25 && Math.sin(P.glide * 0.6) > 0.2;

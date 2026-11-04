@@ -22,6 +22,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Every script must parse, or nothing ships
+        run: for f in src/*.js; do node --check "$f"; done
       - uses: actions/configure-pages@v5
       - name: Stamp script URLs with this commit, so a visitor never gets a mix of old and new files
         run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" index.html

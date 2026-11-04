@@ -152,7 +152,6 @@ function creak() {   // steel under load: a wreck, a piling
   burst({ buf: 'brown', type: 'bandpass', f0: 520, f1: 470, f2: 400, q: 12, attack: 0.3, length: 1.6, g: 0.12, when: 0.5 });
 }
 const masterLevel = () => audioOn ? 0.5 * settings.volume / 10 * (paused ? 0.35 : 1) : 0;
-function toggleAudio() { if (!audio) return; audioOn = !audioOn; }
 function stepVolume() { if (!audio) return; const v = masterLevel(); if (Math.abs(v - (audio.level ?? -1)) > 1e-3) { audio.level = v; audio.master.gain.setTargetAtTime(v, now(), 0.25); } }
 const every = (key, secs, fn) => { const t = now(); if (!audio.nextT[key] || t > audio.nextT[key]) { audio.nextT[key] = t + secs; fn(); } };
 function stepAudio(above) {
