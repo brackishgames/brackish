@@ -71,6 +71,7 @@ ENTER  begin</p><small>H for help any time</small></div>
     <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
+clams on the bottom give a heart back. shrimp clouds refill the burst.
 sharks lose interest if you keep away.
 the surface is not the end of the world.</p><small>H to close</small></div>
 <div id="map"><div><h2>FAST TRAVEL — ↑↓ pick · ENTER go · M close</h2><ul id="cplist"></ul></div><canvas id="bigmap" width="560" height="560"></canvas></div>
@@ -773,6 +774,36 @@ function stepJellies(dt, t) {
   jellyMesh.instanceMatrix.needsUpdate = true;
 }
 
+// food: clam beds on the bottom give a heart back, shrimp clouds in mid-water refill the burst.
+// they sit in fixed places (hashed by 60 m cell) so you can learn where they are; eaten ones stay eaten.
+const FOOD_MAX = 60, eaten = new Set();
+const foodMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.18, 1), creatureMat({ glow: 1.4 }), FOOD_MAX);
+foodMesh.frustumCulled = false; foodMesh.count = 0; scene.add(foodMesh);
+let foodList = [], foodCenter = new THREE.Vector2(1e9, 1e9);
+function rebuildFood() {
+  foodList = []; const C = 60, R = 240, cx = Math.floor(P.pos.x / C), cz = Math.floor(P.pos.z / C);
+  for (let gz = cz - R / C; gz <= cz + R / C; gz++) for (let gx = cx - R / C; gx <= cx + R / C; gx++) {
+    const h = hash2(gx * 31 + 11, gz * 17 + 5); if (h > 0.5) continue; const key = gx + ',' + gz; if (eaten.has(key)) continue;
+    const x = (gx + 0.2 + hash2(gx, gz) * 0.6) * C, z = (gz + 0.2 + hash2(gz, gx) * 0.6) * C, f = floorAt(x, z); if (f > -1.5) continue;
+    const clam = h < 0.3; foodList.push({ key, x, z, y: clam ? f + 0.25 : Math.max(f + 2, f * 0.5), clam, ph: h * 40 });
+  }
+  foodCenter.set(P.pos.x, P.pos.z);
+}
+function stepFood(dt, t) {
+  if (foodCenter.distanceTo(new THREE.Vector2(P.pos.x, P.pos.z)) > 90) rebuildFood();
+  let k = 0;
+  for (const fd of foodList) {
+    if (k >= FOOD_MAX) break;
+    const d = Math.hypot(fd.x - P.pos.x, fd.y - P.pos.y, fd.z - P.pos.z);
+    if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(3, P.hp + 1); say('♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
+      for (let i = 0; i < 3; i++) setTimeout(() => bloop(0.6), i * 90); rebuildFood(); break; }
+    const pulse = 1 + 0.25 * Math.sin(t * 3 + fd.ph);
+    if (fd.clam) { for (let i = 0; i < 3 && k < FOOD_MAX; i++) placeInstance(foodMesh, k++, fd.x + Math.cos(fd.ph + i * 2.1) * 0.35, fd.y, fd.z + Math.sin(fd.ph + i * 2.1) * 0.35, 0, fd.ph, 0, 0.7 * pulse, 0.45 * pulse, 0.7 * pulse); }
+    else { for (let i = 0; i < 5 && k < FOOD_MAX; i++) { const a = t * 1.5 + fd.ph + i * 1.26; placeInstance(foodMesh, k++, fd.x + Math.cos(a) * 0.5, fd.y + Math.sin(a * 1.7) * 0.3, fd.z + Math.sin(a) * 0.5, 0, 0, 0, 0.35 * pulse); } }
+  }
+  foodMesh.count = k; foodMesh.instanceMatrix.needsUpdate = true;
+}
+
 // mullet schools
 function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
 const fishGeo = new THREE.BufferGeometry();
@@ -1130,7 +1161,7 @@ async function sha(text) { const b = await crypto.subtle.digest('SHA-256', new T
 let saveTimer = 0, loadedSave = null;
 async function saveGame() {
   if (!started) return;
-  const data = { v: 1, ch: story.ch, unlocked: [...unlocked], cps: checkpoints, fed: P.fed || 0, clock: dayClock, pos: [P.pos.x, P.pos.y, P.pos.z], yaw: P.yaw, sp: P.sp.id, t: Date.now() };
+  const data = { v: 1, ch: story.ch, unlocked: [...unlocked], cps: checkpoints, fed: P.fed || 0, eaten: [...eaten].slice(-400), clock: dayClock, pos: [P.pos.x, P.pos.y, P.pos.z], yaw: P.yaw, sp: P.sp.id, t: Date.now() };
   const json = JSON.stringify(data);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ json, sig: await sha(SAVE_SALT + json) })); } catch {}
 }
@@ -1140,7 +1171,7 @@ async function loadGame() {
     const d = JSON.parse(json); return d.v === 1 ? d : null; } catch { return null; }
 }
 function applySave(d) {
-  for (const id of d.unlocked) unlocked.add(id);
+  for (const id of d.unlocked) unlocked.add(id); for (const k of d.eaten || []) eaten.add(k);
   checkpoints.length = 0; checkpoints.push(...d.cps); lastCheckpoint = checkpoints[checkpoints.length - 1] || checkpoints[0];
   P.fed = d.fed; dayClock = d.clock; P.pos.set(...d.pos); P.yaw = d.yaw; becomeSpecies(speciesById[d.sp] || speciesById.cownose);
   camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6));
@@ -1329,6 +1360,36 @@ function stepJellies(dt, t) {
   jellyMesh.instanceMatrix.needsUpdate = true;
 }
 
+// food: clam beds on the bottom give a heart back, shrimp clouds in mid-water refill the burst.
+// they sit in fixed places (hashed by 60 m cell) so you can learn where they are; eaten ones stay eaten.
+const FOOD_MAX = 60, eaten = new Set();
+const foodMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.18, 1), creatureMat({ glow: 1.4 }), FOOD_MAX);
+foodMesh.frustumCulled = false; foodMesh.count = 0; scene.add(foodMesh);
+let foodList = [], foodCenter = new THREE.Vector2(1e9, 1e9);
+function rebuildFood() {
+  foodList = []; const C = 60, R = 240, cx = Math.floor(P.pos.x / C), cz = Math.floor(P.pos.z / C);
+  for (let gz = cz - R / C; gz <= cz + R / C; gz++) for (let gx = cx - R / C; gx <= cx + R / C; gx++) {
+    const h = hash2(gx * 31 + 11, gz * 17 + 5); if (h > 0.5) continue; const key = gx + ',' + gz; if (eaten.has(key)) continue;
+    const x = (gx + 0.2 + hash2(gx, gz) * 0.6) * C, z = (gz + 0.2 + hash2(gz, gx) * 0.6) * C, f = floorAt(x, z); if (f > -1.5) continue;
+    const clam = h < 0.3; foodList.push({ key, x, z, y: clam ? f + 0.25 : Math.max(f + 2, f * 0.5), clam, ph: h * 40 });
+  }
+  foodCenter.set(P.pos.x, P.pos.z);
+}
+function stepFood(dt, t) {
+  if (foodCenter.distanceTo(new THREE.Vector2(P.pos.x, P.pos.z)) > 90) rebuildFood();
+  let k = 0;
+  for (const fd of foodList) {
+    if (k >= FOOD_MAX) break;
+    const d = Math.hypot(fd.x - P.pos.x, fd.y - P.pos.y, fd.z - P.pos.z);
+    if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(3, P.hp + 1); say('♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
+      for (let i = 0; i < 3; i++) setTimeout(() => bloop(0.6), i * 90); rebuildFood(); break; }
+    const pulse = 1 + 0.25 * Math.sin(t * 3 + fd.ph);
+    if (fd.clam) { for (let i = 0; i < 3 && k < FOOD_MAX; i++) placeInstance(foodMesh, k++, fd.x + Math.cos(fd.ph + i * 2.1) * 0.35, fd.y, fd.z + Math.sin(fd.ph + i * 2.1) * 0.35, 0, fd.ph, 0, 0.7 * pulse, 0.45 * pulse, 0.7 * pulse); }
+    else { for (let i = 0; i < 5 && k < FOOD_MAX; i++) { const a = t * 1.5 + fd.ph + i * 1.26; placeInstance(foodMesh, k++, fd.x + Math.cos(a) * 0.5, fd.y + Math.sin(a * 1.7) * 0.3, fd.z + Math.sin(a) * 0.5, 0, 0, 0, 0.35 * pulse); } }
+  }
+  foodMesh.count = k; foodMesh.instanceMatrix.needsUpdate = true;
+}
+
 // mullet schools
 function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
   let k = 0;
@@ -1387,7 +1448,7 @@ function frame() {
   if (started) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   if (started && !mapOpen && !helpOpen) { stepPlayer(dt); story.step(dt); }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); composer.render();
 }
 
