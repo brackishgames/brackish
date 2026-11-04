@@ -1,10 +1,10 @@
-<h1 align="center"><img src="logo.png" alt="Brackish" width="380"></h1>
+# Brackish
 
-<p align="center">Play it at <a href="https://brackishgames.github.io/brackish/">brackishgames.github.io/brackish</a></p>
+Play it at https://brackishgames.github.io/brackish/
 
-<img src="screenshots/hole.png" alt="A young cownose ray in the dark water off Egmont Key" width="100%">
+<img src="screenshots/hole.png" alt="A young cownose ray in the dark water off Egmont Key, something round looming in the dark to the left" width="100%">
 
-<img src="screenshots/title.png" alt="The title: the ray and the word BRACKISH lit in dots" width="100%">
+<img src="screenshots/surface.png" alt="Just under the surface at Egmont Key, seagrass below" width="100%">
 
 <img src="screenshots/map.png" alt="Fast travel: places down the bay beside a dot-matrix chart" width="100%">
 
