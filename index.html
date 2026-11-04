@@ -146,6 +146,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const MOBILE = matchMedia('(pointer: coarse)').matches;
+const DEV = new URLSearchParams(location.search).has('dev');   // ?dev opens every place and body for exploring
 
 // ═══════════════════════════════════════════════════════════════════
 //  GEOGRAPHY  —  local metric frame centred on Tampa Bay. 1 unit = 1 m.
@@ -187,7 +188,12 @@ const WRECKS = [
   { ll: [27.645, -82.655], name: 'Old Skyway rubble', kind: 'rubble' }, { ll: [27.598, -82.652], name: 'Old Skyway rubble', kind: 'rubble' },
   { ll: [27.70, -82.95], name: 'Shelf wreck', kind: 'ship', s: 0.6 }, { ll: [27.56, -82.97], name: 'Deep reef', kind: 'rubble' },
   { ll: [27.86, -82.49], name: 'Hillsborough hulk', kind: 'cruiser', s: 2.2 }, { ll: [27.93, -82.63], name: 'Old Tampa Bay skiff', kind: 'cruiser', s: 1 },
+  // real places (positions approximate): the cutter Blackthorn, sunk off the Skyway in 1980 and later scuttled as a Gulf reef; Fort Dade's batteries falling into the Gulf off Egmont Key
+  { ll: [27.897, -83.193], name: 'USCGC Blackthorn', kind: 'ship', s: 0.32, rest: 0.4 }, { ll: [27.6045, -82.7655], name: 'Fort Dade ruins', kind: 'ruins' },
 ];
+// the Sunshine Skyway main span: two cable-stayed pylons in the ship channel, ringed by the protective dolphins added after 1980
+const SKYWAY = { center: [27.6205, -82.6555], axis: [[27.690, -82.657], [27.585, -82.6505]], span: 366, dolphins: 18 };
+const ANCHORAGE = [{ ll: [27.592, -82.82], yaw: 1.9 }];   // tankers waiting off Egmont
 const FEVER_PATH = [[27.607, -82.7535], [27.600, -82.800], [27.592, -82.850], [27.580, -82.910], [27.565, -82.980]].map(p => toXZ(...p));   // Egmont hole, out the Egmont Channel, onto the shelf
 const START = toXZ(27.607, -82.751);   // chapter I: the Egmont pass
 
@@ -283,9 +289,9 @@ const Bay = {
     for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
       const k = j * S + i, v = d[k], b = band(v);
       if (b < 0) { const coast = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => { const ii = i + a, jj = j + c; return ii >= 0 && jj >= 0 && ii < S && jj < S && d[jj * S + ii] > 0; });
-        out[k] = coast ? 220 : ((i + j) % 4 === 0 ? 22 : 0); continue; }
+        out[k] = coast ? 235 : 62 + ((i * 7 + j * 13) % 5) * 3; continue; }   // land: a solid lit mass, the way a chart prints it
       const edge = [[1, 0], [0, 1]].some(([a, c]) => { const ii = i + a, jj = j + c; return ii < S && jj < S && band(d[jj * S + ii]) !== b && band(d[jj * S + ii]) >= 0; });
-      out[k] = edge ? 150 : [95, 70, 50, 34, 22][b];   // shoal water brighter, deep water darker, a contour at 2, 5, 10 and 20 m
+      out[k] = edge ? 70 : [34, 26, 20, 15, 11][b];   // water dark, deeper darker, faint contours at 2, 5, 10 and 20 m
     }
     return out;
   },
@@ -299,11 +305,11 @@ const Bay = {
       const get = async q => { const r = await within(15000, fetch(NOAA.url(q))); if (!r.ok) throw new Error('noaa ' + r.status); return r.json(); };
       const day = new Date(), ymd = d => d.toISOString().slice(0, 10).replace(/-/g, ''), y = new Date(day - 864e5), t2 = new Date(+day + 864e5);
       const range = `begin_date=${ymd(y)}&end_date=${ymd(t2)}`, st = NOAA.tideStation.id;
-      const [lvl, hilo, temp, ...cur] = await Promise.allSettled([
-        get(`product=water_level&datum=MLLW&date=latest&station=${st}`), get(`product=predictions&datum=MLLW&interval=hilo&${range}&station=${st}`),
-        get(`product=water_temperature&date=latest&station=${st}`),
-        ...NOAA.currentStations.map(([id]) => get(`product=currents_predictions&${range}&interval=30&station=${id}`)),
-      ]);
+      const queries = [`product=water_level&datum=MLLW&date=latest&station=${st}`, `product=predictions&datum=MLLW&interval=hilo&${range}&station=${st}`,
+        `product=water_temperature&date=latest&station=${st}`, ...NOAA.currentStations.map(([id]) => `product=currents_predictions&${range}&interval=30&station=${id}`)];
+      const results = new Array(queries.length); let next = 0;   // four at a time: NOAA turns away bursts
+      await Promise.all(Array.from({ length: 4 }, async () => { while (next < queries.length) { const i = next++; try { results[i] = { value: await get(queries[i]) }; } catch { results[i] = {}; } } }));
+      const [lvl, hilo, temp, ...cur] = results;
       data = { lvl: lvl.value, hilo: hilo.value, temp: temp.value, cur: cur.map(c => c.value || null) };
       try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), d: data })); } catch {}
     }
@@ -848,13 +854,31 @@ function buildStructures() {
   for (const m of [buoyMesh, chainMesh, sinkerMesh]) add(m);
   world.buoys = buoys; world.buoyMesh = buoyMesh;
 
+  // the Skyway main piers and their dolphins
+  { const [ax, az] = toXZ(...SKYWAY.axis[0]), [bx, bz] = toXZ(...SKYWAY.axis[1]), L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, [cx, cz] = toXZ(...SKYWAY.center);
+    const pier = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), structMat, 2), ring = new THREE.InstancedMesh(new THREE.CylinderGeometry(6, 7, 1, 16).translate(0, 0.5, 0), structMat, SKYWAY.dolphins * 2);
+    let k = 0;
+    [-1, 1].forEach((sgn, i) => { const px = cx + ux * sgn * SKYWAY.span / 2, pz = cz + uz * sgn * SKYWAY.span / 2, f = floorAt(px, pz);
+      _M.makeRotationY(Math.atan2(ux, uz)); _M.scale(_s.set(14, -f + 60, 9)); _M.setPosition(px, (f + 60) / 2, pz); pier.setMatrixAt(i, _M);
+      for (let d = 0; d < SKYWAY.dolphins; d++) { const a = d / SKYWAY.dolphins * Math.PI * 2, r = 32, dx = px + Math.cos(a) * r, dz = pz + Math.sin(a) * r, df = floorAt(dx, dz);
+        _M.makeScale(1, -df + 2.5, 1); _M.setPosition(dx, df, dz); ring.setMatrixAt(k++, _M); } });
+    ring.count = k; add(pier); add(ring); world.wrecks.push({ x: cx, z: cz, name: 'Skyway main span' }); }
+  // ships riding at anchor, chain down into the dark
+  for (const an of ANCHORAGE) { const [x, z] = toXZ(...an.ll), f = floorAt(x, z), t = BOAT_TYPES.ship, hull = new THREE.Mesh(t.geo, boatMat); hull.position.set(x, 0, z); hull.rotation.y = an.yaw; add(hull);
+    const bow = fwdOf(an.yaw).multiplyScalar(t.L * 0.45), chain = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1, 6).translate(0, -0.5, 0), structMat);
+    const top = new THREE.Vector3(x + bow.x, -1, z + bow.z), bottom = new THREE.Vector3(x + bow.x * 2.2, f, z + bow.z * 2.2); chain.position.copy(top); chain.scale.y = top.distanceTo(bottom); chain.lookAt(bottom); chain.rotateX(-Math.PI / 2); add(chain);
+    world.wrecks.push({ x, z, name: 'Egmont anchorage' }); }
   // wrecks and rubble
   for (const w of WRECKS) {
     const [x, z] = toXZ(...w.ll), f = floorAt(x, z); if (f > -1) continue;
+    if (w.kind === 'ruins') { const n = 22, g = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), structMat, n);   // poured-concrete batteries, tilted and broken
+      for (let i = 0; i < n; i++) { const rx = x + (Math.random() - .5) * 70, rz = z + (Math.random() - .5) * 50, sx = 4 + Math.random() * 9, sy = 2 + Math.random() * 4;
+        _M.makeRotationFromEuler(_E.set((Math.random() - .5) * 0.9, Math.random() * 6, (Math.random() - .5) * 0.9)); _M.scale(_s.set(sx, sy, 3 + Math.random() * 6)); _M.setPosition(rx, floorAt(rx, rz) + sy * 0.3, rz); g.setMatrixAt(i, _M); }
+      add(g); world.wrecks.push({ x, z, name: w.name }); continue; }
     if (w.kind === 'rubble') { const n = 14, g = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), structMat, n);
       for (let i = 0; i < n; i++) { const rx = x + (Math.random() - .5) * 40, rz = z + (Math.random() - .5) * 40, s = 2 + Math.random() * 5; M.makeRotationFromEuler(new THREE.Euler(Math.random(), Math.random() * 6, Math.random())); M.scale(new THREE.Vector3(s, s * 0.6, s * 1.5)); M.setPosition(rx, floorAt(rx, rz) + s * 0.2, rz); g.setMatrixAt(i, M); }
       add(g); }
-    else { const t = BOAT_TYPES[w.kind], m = new THREE.Mesh(t.geo, structMat); m.scale.setScalar(w.s); m.position.set(x, f + t.draft * w.s * 0.6, z); m.rotation.set(0.15, Math.random() * 6, 0.55 + Math.random() * 0.4); add(m); }
+    else { const t = BOAT_TYPES[w.kind], m = new THREE.Mesh(t.geo, structMat); m.scale.setScalar(w.s); m.position.set(x, f + t.draft * w.s * 0.6, z); m.rotation.set(0.15, Math.random() * 6, w.rest ?? (0.55 + Math.random() * 0.4)); add(m); }
     world.wrecks.push({ x, z, name: w.name });
   }
 }
@@ -1362,7 +1386,7 @@ const SAVE_KEY = 'brackish.save', SAVE_SALT = 'egmont-25m-' + location.host;
 async function sha(text) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
 let saveTimer = 0, loadedSave = null;
 async function saveGame() {
-  if (!started) return;
+  if (!started || DEV) return;   // dev mode never overwrites a real save
   const data = { v: 1, ch: story.ch, unlocked: [...unlocked], cps: checkpoints, fed: P.fed || 0, eaten: [...eaten].slice(-400), clock: dayClock, pos: [P.pos.x, P.pos.y, P.pos.z], yaw: P.yaw, sp: P.sp.id, t: Date.now() };
   const json = JSON.stringify(data);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ json, sig: await sha(SAVE_SALT + json) })); } catch {}
@@ -1758,7 +1782,7 @@ function fadeTarget(el) {
   if (el === bl) return document.body.classList.contains('settled') ? 0 : 1;
   return el.style.opacity !== '' ? +el.style.opacity : 0;   // story, card, warning and fade start hidden
 }
-function opa(el) { if (!el) return 0; const tg = fadeTarget(el); let a = fades.has(el) ? fades.get(el) : tg; a += (tg - a) * Math.min(1, fadeDt * 5); if (Math.abs(tg - a) < 0.01) a = tg; fades.set(el, a); return a; }
+function opa(el) { if (!el) return 0; const tg = fadeTarget(el); if (el.id === 'load' && tg === 0) return 0; /* the loading card cuts, so it never ghosts under the title */ let a = fades.has(el) ? fades.get(el) : tg; a += (tg - a) * Math.min(1, fadeDt * 5); if (Math.abs(tg - a) < 0.01) a = tg; fades.set(el, a); return a; }
 const toCell = px => px * renderer.getPixelRatio() / dotPass.uniforms.uPitch.value;
 function drawPanel() {
   if (!panel.data) return; panel.data.fill(0); { const now = performance.now(); fadeDt = Math.min(0.1, Math.max(1 / 120, (now - fadeT) / 1000)); fadeT = now; }   // always progress, even if the clock stalls
@@ -1927,6 +1951,9 @@ async function boot() {
   const stage = async (msg, fn) => { loadmsg.textContent = msg; try { await fn(); } catch (e) { loadmsg.textContent = 'ERROR IN ' + msg + ': ' + e.message; console.error(e); throw e; } };
   bridges = BRIDGES_FALLBACK.map(b => ({ name: b.name, pts: b.pts.map(p => toXZ(...p)) }));
   await stage('BUILDING STRUCTURES', () => buildStructures());
+  if (DEV) { for (const sp of SPECIES) unlocked.add(sp.id);
+    for (const [lat, lon, name] of POIS) { const [x, z] = toXZ(lat, lon); if (!checkpoints.some(c => c.name === name)) checkpoints.push({ name, x, z }); }
+    for (const w of world.wrecks) if (!checkpoints.some(c => c.name === w.name)) checkpoints.push({ name: w.name, x: w.x, z: w.z }); }
   Bay.loadLive().then(() => { const L = Bay.live; if (L.ok) $('noaaline').textContent = `LIVE · NOAA ${NOAA.tideStation.name} · ${L.temp != null ? L.temp.toFixed(1) + '°C' : ''}${L.next ? ' · ' + L.next.type + ' TIDE ' + new Date(L.next.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}`; }).catch(() => {});   // live NOAA tide, temperature and currents arrive in the background
   // OpenStreetMap bridges arrive in the background and replace the fallback set
   loadBridges().then(() => { try { buildStructures(); } catch (e) { console.error(e); } });
