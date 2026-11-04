@@ -960,8 +960,8 @@ function stepWild(dt, t) {
       steerTo(w, 2 * w.pos.x - P.pos.x, 2 * w.pos.z - P.pos.z, 3); v = w.sp.max;
     } else if (rel === 'curious' && d < 70 && w.cool <= 0) {
       w.curT = (w.curT || 0) + dt; if (w.curT > 40) { w.cool = 60; w.curT = 0; }
-      const side = (w.ph > 3 ? 1 : -1) * 3.5, f = fwdOf(P.yaw, 0); steerTo(w, P.pos.x + f.x * 4 + Math.cos(P.yaw) * side, P.pos.z + f.z * 4 - Math.sin(P.yaw) * side, 2.5);
-      v = d > 8 ? w.sp.max * 0.7 : P.speed + 0.3; ty = P.pos.y + 0.5;
+      const r1 = (w.ph * 7.31) % 1, r2 = (w.ph * 13.7) % 1, side = (w.ph > 3 ? 1 : -1) * (3.5 + r1 * 7), ahead = 1 + r2 * 9, f = fwdOf(P.yaw, 0); steerTo(w, P.pos.x + f.x * ahead + Math.cos(P.yaw) * side, P.pos.z + f.z * ahead - Math.sin(P.yaw) * side, 2.5);
+      v = d > 8 ? w.sp.max * 0.7 : P.speed + 0.3; ty = P.pos.y + 0.5 + (((w.ph * 5.17) % 1) - 0.5) * 3;
       w.clickT = (w.clickT || 0) - dt; if (w.clickT <= 0 && d < 25) { w.clickT = 1.2 + Math.random() * 2.5; for (let n = 0; n < 2 + Math.random() * 5; n++) setTimeout(() => click(d), n * 35); }
     } else {
       w.wT = (w.wT || 0) - dt; if (w.wT <= 0) { w.wT = 1.5 + Math.random() * 3; w.turnGoal = (Math.random() - 0.5) * 0.8; }
@@ -977,6 +977,11 @@ function stepWild(dt, t) {
     const dy = ty - w.pos.y; w.pitch += (THREE.MathUtils.clamp(dy * 0.4, -0.5, 0.5) - w.pitch) * Math.min(1, 2 * dt);
     w.v = (w.v ?? v) + (v - (w.v ?? v)) * Math.min(1, 1.5 * dt); w.roll = (w.roll || 0) + (w.turn * 0.6 - (w.roll || 0)) * Math.min(1, 2 * dt);
     w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), w.v * dt);
+    for (const o of wild) { if (o === w || !o.sp) continue;   // nobody swims through anybody
+      const need = ((w.sp.span ?? w.sp.len) + (o.sp.span ?? o.sp.len)) * 0.7, dx = w.pos.x - o.pos.x, dy = w.pos.y - o.pos.y, dz = w.pos.z - o.pos.z, dd = Math.hypot(dx, dy, dz);
+      if (dd < need && dd > 1e-3) { const k = (need - dd) / dd * Math.min(1, 3 * dt); w.pos.x += dx * k; w.pos.y += dy * k * 0.6; w.pos.z += dz * k; } }
+    { const need = ((w.sp.span ?? w.sp.len) + (P.sp.span ?? P.sp.len)) * 0.75, dx = w.pos.x - P.pos.x, dy = w.pos.y - P.pos.y, dz = w.pos.z - P.pos.z, dd = Math.hypot(dx, dy, dz);
+      if (dd < need && dd > 1e-3 && !w.hunting) { const k = (need - dd) / dd * Math.min(1, 3 * dt); w.pos.x += dx * k; w.pos.y += dy * k * 0.6; w.pos.z += dz * k; } }
     w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, -0.5);
     w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, w.roll);
     { const u = w.mesh.material.uniforms, work = Math.min(1, w.v / w.sp.max); w.mesh.userData.baseGlow ??= u.uGlow.value; u.uGlow.value = w.mesh.userData.baseGlow * (1 + 0.9 * (P.reveal || 0) * (d < (P.revealRange || 50) ? 1 : 0)); u.uFlap.value += ((w.sp.kind === 'ray' ? 0.35 + 0.65 * work : 0.6 + 0.4 * work) - u.uFlap.value) * Math.min(1, 2 * dt);
@@ -1452,7 +1457,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
       if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
       card.textContent = c.title; card.style.opacity = 1; bell();
       setTimeout(() => { fade.style.opacity = 0; }, 900);
-      setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.title); }, 3600);
+      setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.title); }, 1000);
       if (i === 3) fever.moving = true;
     }, i === 0 ? 50 : 700);
   },
@@ -1480,7 +1485,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
 const TITLE_HINT = 'PRESS ENTER';
 function startGame(save) { if (canFull && !DEV) goFull(); started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
-  if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
+  if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3) fever.moving = true; return; }
   story.begin(0); }
 function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }
 
@@ -1846,7 +1851,7 @@ function drawPanel() {
   const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
     const b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.min(cols, 64));
     let y = H - 14 - lines.length * 10; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center'); y += 10; } }
-  const card = $('chapter'), oc = opa(card) * (mapOpen ? 0 : 1) * (1 - oHelp); if (oc > 0.01) {   // chapter card
+  const card = $('chapter'), oc = 0; if (oc > 0.01) {   // titles are shown once, with the story at the bottom   // chapter card
     const txt = card.textContent, sc = [...txt].length * 12 <= W - 10 ? 2 : 1; wrap(txt, Math.floor((W - 8) / (6 * sc))).forEach((l, i) => pText(l, cx, Math.round(H * 0.36) + i * 9 * sc, 240 * oc, 'center', sc)); }
   if (oHelp > 0.01) {   // help
     let y = Math.max(4, Math.round(H * 0.14)); const big = W > 140; pText('HOW TO SWIM', cx, y, 240 * oHelp, 'center', big ? 2 : 1); y += big ? 24 : 14;
