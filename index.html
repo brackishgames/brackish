@@ -1113,6 +1113,7 @@ function stepFever(dt, t) {
   feverMesh.instanceMatrix.needsUpdate = true;
 }
 
+const AIR = new Set(['dolphin', 'loggerhead', 'manatee', 'tarpon']);   // the bodies that come up to breathe
 const ABILITY = { cownose: 'sense', manta: 'sense', eagle: 'sense', dolphin: 'echo', bull: 'strike', hammer: 'strike', snook: 'strike',
   stingray: 'settle', goliath: 'settle', redfish: 'settle', loggerhead: 'breathe', manatee: 'breathe', tarpon: 'breathe', mullet: 'leap' };
 const ABILITY_CD = { sense: 3, echo: 2, strike: 1.2, settle: 0.4, breathe: 2, leap: 1.5 };
@@ -1125,7 +1126,7 @@ function act() {
   } else if (kind === 'strike') { P.vel.addScaledVector(fwdOf(P.yaw, P.pitch), P.sp.max * 1.3); P.strikeT = 0.45; whoosh(0.7); }
   else if (kind === 'settle') { P.hidden = !P.hidden; say(P.hidden ? 'still. buried. unseen.' : '', P.hidden ? 1.5 : 0.01); if (P.hidden) for (let i = 0; i < 12; i++) emitBubble(P.pos.x + (Math.random() - .5), P.pos.y - 0.2, P.pos.z + (Math.random() - .5)); }
   else if (kind === 'breathe') { if (P.pos.y > -1.2) { P.sta = 1; P.spent = false; splash(0.3); say('a breath', 1.2); } else { say('too deep to breathe', 1.2); P.actReady = now + 0.3; } }
-  else if (kind === 'leap') { if (P.pos.y > -1.6) { P.vel.y = 6; P.vel.addScaledVector(fwdOf(P.yaw), 2); } else { say('get near the surface', 1.2); P.actReady = now + 0.3; } }
+  else if (kind === 'leap') { if (P.pos.y > -1.6) { P.vel.y = 6; P.leapT = 0.6; P.vel.addScaledVector(fwdOf(P.yaw), 2); } else { say('get near the surface', 1.2); P.actReady = now + 0.3; } }
 }
 const abilityName = () => (ABILITY[P.sp.id] || 'sense').toUpperCase();
 
@@ -1513,7 +1514,7 @@ function stepPlayer(dt) {
 
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
   if (P.hidden && (turn || climb > 0 || sprinting())) P.hidden = false;
-  P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
+  P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.leapT = Math.max(0, (P.leapT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
   P.idleT = climb ? 0 : (P.idleT || 0) + dt;
 
   // body attitude: a turn needs speed and banks the body; the turning circle grows with speed
@@ -1544,7 +1545,9 @@ function stepPlayer(dt) {
   else {
     P.vel.y += climb * 2.2 * dt * Math.max(1, sp.max * 0.35) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
     if (P.hidden) P.vel.y -= 2.0 * dt;   // settling into the sand
-    if (P.pos.y > -0.6 && P.vel.y > 0 && P.vel.y < 2.5) P.vel.y = Math.min(P.vel.y, (-0.08 - P.pos.y) * 4);   // a gentle rise floats you at the surface; only a burst breaches
+    const top = AIR.has(sp.id) ? -0.08 : -0.3;   // air-breathers float at the top; everything else stays just under it
+    if (P.pos.y > top - 0.5 && P.vel.y > 0 && !wantBurst && !(P.leapT > 0)) P.vel.y = Math.min(P.vel.y, (top - P.pos.y) * 4);   // a rise floats you there; only a burst or a leap breaches
+    if (!AIR.has(sp.id) && climb <= 0 && P.pos.y > -0.9) P.vel.y -= 0.9 * dt;   // let go of rise and a fish or a ray slips back down
   }
   P.speed = Math.max(0, along);
 
@@ -1555,7 +1558,7 @@ function stepPlayer(dt) {
   P.pos.y = THREE.MathUtils.clamp(P.pos.y, fHere + sp.alt, 6);
   if (P.pos.y <= fHere + sp.alt + 0.01 && P.vel.y < 0) P.vel.y = 0;
   lastFloor = fHere; P.current = _cur.length();
-  if (P.pos.y > -0.3) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - Math.random() * 0.1, P.pos.z + Math.sin(a) * r); } } }
+  if (P.pos.y > -0.4) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - Math.random() * 0.1, P.pos.z + Math.sin(a) * r); } } }
   const upNow = P.pos.y > -0.25; if (upNow !== !!P.wasUp && Math.abs(P.vel.y) > 0.4) { for (let i = 0; i < 30; i++) emitBubble(P.pos.x + (Math.random() - .5) * 1.5 * (sp.span ?? sp.len), -0.1 - Math.random() * 1.5, P.pos.z + (Math.random() - .5) * 1.5); splash(Math.min(1, Math.abs(P.vel.y) / 3)); P.shake = Math.max(P.shake || 0, 0.25); } P.wasUp = upNow;
   P.mesh.position.copy(P.pos); P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch, P.roll);
   P.mesh.material.uniforms.uGlow.value += ((P.hidden ? 0.35 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
@@ -1576,7 +1579,7 @@ function stepCamera(dt) {
   const back = fwdOf(yawT, P.pitch * 0.45).multiplyScalar(-dist); back.y += h;
   const want = P.pos.clone().add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
-  if (P.pos.y > -0.12) P.camUp = true; else if (P.pos.y < -0.9) P.camUp = false;
+  if (P.pos.y > -0.12) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;
   if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
   want.x += Math.sin(WU.uTime.value * 0.35) * 0.12; want.y += Math.sin(WU.uTime.value * 0.5 + 1.0) * 0.08;
   camPos.lerp(want, Math.min(1, 5 * dt));
