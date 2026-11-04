@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BAY RAY</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
+    font-family: "Courier New", Courier, monospace; color: #ffb000; }
+  canvas.gl { display: block; }
+  .hud { position: fixed; pointer-events: none; white-space: pre; font-size: 13px; line-height: 1.6;
+    letter-spacing: 2px; text-shadow: 0 0 6px #ff9000, 0 0 14px #ff700088; text-transform: uppercase; }
+  #tl { top: 16px; left: 18px; }
+  #tr { top: 16px; right: 18px; text-align: right; font-size: 18px; }
+  #bl { bottom: 14px; left: 18px; font-size: 11px; opacity: .75; }
+  #mini { position: fixed; right: 18px; bottom: 18px; width: 180px; height: 180px; image-rendering: pixelated;
+    border: 1px solid #ffb00044; box-shadow: 0 0 12px #ff900033; pointer-events: none; }
+  #load { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; font-size: 16px; letter-spacing: 4px; background: #000; z-index: 10; transition: opacity .8s; }
+  #load.gone { opacity: 0; pointer-events: none; }
+  #load .bar { width: 260px; height: 10px; border: 1px solid #ffb00088; }
+  #load .bar i { display: block; height: 100%; width: 0; background: #ffb000; box-shadow: 0 0 10px #ffb000; }
+  #load small { font-size: 10px; opacity: .6; letter-spacing: 2px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="load"><div>B A Y &nbsp; R A Y</div><div class="bar"><i id="bar"></i></div><div id="loadmsg">CONNECTING TO NOAA NCEI</div>
+  <small>bathymetry: NOAA NCEI DEM global mosaic · 1 unit = 1 metre</small></div>
+<div class="hud" id="tl"></div>
+<div class="hud" id="tr"></div>
+<div class="hud" id="bl"></div>
+<canvas id="mini" width="180" height="180"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ═══════════════════════════════════════════════════════════════════
+//  GEOGRAPHY  —  local metric frame centred on Tampa Bay. 1 unit = 1 m.
+//  +x east, −z north, y up, sea level y = 0. Depths are real NOAA values.
+// ═══════════════════════════════════════════════════════════════════
+const LAT0 = 27.75, LON0 = -82.55;
+const KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KZ = 110574;
+const toXZ = (lat, lon) => [(lon - LON0) * KX, -(lat - LAT0) * KZ];
+const toLL = (x, z) => [LAT0 - z / KZ, LON0 + x / KX];
+
+// Two nested DEM tiles: a wide one covering the Gulf shelf, a finer one for the bay.
+const TILES = {
+  outer: { lon0: -83.6, lat0: 27.0, lon1: -82.2, lat1: 28.3, n: 1024 },
+  inner: { lon0: -82.9, lat0: 27.45, lon1: -82.3, lat1: 28.1, n: 1024 },
+};
+for (const t of Object.values(TILES)) {
+  t.xmin = toXZ(0, t.lon0)[0]; t.xmax = toXZ(0, t.lon1)[0];
+  t.zmin = toXZ(t.lat1, 0)[1]; t.zmax = toXZ(t.lat0, 0)[1];   // north edge is zmin
+}
+const DEM_URL = t =>
+  `https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer/exportImage` +
+  `?bbox=${t.lon0},${t.lat0},${t.lon1},${t.lat1}&bboxSR=4326&imageSR=4326&size=${t.n},${t.n}` +
+  `&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=image`;
+
+// Places of interest (lat, lon). Bridge lines are approximate alignments.
+const POIS = [
+  [27.6205, -82.6555, 'Sunshine Skyway'], [27.600, -82.761, 'Egmont Key'], [27.615, -82.722, 'Fort De Soto'],
+  [27.530, -82.735, 'Anna Maria Island'], [27.877, -82.565, 'Gandy Bridge'], [27.945, -82.548, 'Howard Frankland'],
+  [27.965, -82.620, 'Courtney Campbell'], [27.85, -82.50, 'MacDill'], [27.78, -82.42, 'Apollo Beach'],
+  [27.96, -82.83, 'Clearwater Pass'], [27.68, -82.74, 'Pass-a-Grille'], [27.78, -82.78, 'Johns Pass'],
+  [27.75, -82.55, 'Middle Tampa Bay'], [27.92, -82.60, 'Old Tampa Bay'], [27.85, -82.45, 'Hillsborough Bay'],
+  [27.52, -82.62, 'Manatee River'], [27.70, -82.50, 'Lower Tampa Bay'], [27.33, -82.60, 'Sarasota Bay'],
+];
+const BRIDGES = [
+  { name: 'Sunshine Skyway', a: [27.698, -82.6548], b: [27.580, -82.6515], gap: 45 },
+  { name: 'Gandy Bridge', a: [27.8785, -82.5895], b: [27.8775, -82.5330], gap: 40 },
+  { name: 'Howard Frankland', a: [27.9240, -82.5720], b: [27.9790, -82.5230], gap: 40 },
+  { name: 'Courtney Campbell', a: [27.9660, -82.6590], b: [27.9640, -82.5770], gap: 60 },
+];
+const START = toXZ(27.632, -82.665);   // just north of the Skyway main span
+
+// ═══════════════════════════════════════════════════════════════════
+//  DATA  —  fetch NOAA float TIFFs, cache in IndexedDB, parse by hand.
+// ═══════════════════════════════════════════════════════════════════
+const bar = document.getElementById('bar'), loadmsg = document.getElementById('loadmsg');
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('bayray', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('dem');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function cached(key, fetcher) {
+  let db = null;
+  try { db = await idb(); } catch { return fetcher(); }
+  const hit = await new Promise(res => {
+    const rq = db.transaction('dem').objectStore('dem').get(key);
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined);
+  });
+  if (hit) return hit;
+  const v = await fetcher();
+  try { db.transaction('dem', 'readwrite').objectStore('dem').put(v, key); } catch {}
+  return v;
+}
+async function fetchBuf(url, onProgress) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('NOAA ' + r.status);
+  const total = +r.headers.get('content-length') || 0, reader = r.body.getReader(), chunks = [];
+  let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onProgress(total ? got / total : 0); }
+  const out = new Uint8Array(got); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out.buffer;
+}
+// Minimal TIFF reader: uncompressed, 32-bit float, strips or tiles, little or big endian.
+function parseTiffF32(buf) {
+  const dv = new DataView(buf), le = dv.getUint16(0, false) === 0x4949;
+  const u16 = o => dv.getUint16(o, le), u32 = o => dv.getUint32(o, le);
+  const ifd = u32(4), n = u16(ifd), tags = {};
+  const SZ = { 1: 1, 2: 1, 3: 2, 4: 4, 12: 8 };
+  for (let i = 0; i < n; i++) {
+    const o = ifd + 2 + i * 12, tag = u16(o), type = u16(o + 2), count = u32(o + 4);
+    const off = SZ[type] * count <= 4 ? o + 8 : u32(o + 8);
+    tags[tag] = { type, count, off };
+  }
+  const vals = t => { const g = tags[t]; if (!g) return null; const a = []; for (let i = 0; i < g.count; i++) a.push(g.type === 3 ? u16(g.off + i * 2) : u32(g.off + i * 4)); return a; };
+  const w = vals(256)[0], h = vals(257)[0];
+  if (vals(258)[0] !== 32 || (vals(259) || [1])[0] !== 1) throw new Error('unexpected TIFF layout');
+  const out = new Float32Array(w * h);
+  const copy = (src, dstX, dstY, bw, bh) => {
+    for (let y = 0; y < bh && dstY + y < h; y++) for (let x = 0; x < bw && dstX + x < w; x++)
+      out[(dstY + y) * w + dstX + x] = dv.getFloat32(src + (y * bw + x) * 4, le);
+  };
+  if (tags[324]) {
+    const tw = vals(322)[0], th = vals(323)[0], offs = vals(324), tilesX = Math.ceil(w / tw);
+    offs.forEach((off, i) => copy(off, (i % tilesX) * tw, Math.floor(i / tilesX) * th, tw, th));
+  } else {
+    const rps = (vals(278) || [h])[0], offs = vals(273);
+    offs.forEach((off, i) => copy(off, 0, i * rps, w, rps));
+  }
+  for (let i = 0; i < out.length; i++) if (!Number.isFinite(out[i]) || Math.abs(out[i]) > 12000) out[i] = 0;
+  return { w, h, data: out };
+}
+
+// CPU-side bilinear height query (metres, negative = below sea level).
+function tileSample(t, x, z) {
+  const u = (x - t.xmin) / (t.xmax - t.xmin) * (t.w - 1), v = (z - t.zmin) / (t.zmax - t.zmin) * (t.h - 1);
+  const x0 = Math.max(0, Math.min(t.w - 2, Math.floor(u))), y0 = Math.max(0, Math.min(t.h - 2, Math.floor(v)));
+  const fx = Math.min(1, Math.max(0, u - x0)), fy = Math.min(1, Math.max(0, v - y0)), d = t.data, w = t.w;
+  const a = d[y0 * w + x0], b = d[y0 * w + x0 + 1], c = d[(y0 + 1) * w + x0], e = d[(y0 + 1) * w + x0 + 1];
+  return (a + (b - a) * fx) * (1 - fy) + (c + (e - c) * fx) * fy;
+}
+let vex = 1;  // vertical exaggeration (V key); 1 = true scale
+function floorAt(x, z) {
+  const i = TILES.inner, m = 300;
+  const t = (x > i.xmin + m && x < i.xmax - m && z > i.zmin + m && z < i.zmax - m) ? i : TILES.outer;
+  return tileSample(t, x, z) * vex;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDERER + DOT-MATRIX POST  (scene renders brightness only; the post
+//  pass turns each low-res pixel into a glowing OEL dot, then bloom.)
+// ═══════════════════════════════════════════════════════════════════
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.domElement.className = 'gl';
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 900);
+
+let pitchCss = 4;                     // dot pitch in CSS pixels (keys 1/2/3)
+const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+const DotShader = {
+  uniforms: { tScene: { value: lowRT.texture }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tScene; uniform vec2 uGrid; uniform float uPitch;
+    vec3 palette(float b) {
+      b = clamp(b, 0.0, 1.0);
+      vec3 c0 = vec3(0.010, 0.035, 0.10), c1 = vec3(0.05, 0.38, 0.98), c2 = vec3(0.38, 0.92, 1.0), c3 = vec3(0.96, 1.0, 1.0);
+      return b < 0.4 ? mix(c0, c1, b / 0.4) : b < 0.75 ? mix(c1, c2, (b - 0.4) / 0.35) : mix(c2, c3, (b - 0.75) / 0.25);
+    }
+    void main() {
+      vec2 cell = floor(gl_FragCoord.xy / uPitch);
+      float b = texture2D(tScene, (cell + 0.5) / uGrid).r;
+      vec2 f = fract(gl_FragCoord.xy / uPitch) - 0.5;
+      float d = length(f) * 2.0;
+      float r = 0.5 + 0.45 * b;
+      float mask = 1.0 - smoothstep(r - 0.3, r + 0.05, d);
+      vec3 lit = palette(b) * mask;
+      vec3 unlit = vec3(0.004, 0.010, 0.028) * (1.0 - smoothstep(0.7, 0.95, d));
+      gl_FragColor = vec4(lit + unlit, 1.0);
+    }`,
+};
+const composer = new EffectComposer(renderer);
+const dotPass = new ShaderPass(DotShader);
+dotPass.uniforms.tScene.value = lowRT.texture;   // ShaderPass clones uniforms; a cloned RT texture is dead
+composer.addPass(dotPass);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.4, 0.55);
+composer.addPass(bloom);
+
+function resize() {
+  const dpr = renderer.getPixelRatio(), W = Math.floor(innerWidth * dpr), H = Math.floor(innerHeight * dpr);
+  const pitch = Math.max(2, Math.round(pitchCss * dpr));
+  const gw = Math.ceil(W / pitch), gh = Math.ceil(H / pitch);
+  lowRT.setSize(gw, gh);
+  dotPass.uniforms.uGrid.value.set(gw, gh);
+  dotPass.uniforms.uPitch.value = pitch;
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════════════════
+//  SHARED GLSL
+// ═══════════════════════════════════════════════════════════════════
+const FOG_D = 0.011;
+const GLSL_COMMON = /* glsl */`
+  uniform float uTime;
+  float fogF(float d) { float k = d * ${FOG_D}; return 1.0 - exp(-k * k); }
+  float depthLight(float y) { return exp(min(y, 0.0) * 0.045); }   // sunlight fades with depth
+`;
+const DEM_GLSL = /* glsl */`
+  uniform sampler2D uDemO, uDemI; uniform vec4 uBoxO, uBoxI; uniform float uVex;
+  float demAt(vec2 p) {
+    vec2 uvI = (p - uBoxI.xy) / (uBoxI.zw - uBoxI.xy);
+    if (all(greaterThan(uvI, vec2(0.015))) && all(lessThan(uvI, vec2(0.985)))) return texture2D(uDemI, uvI).r * uVex;
+    vec2 uvO = clamp((p - uBoxO.xy) / (uBoxO.zw - uBoxO.xy), 0.0, 1.0);
+    return texture2D(uDemO, uvO).r * uVex;
+  }`;
+const demUniforms = {
+  uDemO: { value: null }, uDemI: { value: null }, uVex: { value: 1 },
+  uBoxO: { value: new THREE.Vector4(TILES.outer.xmin, TILES.outer.zmin, TILES.outer.xmax, TILES.outer.zmax) },
+  uBoxI: { value: new THREE.Vector4(TILES.inner.xmin, TILES.inner.zmin, TILES.inner.xmax, TILES.inner.zmax) },
+};
+const timeU = { value: 0 };
+
+// ═══════════════════════════════════════════════════════════════════
+//  SEAFLOOR  —  geometry clipmap: nested rings displaced by the DEM
+//  textures in the vertex shader, re-centred on the ray every frame.
+// ═══════════════════════════════════════════════════════════════════
+const CLIP_N = 64, CLIP_BASE = 1.0, CLIP_LEVELS = 6;
+function ringGeometry(level) {
+  const pos = [], idx = [], half = CLIP_N / 2, hole = level === 0 ? -1 : CLIP_N / 4;
+  const map = new Map();
+  const vid = (i, j) => { const k = i + ',' + j; if (!map.has(k)) { map.set(k, pos.length / 3); pos.push(i, 0, j); } return map.get(k); };
+  for (let j = -half; j < half; j++) for (let i = -half; i < half; i++) {
+    if (hole > 0 && i >= -hole && i < hole && j >= -hole && j < hole) continue;
+    const a = vid(i, j), b = vid(i + 1, j), c = vid(i, j + 1), d = vid(i + 1, j + 1);
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  return g;
+}
+const floorMat = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  uniforms: { ...demUniforms, uTime: timeU, uOrigin: { value: new THREE.Vector2() }, uCell: { value: 1 } },
+  vertexShader: GLSL_COMMON + DEM_GLSL + /* glsl */`
+    uniform vec2 uOrigin; uniform float uCell;
+    varying vec3 vW; varying float vD;
+    void main() {
+      vec2 xz = uOrigin + position.xz * uCell;
+      vW = vec3(xz.x, demAt(xz), xz.y);
+      vec4 mv = modelViewMatrix * vec4(vW, 1.0);
+      vD = length(mv.xyz);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: GLSL_COMMON + /* glsl */`
+    uniform float uVex;
+    varying vec3 vW; varying float vD;
+    void main() {
+      vec3 n = normalize(cross(dFdx(vW), dFdy(vW))); if (n.y < 0.0) n = -n;
+      float l = 0.45 + 0.55 * max(dot(n, normalize(vec3(0.25, 1.0, 0.15))), 0.0);
+      float r1 = sin(vW.x * 2.6 + sin(vW.z * 0.5) * 1.5 + uTime * 0.1), r2 = sin(vW.z * 2.1 - vW.x * 0.7);
+      float sand = 1.0 + 0.07 * r1 + 0.05 * r2;
+      float b = l * sand * mix(0.08, 0.40, depthLight(vW.y));
+      // bright isolines every metre of true depth: the bathymetry itself becomes the texture
+      float iso = abs(fract(vW.y / uVex + 0.5) - 0.5) / max(fwidth(vW.y / uVex), 1e-4);
+      b += 0.22 * (1.0 - smoothstep(0.0, 1.4, iso)) * mix(0.3, 1.0, depthLight(vW.y));
+      b *= 1.0 - fogF(vD);
+      gl_FragColor = vec4(vec3(b), 1.0);
+    }`,
+});
+const clipLevels = [];
+for (let L = 0; L < CLIP_LEVELS; L++) {
+  const m = new THREE.Mesh(ringGeometry(L), floorMat.clone());
+  m.material.uniforms.uDemO = demUniforms.uDemO; m.material.uniforms.uDemI = demUniforms.uDemI;
+  m.material.uniforms.uVex = demUniforms.uVex; m.material.uniforms.uTime = timeU;
+  m.material.uniforms.uCell.value = CLIP_BASE * 2 ** L;
+  m.frustumCulled = false;
+  scene.add(m); clipLevels.push(m);
+}
+function updateClipmap(px, pz) {
+  for (const m of clipLevels) {
+    const c = m.material.uniforms.uCell.value, s = c * 2;
+    m.material.uniforms.uOrigin.value.set(Math.floor(px / s) * s, Math.floor(pz / s) * s);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  WATER SURFACE (seen from below) + LIGHT SHAFTS + PARTICLES
+// ═══════════════════════════════════════════════════════════════════
+const surface = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.ShaderMaterial({
+  uniforms: { uTime: timeU },
+  side: THREE.DoubleSide,
+  vertexShader: GLSL_COMMON + `varying vec3 vW; varying float vD;
+    void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: GLSL_COMMON + `varying vec3 vW; varying float vD;
+    void main(){
+      float a = sin(vW.x * 0.45 + uTime * 0.9) * sin(vW.z * 0.38 - uTime * 0.7);
+      float c = sin(vW.x * 0.11 - vW.z * 0.13 + uTime * 0.35);
+      float p = 0.5 + 0.5 * (a * 0.7 + c * 0.3);
+      float b = 0.14 + 0.6 * pow(p, 5.0);
+      b *= 1.0 - fogF(vD);
+      gl_FragColor = vec4(vec3(b), 1.0);
+    }`,
+}));
+surface.rotation.x = -Math.PI / 2; surface.frustumCulled = false; scene.add(surface);
+
+const SHAFTS = 36, shaftGeo = new THREE.PlaneGeometry(1, 1).translate(0, -0.5, 0);
+const shaftMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: timeU }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  vertexShader: GLSL_COMMON + `varying vec2 vUv; varying float vD; varying float vY;
+    void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position,1.0); vY = w.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: GLSL_COMMON + `varying vec2 vUv; varying float vD; varying float vY;
+    void main(){
+      float edge = sin(vUv.x * 3.14159);
+      float b = 0.10 * edge * edge * vUv.y * vUv.y * depthLight(vY) * (0.7 + 0.3 * sin(uTime * 0.8 + vUv.x * 6.0));
+      b *= 1.0 - fogF(vD);
+      gl_FragColor = vec4(vec3(b), 1.0);
+    }`,
+});
+const shafts = new THREE.InstancedMesh(shaftGeo, shaftMat, SHAFTS);
+shafts.frustumCulled = false; scene.add(shafts);
+const shaftSeeds = Array.from({ length: SHAFTS }, (_, i) => ({ a: i / SHAFTS * Math.PI * 2 + Math.random(), r: 15 + Math.random() * 70, w: 2 + Math.random() * 4, s: Math.random() * 6 }));
+
+function pointsCloud(n, size, bright) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uTime: timeU, uSize: { value: size }, uB: { value: bright } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: GLSL_COMMON + `uniform float uSize; varying float vD; varying float vY;
+      void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vD = length(mv.xyz); vY = position.y; gl_PointSize = uSize; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: GLSL_COMMON + `uniform float uB; varying float vD; varying float vY;
+      void main(){ float b = uB * (1.0 - fogF(vD)) * (0.5 + 0.5 * depthLight(vY)); gl_FragColor = vec4(vec3(b), 1.0); }`,
+  });
+  const p = new THREE.Points(g, m); p.frustumCulled = false; scene.add(p);
+  return p;
+}
+const snow = pointsCloud(2500, 1, 0.28), snowBox = 110;
+{ const a = snow.geometry.attributes.position.array; for (let i = 0; i < a.length; i++) a[i] = (Math.random() - 0.5) * snowBox; }
+const bubbles = pointsCloud(160, 2, 0.8), bubbleLife = new Float32Array(160).fill(99);
+
+// ═══════════════════════════════════════════════════════════════════
+//  CREATURES  —  one brightness material with rim light; flat normals
+//  from screen derivatives so flapping/deformed meshes still shade.
+// ═══════════════════════════════════════════════════════════════════
+function creatureMaterial(extraVert = '', uniforms = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: timeU, uFlap: { value: 0 }, uGlow: { value: 1 }, ...uniforms }, side: THREE.DoubleSide,
+    vertexShader: GLSL_COMMON + `uniform float uFlap; varying vec3 vW; varying float vD;
+      void main(){
+        vec3 p = position;
+        ${extraVert}
+        #ifdef USE_INSTANCING
+          vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        #else
+          vec4 w = modelMatrix * vec4(p, 1.0);
+        #endif
+        vW = w.xyz; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: GLSL_COMMON + `uniform float uGlow; varying vec3 vW; varying float vD;
+      void main(){
+        vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));
+        vec3 v = normalize(cameraPosition - vW);
+        if (dot(n, v) < 0.0) n = -n;
+        float l = 0.22 + 0.40 * max(dot(n, normalize(vec3(0.2, 1.0, 0.1))), 0.0);
+        float rim = pow(1.0 - max(dot(n, v), 0.0), 2.2);
+        float b = min(1.0, (l * mix(0.5, 1.0, depthLight(vW.y)) + rim * 0.75) * uGlow);
+        b *= 1.0 - fogF(vD);
+        gl_FragColor = vec4(vec3(b), 1.0);
+      }`,
+  });
+}
+
+// — The ray: a manta-shaped sheet, wings flapped in the vertex shader.
+const RAY_SPAN = 3.8, RAY_LEN = 2.6;
+function rayGeometry() {
+  const nu = 48, nv = 28, pos = [], idx = [];
+  const half = RAY_SPAN / 2;
+  const width = t => t < 0.86 ? half * Math.pow(Math.sin(Math.PI * Math.min(1, t / 0.86)), 0.75) : 0.0001;
+  for (const sideSign of [1, -1]) {
+    const base = pos.length / 3;
+    for (let j = 0; j <= nv; j++) {
+      const t = j / nv, w = width(t);
+      for (let i = 0; i <= nu; i++) {
+        const u = i / nu * 2 - 1;
+        const bulge = (1 - u * u) * 0.11 * Math.pow(Math.sin(Math.PI * Math.min(t / 0.86, 1)), 0.6) * Math.max(0, 1 - Math.abs(u) * 1.2);
+        pos.push(u * w, sideSign * bulge, (t - 0.32) * RAY_LEN);
+      }
+    }
+    for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+      const a = base + j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
+      if (sideSign > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  return g;
+}
+const rayMat = creatureMaterial(`
+  float s = abs(p.x) / ${(RAY_SPAN / 2).toFixed(3)};
+  p.y += sin(uTime * 2.3 - s * 1.6) * pow(s, 1.6) * 0.62 * uFlap;
+  p.y += sin(uTime * 2.3 + p.z * 1.2) * 0.03;`);
+const ray = new THREE.Group();
+const rayBody = new THREE.Mesh(rayGeometry(), rayMat); ray.add(rayBody);
+const rayTail = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 1.9).translate(0, 0.95, 0).rotateX(Math.PI / 2), creatureMaterial());
+rayTail.position.z = (0.86 - 0.32) * RAY_LEN - 0.1; ray.add(rayTail);
+for (const sx of [-1, 1]) {   // cephalic lobes
+  const lobe = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.5).rotateX(-Math.PI / 2).rotateY(sx * 0.35), creatureMaterial());
+  lobe.position.set(sx * 0.32, 0, -0.32 * RAY_LEN - 0.18); ray.add(lobe);
+}
+scene.add(ray);
+
+// — Dolphins: lathe body + fins, porpoising around the ray.
+function dolphin() {
+  const L = 2.5, pts = [];
+  for (let i = 0; i <= 24; i++) { const s = i / 24; pts.push(new THREE.Vector2(0.001 + 0.23 * Math.pow(Math.sin(Math.PI * Math.pow(s, 0.85)), 0.7) * (0.55 + 0.45 * s), s * L)); }
+  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 18).rotateX(-Math.PI / 2).translate(0, 0, L * 0.5), creatureMaterial());
+  const g = new THREE.Group(); g.add(body);
+  const fin = (sx, sy, sz, px, py, pz, rx, rz) => {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 10).scale(sx, sy, sz), creatureMaterial());
+    m.position.set(px, py, pz); m.rotation.set(rx, 0, rz); g.add(m);
+  };
+  fin(0.18, 1, 1, 0, 0.3, 0.1, 0.5, 0);                              // dorsal
+  fin(1, 1, 0.12, 0.26, -0.06, -0.45, 0, -1.9); fin(1, 1, 0.12, -0.26, -0.06, -0.45, 0, 1.9); // pectorals
+  const fluke = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.26), creatureMaterial()); fluke.position.set(0, 0, L * 0.5 + 0.05); g.add(fluke);
+  g.userData = { phase: Math.random() * 10, r: 18 + Math.random() * 25, speed: 0.12 + Math.random() * 0.08, pos: new THREE.Vector3(), vel: new THREE.Vector3() };
+  scene.add(g); return g;
+}
+const dolphins = [dolphin(), dolphin(), dolphin()];
+
+// — Fish schools: instanced silhouettes orbiting wandering school centres.
+const fishGeo = new THREE.BufferGeometry();
+fishGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.14, 0, 0.045, 0.02, 0, -0.045, 0.02, 0, 0, 0.11, 0, 0.055, 0.17, 0, -0.055, 0.17], 3));
+fishGeo.setIndex([0, 1, 2, 1, 3, 2, 3, 4, 5]);
+const SCHOOLS = 7, FISH_PER = 55;
+const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMaterial('', { uGlow: { value: 0.8 } }), SCHOOLS * FISH_PER);
+fishMesh.frustumCulled = false; scene.add(fishMesh);
+const schools = Array.from({ length: SCHOOLS }, (_, s) => ({
+  c: new THREE.Vector3(), dir: Math.random() * 6.28, turn: 0, v: 0.6 + Math.random() * 0.6, spread: 2.5 + Math.random() * 3,
+  fish: Array.from({ length: FISH_PER }, () => ({ off: new THREE.Vector3((Math.random() - .5), (Math.random() - .5) * 0.5, (Math.random() - .5)), ph: Math.random() * 6.28, w: 0.4 + Math.random() * 0.5 })),
+}));
+
+// — Seagrass: instanced blades in the shallows, re-scattered as the ray roams.
+const GRASS_MAX = 14000;
+const grassMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: timeU }, side: THREE.DoubleSide,
+  vertexShader: GLSL_COMMON + `varying float vD; varying float vY; varying float vU;
+    void main(){ vec3 p = position; vec3 o = (instanceMatrix * vec4(0,0,0,1)).xyz;
+      p.x += sin(uTime * 1.1 + o.x * 0.7 + o.z * 0.4) * uv.y * uv.y * 0.22;
+      p.z += cos(uTime * 0.9 + o.x * 0.3) * uv.y * uv.y * 0.12;
+      vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vY = w.y; vU = uv.y;
+      vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: GLSL_COMMON + `varying float vD; varying float vY; varying float vU;
+    void main(){ float b = (0.22 + 0.45 * vU) * mix(0.4, 1.0, depthLight(vY)); b *= 1.0 - fogF(vD); gl_FragColor = vec4(vec3(b), 1.0); }`,
+});
+const grass = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.06, 0.75).translate(0, 0.375, 0), grassMat, GRASS_MAX);
+grass.frustumCulled = false; grass.count = 0; scene.add(grass);
+let grassCenter = new THREE.Vector2(1e9, 1e9);
+const hash2 = (x, z) => { let n = Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+function rebuildGrass(px, pz) {
+  const m = new THREE.Matrix4(), R = 70, step = 1.4; let k = 0;
+  const cx = Math.round(px / step) * step, cz = Math.round(pz / step) * step;
+  for (let z = cz - R; z <= cz + R && k < GRASS_MAX; z += step) for (let x = cx - R; x <= cx + R && k < GRASS_MAX; x += step) {
+    const h = hash2(x * 7, z * 13); if (h > 0.26) continue;
+    const f = floorAt(x, z); if (f > -0.4 || f < -5.5) continue;
+    const jx = (hash2(x, z) - 0.5) * step, jz = (hash2(z, x) - 0.5) * step, s = 0.6 + hash2(x + 1, z + 1) * 0.9;
+    m.makeRotationY(hash2(x + 3, z) * 6.28); m.scale(new THREE.Vector3(1, s, 1)); m.setPosition(x + jx, floorAt(x + jx, z + jz), z + jz);
+    grass.setMatrixAt(k++, m);
+  }
+  grass.count = k; grass.instanceMatrix.needsUpdate = true; grassCenter.set(px, pz);
+}
+
+// — Bridge pilings along approximate alignments, floor to surface (sized once the DEM is in).
+let pileCount = 0;
+for (const br of BRIDGES) { const a = toXZ(...br.a), b = toXZ(...br.b); pileCount += (Math.floor(Math.hypot(b[0] - a[0], b[1] - a[1]) / br.gap) + 1) * 2; }
+const pileMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.2, 1.4, 1, 10).translate(0, 0.5, 0), creatureMaterial('', { uGlow: { value: 0.7 } }), pileCount);
+pileMesh.frustumCulled = false; pileMesh.count = 0; scene.add(pileMesh);
+function placePilings() {
+  const m = new THREE.Matrix4(); let k = 0;
+  for (const br of BRIDGES) {
+    const a = toXZ(...br.a), b = toXZ(...br.b), len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.floor(len / br.gap);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
+      for (const o of [-6, 6]) {
+        const px = x + o * (b[1] - a[1]) / len, pz = z - o * (b[0] - a[0]) / len, f = floorAt(px, pz);
+        if (f > -0.5) continue;
+        m.makeScale(1, -f + 3, 1); m.setPosition(px, f - 1, pz); pileMesh.setMatrixAt(k++, m);
+      }
+    }
+  }
+  pileMesh.count = k; pileMesh.instanceMatrix.needsUpdate = true;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SIM STATE, INPUT, AUDIO
+// ═══════════════════════════════════════════════════════════════════
+const R = { pos: new THREE.Vector3(START[0], -4, START[1]), yaw: Math.PI, pitch: 0, roll: 0, speed: 1.6, yawRate: 0 };
+let camYawOff = 0, camPitch = 0.16, dragging = false, lx = 0, ly = 0;
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Digit1') { pitchCss = 3; resize(); } if (e.code === 'Digit2') { pitchCss = 4; resize(); } if (e.code === 'Digit3') { pitchCss = 6; resize(); }
+  if (e.code === 'KeyV') { vex = vex === 1 ? 3 : 1; demUniforms.uVex.value = vex; grassCenter.set(1e9, 1e9); }
+  if (e.code === 'KeyM') mini.style.display = mini.style.display === 'none' ? '' : 'none';
+  if (e.code === 'KeyN') toggleAudio();
+  startAudio();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; startAudio(); });
+addEventListener('pointerup', () => dragging = false);
+addEventListener('pointermove', e => {
+  if (!dragging) return;
+  camYawOff -= (e.clientX - lx) * 0.005; camPitch = THREE.MathUtils.clamp(camPitch + (e.clientY - ly) * 0.004, -0.5, 1.1);
+  lx = e.clientX; ly = e.clientY;
+});
+
+let audio = null, audioOn = true;
+function startAudio() {
+  if (audio) return;
+  const ac = new (window.AudioContext || window.webkitAudioContext)(); audio = { ac, gain: ac.createGain() };
+  audio.gain.gain.value = 0.0; audio.gain.connect(ac.destination);
+  const buf = ac.createBuffer(1, ac.sampleRate * 4, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const noise = ac.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.4;
+  const ng = ac.createGain(); ng.gain.value = 0.35; noise.connect(lp).connect(ng).connect(audio.gain); noise.start();
+  const lfo = ac.createOscillator(); lfo.frequency.value = 0.07; const lg = ac.createGain(); lg.gain.value = 120; lfo.connect(lg).connect(lp.frequency); lfo.start();
+  for (const [f, g] of [[55, 0.10], [82.4, 0.06], [110, 0.03]]) { const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f; const og = ac.createGain(); og.gain.value = g; o.connect(og).connect(audio.gain); o.start(); }
+  audio.gain.gain.linearRampToValueAtTime(0.5, ac.currentTime + 4);
+}
+function toggleAudio() { if (!audio) return; audioOn = !audioOn; audio.gain.gain.linearRampToValueAtTime(audioOn ? 0.5 : 0, audio.ac.currentTime + 0.5); }
+
+// ═══════════════════════════════════════════════════════════════════
+//  HUD + MINIMAP
+// ═══════════════════════════════════════════════════════════════════
+const tl = document.getElementById('tl'), tr = document.getElementById('tr'), bl = document.getElementById('bl');
+const mini = document.getElementById('mini'), mctx = mini.getContext('2d');
+let miniImg = null;
+function buildMinimap() {
+  const t = TILES.outer, S = 180, img = mctx.createImageData(S, S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const v = t.data[Math.floor(y / S * t.h) * t.w + Math.floor(x / S * t.w)], i = (y * S + x) * 4;
+    if (v > 0) { img.data[i] = 40; img.data[i + 1] = 26; img.data[i + 2] = 0; }
+    else { const d = Math.min(1, -v / 40); img.data[i] = 5; img.data[i + 1] = 40 + 90 * (1 - d); img.data[i + 2] = 90 + 150 * (1 - d); }
+    img.data[i + 3] = 255;
+  }
+  miniImg = img;
+}
+function drawMinimap() {
+  if (!miniImg) return;
+  mctx.putImageData(miniImg, 0, 0);
+  const t = TILES.outer, x = (R.pos.x - t.xmin) / (t.xmax - t.xmin) * 180, y = (R.pos.z - t.zmin) / (t.zmax - t.zmin) * 180;
+  mctx.fillStyle = '#ffb000'; mctx.shadowColor = '#ffb000'; mctx.shadowBlur = 6; mctx.fillRect(x - 2, y - 2, 4, 4); mctx.shadowBlur = 0;
+}
+bl.textContent = 'W/S speed   A/D turn   R/F rise · dive   drag: look   1·2·3 dot pitch   V depth ×3   M map   N sound';
+
+// ═══════════════════════════════════════════════════════════════════
+//  FRAME
+// ═══════════════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+const _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+let nearestPoi = '', poiTimer = 0;
+
+function step(dt, t) {
+  // ── ray control ──
+  const want = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  R.speed = THREE.MathUtils.clamp(R.speed + want * 1.6 * dt, 0.3, 4.5);
+  const turn = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+  R.yawRate += (turn * 1.1 - R.yawRate) * Math.min(1, 3 * dt);
+  R.yaw += R.yawRate * dt;
+  const climb = (keys.KeyR || keys.Space ? 1 : 0) - (keys.KeyF || keys.ShiftLeft ? 1 : 0);
+  R.pitch += ((climb * 0.55) - R.pitch) * Math.min(1, 2.5 * dt);
+  R.roll += (-R.yawRate * 0.7 - R.roll) * Math.min(1, 3 * dt);
+  const fwd = new THREE.Vector3(-Math.sin(R.yaw) * Math.cos(R.pitch), Math.sin(R.pitch), -Math.cos(R.yaw) * Math.cos(R.pitch));
+  const next = R.pos.clone().addScaledVector(fwd, R.speed * dt);
+  const fl = floorAt(next.x, next.z);
+  if (fl > -1.6) { R.speed = Math.max(0.3, R.speed * 0.5); R.pitch = Math.max(R.pitch, 0); } else R.pos.copy(next);
+  const floorHere = floorAt(R.pos.x, R.pos.z);
+  R.pos.y = THREE.MathUtils.clamp(R.pos.y, floorHere + 0.9, -0.8);
+
+  ray.position.copy(R.pos);
+  ray.rotation.set(0, 0, 0); ray.rotateY(R.yaw); ray.rotateX(-R.pitch); ray.rotateZ(R.roll);
+  rayMat.uniforms.uFlap.value = 0.55 + 0.45 * Math.min(1, R.speed / 3);
+  rayTail.rotation.y = Math.sin(t * 1.3) * 0.25;
+
+  // ── camera ──
+  const cy = R.yaw + camYawOff;
+  const back = new THREE.Vector3(Math.sin(cy) * Math.cos(camPitch), Math.sin(camPitch), Math.cos(cy) * Math.cos(camPitch));
+  camPos.lerp(_v.copy(R.pos).addScaledVector(back, 12), Math.min(1, 4 * dt));
+  camPos.y = THREE.MathUtils.clamp(camPos.y, floorAt(camPos.x, camPos.z) + 0.6, -0.4);
+  camLook.lerp(_v.copy(R.pos).addScaledVector(fwd, 4), Math.min(1, 6 * dt));
+  camera.position.copy(camPos); camera.lookAt(camLook);
+
+  // ── world upkeep ──
+  updateClipmap(R.pos.x, R.pos.z);
+  surface.position.set(camPos.x, 0, camPos.z);
+  if (grassCenter.distanceTo(new THREE.Vector2(R.pos.x, R.pos.z)) > 28) rebuildGrass(R.pos.x, R.pos.z);
+
+  shaftSeeds.forEach((s, i) => {
+    const a = s.a + t * 0.01, x = camPos.x + Math.cos(a) * s.r, z = camPos.z + Math.sin(a) * s.r;
+    _m.makeRotationY(Math.atan2(camPos.x - x, camPos.z - z) + Math.sin(t * 0.3 + s.s) * 0.2);
+    _m.scale(new THREE.Vector3(s.w, 26 + Math.sin(t * 0.2 + s.s) * 4, 1)); _m.setPosition(x, 0, z);
+    shafts.setMatrixAt(i, _m);
+  });
+  shafts.instanceMatrix.needsUpdate = true;
+
+  { const a = snow.geometry.attributes.position.array, h = snowBox / 2;
+    for (let i = 0; i < a.length; i += 3) {
+      a[i + 1] -= 0.08 * dt; a[i] += Math.sin(t * 0.3 + i) * 0.02 * dt;
+      for (let k = 0; k < 3; k++) { const d = a[i + k] - camPos.getComponent(k); if (d > h) a[i + k] -= snowBox; else if (d < -h) a[i + k] += snowBox; }
+    }
+    snow.geometry.attributes.position.needsUpdate = true; }
+  { const a = bubbles.geometry.attributes.position.array;
+    for (let i = 0; i < 160; i++) {
+      bubbleLife[i] += dt;
+      if (bubbleLife[i] > 6 && Math.random() < 0.02 * R.speed) { bubbleLife[i] = 0; a[i * 3] = R.pos.x + (Math.random() - .5) * 0.6; a[i * 3 + 1] = R.pos.y; a[i * 3 + 2] = R.pos.z; }
+      else if (bubbleLife[i] <= 6) { a[i * 3 + 1] = Math.min(-0.05, a[i * 3 + 1] + 0.45 * dt); a[i * 3] += Math.sin(t * 5 + i) * 0.05 * dt; }
+      else a[i * 3 + 1] = 9999;
+    }
+    bubbles.geometry.attributes.position.needsUpdate = true; }
+
+  // ── dolphins: orbit the ray and porpoise toward the surface ──
+  dolphins.forEach((d, i) => {
+    const u = d.userData, a = t * u.speed + u.phase;
+    const target = _v.set(R.pos.x + Math.cos(a) * u.r, -1.2 - Math.max(0, Math.sin(a * 2.3 + i)) * 4.5, R.pos.z + Math.sin(a) * u.r);
+    const f = floorAt(target.x, target.z); target.y = THREE.MathUtils.clamp(target.y, f + 1.2, -0.6);
+    if (u.pos.lengthSq() === 0) u.pos.copy(target);
+    const prev = u.pos.clone(); u.pos.lerp(target, Math.min(1, 1.2 * dt));
+    u.vel.lerp(_v.copy(u.pos).sub(prev).divideScalar(Math.max(dt, 1e-3)), 0.2);
+    d.position.copy(u.pos);
+    if (u.vel.lengthSq() > 1e-4) { _m.lookAt(_v.set(0, 0, 0), u.vel, new THREE.Vector3(0, 1, 0)); d.quaternion.setFromRotationMatrix(_m); }
+    d.rotation.x += Math.sin(t * 4 + i) * 0.03;
+  });
+
+  // ── fish schools ──
+  let k = 0;
+  for (const s of schools) {
+    if (s.c.lengthSq() === 0 || s.c.distanceTo(R.pos) > 160) {
+      const a = Math.random() * 6.28, r = 25 + Math.random() * 60; s.c.set(R.pos.x + Math.cos(a) * r, 0, R.pos.z + Math.sin(a) * r);
+      s.c.y = Math.min(-1.5, floorAt(s.c.x, s.c.z) + 2 + Math.random() * 3);
+    }
+    s.turn += (Math.random() - 0.5) * dt * 2; s.turn *= 0.98; s.dir += s.turn * dt;
+    s.c.x += -Math.sin(s.dir) * s.v * dt; s.c.z += -Math.cos(s.dir) * s.v * dt;
+    const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += Math.PI * 0.5 * dt * 4;
+    s.c.y = THREE.MathUtils.clamp(s.c.y + Math.sin(t * 0.2) * 0.1 * dt, f + 1, -1.2);
+    for (const fish of s.fish) {
+      const ph = t * fish.w + fish.ph;
+      const ox = fish.off.x * s.spread + Math.sin(ph) * 0.6, oz = fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6, oy = fish.off.y * s.spread;
+      _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0);
+      _m.makeRotationFromEuler(_e); _m.setPosition(s.c.x + ox, s.c.y + oy, s.c.z + oz);
+      fishMesh.setMatrixAt(k++, _m);
+    }
+  }
+  fishMesh.instanceMatrix.needsUpdate = true;
+
+  // ── HUD ──
+  const [lat, lon] = toLL(R.pos.x, R.pos.z), hdg = ((-R.yaw * 180 / Math.PI) % 360 + 360) % 360;
+  tl.textContent = `DEPTH  ${(-R.pos.y).toFixed(1).padStart(5)} m\nFLOOR  ${(-floorHere / vex).toFixed(1).padStart(5)} m\nHDG    ${hdg.toFixed(0).padStart(3)}°\nSPD    ${R.speed.toFixed(1)} m/s\n${lat.toFixed(4)} N  ${(-lon).toFixed(4)} W${vex > 1 ? '\nDEPTH ×' + vex : ''}`;
+  poiTimer -= dt;
+  if (poiTimer < 0) {
+    poiTimer = 1; let best = 'Gulf of Mexico', bd = 1e12;
+    for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon); const d = (x - R.pos.x) ** 2 + (z - R.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } }
+    nearestPoi = best;
+  }
+  tr.textContent = nearestPoi;
+  drawMinimap();
+}
+
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+  timeU.value = t;
+  step(dt, t);
+  renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null);
+  composer.render();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════════════════
+async function boot() {
+  const prog = [0, 0];
+  const load = async (name, i) => {
+    const t = TILES[name];
+    const buf = await cached(`${name}-v1-${t.n}`, () => fetchBuf(DEM_URL(t), p => { prog[i] = p; bar.style.width = ((prog[0] + prog[1]) / 2 * 100) + '%'; }));
+    const { w, h, data } = parseTiffF32(buf);
+    Object.assign(t, { w, h, data });
+    const half = new Uint16Array(w * h);
+    for (let k = 0; k < data.length; k++) half[k] = THREE.DataUtils.toHalfFloat(data[k]);
+    const tex = new THREE.DataTexture(half, w, h, THREE.RedFormat, THREE.HalfFloatType);
+    tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+    return tex;
+  };
+  loadmsg.textContent = 'DOWNLOADING BATHYMETRY';
+  try {
+    const [o, i] = await Promise.all([load('outer', 0), load('inner', 1)]);
+    demUniforms.uDemO.value = o; demUniforms.uDemI.value = i;
+  } catch (e) {
+    loadmsg.textContent = 'NOAA UNREACHABLE: ' + e.message; throw e;
+  }
+  bar.style.width = '100%';
+  placePilings();
+  buildMinimap();
+  // Make sure we start in water deep enough to swim.
+  for (let r = 0; floorAt(R.pos.x, R.pos.z) > -3 && r < 4000; r += 25) { const a = r * 0.3; R.pos.x = START[0] + Math.cos(a) * r; R.pos.z = START[1] + Math.sin(a) * r; }
+  R.pos.y = Math.max(floorAt(R.pos.x, R.pos.z) + 1.5, -6);
+  camPos.copy(R.pos).add(new THREE.Vector3(0, 2, 9)); camLook.copy(R.pos);
+  rebuildGrass(R.pos.x, R.pos.z);
+  resize();
+  document.getElementById('load').classList.add('gone');
+  frame();
+}
+boot();
+</script>
+</body>
+</html>
