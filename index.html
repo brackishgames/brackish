@@ -524,10 +524,15 @@ const logo = (() => {
       float h(float x) { return fract(sin(x * 12.9898) * 43758.5453); }
       void main() {
         vec3 p = uOrigin + uRight * aTarget.x * uSpacing + uUp * aTarget.y * uSpacing;
-        p += uUp * sin(uTime * 1.7 + aSeed) * uSpacing * 0.25 + uRight * sin(uTime * 1.1 + aSeed * 2.0) * uSpacing * 0.15;
-        float go = max(uGo, 0.0), d = go + h(aSeed) * 0.6;   // released bubbles rise, wander and fade
+        p += uUp * sin(uTime * 1.7 + aSeed) * uSpacing * 0.08 + uRight * sin(uTime * 1.1 + aSeed * 2.0) * uSpacing * 0.06;
+        // every bubble has a life: it rises into its slot, holds, slips away, and another rises to replace it
+        float period = 9.0 + h(aSeed + 3.0) * 8.0, ph = fract((uTime + h(aSeed + 4.0) * period * 3.0) / period);
+        float rise = 1.0 - smoothstep(0.0, 0.14, ph), leave = smoothstep(0.86, 1.0, ph);
+        p.y -= rise * rise * 2.5; p.y += leave * leave * 1.4; p.x += leave * sin(uTime * 3.0 + aSeed) * 0.25;
+        float life = (1.0 - rise * 0.8) * (1.0 - leave);
+        float go = max(uGo, 0.0), d = go + h(aSeed) * 0.6;   // on start they all let go: rise, wander, fade
         if (uGo >= 0.0) { p.y += d * d * 0.9; p += (vec3(h(aSeed + 1.0), 0.0, h(aSeed + 2.0)) - 0.5) * d * 1.6; p.x += sin(uTime * 4.0 + aSeed) * d * 0.15; }
-        vFade = uGo < 0.0 ? 1.0 : 1.0 - smoothstep(1.2, 3.4, d); vCol = aCol;
+        vFade = (uGo < 0.0 ? life : 1.0 - smoothstep(1.2, 3.4, d)); vCol = aCol;
         gl_PointSize = uSize; gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0); }`,
     fragmentShader: GLSL_COMMON + `varying vec2 vCol; varying float vFade;
       void main() { if (length(gl_PointCoord - 0.5) > 0.5) discard; float f = vFade * (0.85 + 0.15 * sin(uTime * 3.0)); gl_FragColor = vec4(vCol.x * f, vCol.y * f, 0.0, 1.0); }` });
@@ -539,7 +544,7 @@ function stepLogo(dt) {
   const dist = 7.5, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
   if (u.uGo.value < 0 && !started) { u.uOrigin.value.copy(camPos).addScaledVector(fwd, dist).addScaledVector(up, 1.1); u.uRight.value.copy(right); u.uUp.value.copy(up);
     const gh = dotPass.uniforms.uGrid.value.y || 300; u.uSpacing.value = 3.0 * (2 * dist * Math.tan(camera.fov * Math.PI / 360)) / gh; }
-  u.uSize.value = 3.0;
+  u.uSize.value = 3.4;
   if (u.uGo.value < 0 && started) { logo.held = (logo.held || 0) + dt; if (P.pos.distanceTo(u.uOrigin.value) < 3.0 || logo.held > 14) logo.release(); }
 }
 
@@ -1090,7 +1095,8 @@ function stepPlayer(dt) {
 }
 function stepCamera(dt) {
   const size = P.mesh.userData.size, dist = 3.2 + size * 2.6 + P.speed * 0.15, h = 1.3 + size * 0.6;
-  const back = fwdOf(P.yaw, 0).multiplyScalar(-dist); back.y = h;
+  const yawT = started ? P.yaw : P.yaw + Math.sin(WU.uTime.value * 0.07) * 0.5;
+  const back = fwdOf(yawT, 0).multiplyScalar(-dist); back.y = h;
   const want = P.pos.clone().add(back);
   // keep the camera clearly on one side of the surface
   if (P.pos.y > -0.6) want.y = Math.max(want.y, 1.0 + size * 0.3); else want.y = Math.min(want.y, -0.5);
