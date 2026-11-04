@@ -111,6 +111,7 @@
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
+  <p id="noaaline"></p>
   <p id="titlehint">WASD  swim    SPACE · C  rise · dive    SHIFT  burst    E  ability
 M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
@@ -122,6 +123,7 @@ ENTER  begin</p><small>H for help any time</small><small id="restart" class="res
     <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
+depths are real NOAA soundings. tide, water temperature and currents are live from NOAA.
 clams on the bottom give a heart back. shrimp clouds refill the burst.
 sharks lose interest if you keep away.
 the surface is not the end of the world.</p><small>H to close</small></div>
@@ -239,6 +241,104 @@ function floorAt(x, z) {
   return tileSample(t, x, z) * vex;
 }
 const isWater = (x, z, min = 1.5) => floorAt(x, z) < -min;
+
+// ═══════════════════════════════════════════════════════════════════
+//  BAY  —  the game's own API for the real world. Physics, spawns, the
+//  seafloor, the charts and the HUD all read the bay through this one
+//  object, so there is one source of truth for depth, water and tide.
+//  Sources: NOAA NCEI bathymetry (depth), NOAA CO-OPS (live tide, water
+//  temperature, tidal current predictions), OpenStreetMap (bridges).
+// ═══════════════════════════════════════════════════════════════════
+const NOAA = {
+  api: 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter',
+  tideStation: { id: '8726520', name: 'ST. PETERSBURG' },
+  // tidal current prediction stations across the bay (id, lat, lon)
+  currentStations: [['ACT8401', 27.6005, -82.8677], ['ACT8411', 27.6043, -82.7603], ['ACT8416', 27.5617, -82.7673], ['ACT8421', 27.6045, -82.7238],
+    ['ACT8441', 27.6083, -82.694], ['ACT8466', 27.6388, -82.6255], ['ACT8476', 27.6112, -82.5945], ['ACT8486', 27.6605, -82.6417], ['ACT8521', 27.7245, -82.6097],
+    ['ACT8536', 27.7253, -82.5357], ['ACT8551', 27.837, -82.5732], ['ACT8566', 27.8792, -82.5805], ['ACT8576', 27.9258, -82.5862], ['ACT8586', 27.786, -82.522], ['ACT8596', 27.846, -82.4437]],
+  url: (q) => `${NOAA.api}?${q}&units=metric&time_zone=gmt&format=json&application=brackish`,
+};
+const Bay = {
+  floor: (x, z) => floorAt(x, z),                       // metres, negative below sea level
+  depth: (x, z) => Math.max(0, -floorAt(x, z)),
+  isWater: (x, z, min = 1.5) => floorAt(x, z) < -min,
+  live: { ok: false, level: null, rising: null, next: null, temp: null, stations: [], updated: null },
+  // ── tidal current: live NOAA predictions near stations, a modelled channel flow elsewhere
+  current(x, z, out) {
+    out.set(0, 0, 0); let wsum = 0;
+    const now = Date.now();
+    for (const st of this.live.stations) {
+      const v = st.at(now); if (!v) continue;
+      const d2 = (x - st.x) ** 2 + (z - st.z) ** 2; if (d2 > 7000 ** 2) continue;
+      const w = 1 / (d2 + 600 ** 2); out.x += v.x * w; out.z += v.z * w; wsum += w;
+    }
+    if (wsum > 0) { const near = Math.min(1, wsum * 1500 ** 2); out.multiplyScalar(near / wsum); return out; }
+    return modelCurrent(x, z, out);
+  },
+  // ── charts: one renderer for the minimap and the fast-travel map, styled like a NOAA chart in dots
+  chart(cx, cz, span, S, out = new Uint8Array(S * S)) {
+    const step = span / S, x0 = cx - span / 2, z0 = cz - span / 2, d = new Float32Array(S * S);
+    for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) d[j * S + i] = -floorAt(x0 + (i + 0.5) * step, z0 + (j + 0.5) * step);
+    const band = v => v < 0 ? -1 : v < 2 ? 0 : v < 5 ? 1 : v < 10 ? 2 : v < 20 ? 3 : 4;
+    for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+      const k = j * S + i, v = d[k], b = band(v);
+      if (b < 0) { const coast = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => { const ii = i + a, jj = j + c; return ii >= 0 && jj >= 0 && ii < S && jj < S && d[jj * S + ii] > 0; });
+        out[k] = coast ? 220 : ((i + j) % 4 === 0 ? 22 : 0); continue; }
+      const edge = [[1, 0], [0, 1]].some(([a, c]) => { const ii = i + a, jj = j + c; return ii < S && jj < S && band(d[jj * S + ii]) !== b && band(d[jj * S + ii]) >= 0; });
+      out[k] = edge ? 150 : [95, 70, 50, 34, 22][b];   // shoal water brighter, deep water darker, a contour at 2, 5, 10 and 20 m
+    }
+    return out;
+  },
+  toChart(x, z, cx, cz, span, S) { return [(x - (cx - span / 2)) / span * S, (z - (cz - span / 2)) / span * S]; },
+  // ── live NOAA data, cached for an hour, never blocks the game
+  async loadLive() {
+    const key = 'brackish.noaa', hour = 36e5;
+    let data = null;
+    try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && Date.now() - c.t < hour) data = c.d; } catch {}
+    if (!data) {
+      const get = async q => { const r = await within(15000, fetch(NOAA.url(q))); if (!r.ok) throw new Error('noaa ' + r.status); return r.json(); };
+      const day = new Date(), ymd = d => d.toISOString().slice(0, 10).replace(/-/g, ''), y = new Date(day - 864e5), t2 = new Date(+day + 864e5);
+      const range = `begin_date=${ymd(y)}&end_date=${ymd(t2)}`, st = NOAA.tideStation.id;
+      const [lvl, hilo, temp, ...cur] = await Promise.allSettled([
+        get(`product=water_level&datum=MLLW&date=latest&station=${st}`), get(`product=predictions&datum=MLLW&interval=hilo&${range}&station=${st}`),
+        get(`product=water_temperature&date=latest&station=${st}`),
+        ...NOAA.currentStations.map(([id]) => get(`product=currents_predictions&${range}&interval=30&station=${id}`)),
+      ]);
+      data = { lvl: lvl.value, hilo: hilo.value, temp: temp.value, cur: cur.map(c => c.value || null) };
+      try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), d: data })); } catch {}
+    }
+    this.applyLive(data);
+  },
+  applyLive(data) {
+    const L = this.live, gmt = s => Date.parse(s.replace(' ', 'T') + 'Z');
+    const lv = data.lvl?.data?.[0]; if (lv) { L.level = +lv.v; L.updated = gmt(lv.t); }
+    const t = data.temp?.data?.[0]; if (t && t.v !== '') L.temp = +t.v;
+    const preds = data.hilo?.predictions || [], now = Date.now(), nxt = preds.find(p => gmt(p.t) > now);
+    if (nxt) { L.next = { type: nxt.type === 'H' ? 'HIGH' : 'LOW', at: gmt(nxt.t), v: +nxt.v }; L.rising = nxt.type === 'H'; }
+    L.stations = [];
+    data.cur.forEach((res, i) => {
+      const cp = res?.current_predictions?.cp; if (!cp || !cp.length) return;
+      const [id, lat, lon] = NOAA.currentStations[i], [x, z] = toXZ(lat, lon);
+      const pts = cp.map(p => { const v = +p.Velocity_Major / 100, dir = (v >= 0 ? +p.meanFloodDir : +p.meanEbbDir) * Math.PI / 180, s = Math.abs(v);
+        return { t: gmt(p.Time), x: Math.sin(dir) * s, z: -Math.cos(dir) * s }; }).sort((a, b) => a.t - b.t);
+      L.stations.push({ id, x, z, at(now) { if (now < pts[0].t || now > pts[pts.length - 1].t) return null;
+        let k = 1; while (pts[k].t < now) k++; const a = pts[k - 1], b = pts[k], u = (now - a.t) / Math.max(1, b.t - a.t), e = 0.5 - 0.5 * Math.cos(Math.PI * u);   // eased between predictions
+        return { x: a.x + (b.x - a.x) * e, z: a.z + (b.z - a.z) * e }; } });
+    });
+    L.ok = L.level != null || L.stations.length > 0;
+  },
+};
+// a modelled flow along the ship channel, used where no NOAA station is close
+function modelCurrent(x, z, out) {
+  let best = 1e9, bx = 0, bz = 0;
+  for (let i = 0; i + 1 < CHANNEL.length; i++) {
+    const [ax, az] = CHANNEL[i], [cx, cz] = CHANNEL[i + 1], dx = cx - ax, dz = cz - az, L2 = dx * dx + dz * dz;
+    const u = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1), px = ax + dx * u, pz = az + dz * u, d = Math.hypot(x - px, z - pz);
+    if (d < best) { best = d; const L = Math.sqrt(L2); bx = dx / L; bz = dz / L; }
+  }
+  const k = 0.45 * Math.sin(dayClock * 2 * Math.PI / 12.4) * Math.exp(-best / 900);
+  return out.set(bx * k, 0, bz * k);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  RENDERER + DOT-MATRIX POST
@@ -1225,25 +1325,7 @@ let sayTimer = 0;
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
 bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help';
 
-function demImage(S) {
-  const t = TILES.outer, img = new ImageData(S, S);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const v = t.data[Math.floor(y / S * t.h) * t.w + Math.floor(x / S * t.w)], i = (y * S + x) * 4;
-    if (v > 0) { img.data[i] = 40; img.data[i + 1] = 26; img.data[i + 2] = 0; } else { const d = Math.min(1, -v / 40); img.data[i] = 5; img.data[i + 1] = 40 + 90 * (1 - d); img.data[i + 2] = 90 + 150 * (1 - d); }
-    img.data[i + 3] = 255;
-  }
-  return img;
-}
-let miniImg = null, bigImg = null;
 const mapXY = (x, z, S) => { const t = TILES.outer; return [(x - t.xmin) / (t.xmax - t.xmin) * S, (z - t.zmin) / (t.zmax - t.zmin) * S]; };
-function drawMap(ctx, img, S, showCps) {
-  ctx.putImageData(img, 0, 0);
-  ctx.strokeStyle = '#e8f1ff88'; ctx.lineWidth = 1;
-  for (const br of bridges) { ctx.beginPath(); br.pts.forEach(([x, z], i) => { const [px, py] = mapXY(x, z, S); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke(); }
-  if (showCps) checkpoints.forEach((c, i) => { const [px, py] = mapXY(c.x, c.z, S); ctx.fillStyle = i === mapSel ? '#fff' : '#e8f1ff'; ctx.fillRect(px - 2, py - 2, 5, 5); if (i === mapSel) { ctx.fillText(c.name.toUpperCase(), px + 8, py + 4); } });
-  const [x, y] = mapXY(P.pos.x, P.pos.z, S); ctx.fillStyle = '#e8f1ff'; ctx.shadowColor = '#e8f1ff'; ctx.shadowBlur = 6; ctx.fillRect(x - 2, y - 2, 4, 4);
-  ctx.strokeStyle = '#e8f1ff'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.sin(P.yaw) * 9, y - Math.cos(P.yaw) * 9); ctx.stroke(); ctx.shadowBlur = 0;
-}
 let compassMarks = [];
 function drawCompass(landmarks) { compassMarks = landmarks; }
 const headingDeg = () => ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
@@ -1258,7 +1340,7 @@ function travelTo(cp) {
   P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
 }
 function toggleMap() { mapOpen = !mapOpen; mapEl.style.display = mapOpen ? 'flex' : 'none'; if (mapOpen) { mapSel = Math.max(0, checkpoints.indexOf(lastCheckpoint)); renderMapList(); } }
-function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join(''); bctx.font = '12px "Courier New"'; drawMap(bctx, bigImg, 560, true); }
+function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join('');  }
 
 const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -1377,19 +1459,6 @@ const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = 
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 let dayClock = 6.5, above = false, aboveMix = 0, nearestPoi = '', poiTimer = 0, grassCenter = new THREE.Vector2(1e9, 1e9), lastFloor = -5;
 
-// Tidal current: flows along the channel near it, strongest in the Egmont pass, reversing on a 12.4 h tide.
-function currentAt(x, z, t, out) {
-  out.set(0, 0, 0); let best = 1e9, bx = 0, bz = 0;
-  for (let i = 0; i + 1 < CHANNEL.length; i++) {
-    const [ax, az] = CHANNEL[i], [cx, cz] = CHANNEL[i + 1], dx = cx - ax, dz = cz - az, L2 = dx * dx + dz * dz;
-    const u = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1), px = ax + dx * u, pz = az + dz * u, d = Math.hypot(x - px, z - pz);
-    if (d < best) { best = d; const L = Math.sqrt(L2); bx = dx / L; bz = dz / L; }
-  }
-  const tide = Math.sin(dayClock * 2 * Math.PI / 12.4);                 // flood (+) / ebb (−)
-  const passBoost = 1 + 1.6 * Math.exp(-((x - CHANNEL[1][0]) ** 2 + (z - CHANNEL[1][1]) ** 2) / (1800 * 1800));
-  const k = 0.55 * tide * passBoost * Math.exp(-best / 900);
-  out.set(bx * k, 0, bz * k); return out;
-}
 const _cur = new THREE.Vector3();
 function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
@@ -1435,7 +1504,7 @@ function stepPlayer(dt) {
   }
   P.speed = Math.max(0, along);
 
-  currentAt(P.pos.x, P.pos.z, WU.uTime.value, _cur);
+  Bay.current(P.pos.x, P.pos.z, _cur);
   const next = P.pos.clone().addScaledVector(P.vel, dt).addScaledVector(_cur, dt);
   if (floorAt(next.x, next.z) > -sp.alt - 0.5) { P.vel.multiplyScalar(0.3); P.yaw += 0.8 * dt; next.copy(P.pos).addScaledVector(_cur, dt); }
   P.pos.copy(next);
@@ -1709,7 +1778,7 @@ function drawPanel() {
     for (const el of ps) { const o = oTitle * opa(el), small = el.tagName === 'SMALL';
       for (const l of wrap(el.textContent, cols)) { pText(l, cx, y, (small ? 120 : 215) * o, 'center'); y += 10; } y += 5; }
   }
-  if (document.body.classList.contains('playing') && !mapOpen) {   // HUD
+  if (document.body.classList.contains('playing') && !mapOpen && oHelp < 0.05) {   // HUD
     pText(tl.textContent, 3, 2, 230, 'left', 1, true); pText(tr.textContent, W - 3, 2, 180, 'right', 1, true);
     const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(3 + i * 4 + x, 9, on ? 220 : 60); }
     { const ready = (P.actReady || 0) <= t; pText('E ' + abilityName(), 3, 12, ready ? 170 : 70, 'left', 1, true); }
@@ -1724,6 +1793,17 @@ function drawPanel() {
       const label = goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + 'KM' : Math.round(goal.dist / 10) * 10 + 'M';
       pText(off ? (raw > 0 ? '►' : '◄') : '◆', gx, 1, 255, 'center', 1, true); pText(label, gx + (raw > 0 ? -4 : 4), 1, 190, raw > 0 ? 'right' : 'left', 1, true); }
     const ow = opa(warn); if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, 20, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center');
+    { const MS = Math.max(22, Math.min(46, Math.floor(H * 0.2))), mx = W - MS - 3, my = H - MS - 3, span = 3000;
+      if (!panel.mini || panel.miniS !== MS || t - (panel.miniT || 0) > 0.5) { panel.mini = Bay.chart(P.pos.x, P.pos.z, span, MS, panel.mini && panel.miniS === MS ? panel.mini : undefined); panel.miniS = MS; panel.miniT = t; panel.miniC = [P.pos.x, P.pos.z]; }
+      const [mcx, mcz] = panel.miniC;
+      for (let j = 0; j < MS; j++) for (let i = 0; i < MS; i++) pDot(mx + i, my + j, panel.mini[j * MS + i] * 0.85);
+      for (let i = -1; i <= MS; i++) { pDot(mx + i, my - 1, 60); pDot(mx + i, my + MS, 60); pDot(mx - 1, my + i, 60); pDot(mx + MS, my + i, 60); }
+      const g = story.goal; if (g) { const [gx, gy] = Bay.toChart(g[0], g[1], mcx, mcz, span, MS); pText('◆', THREE.MathUtils.clamp(gx, 2, MS - 2) + mx, THREE.MathUtils.clamp(gy, 2, MS - 4) + my - 2, 255, 'center', 1, true); }
+      const [px2, py2] = Bay.toChart(P.pos.x, P.pos.z, mcx, mcz, span, MS), hx = -Math.sin(P.yaw), hz = -Math.cos(P.yaw);
+      if (Math.sin(t * 6) > -0.4) { pDot(mx + px2, my + py2, 255); pDot(mx + px2 + 1, my + py2, 255); pDot(mx + px2, my + py2 + 1, 255); pDot(mx + px2 + 1, my + py2 + 1, 255); }
+      for (let k = 2; k <= 4; k++) pDot(mx + px2 + 0.5 + hx * k, my + py2 + 0.5 + hz * k, 200);
+      const L = Bay.live; if (L.ok) { const kt = (_cur.length() * 1.944).toFixed(1), tide = L.level != null ? (L.level >= 0 ? '+' : '') + L.level.toFixed(1) + 'M' + (L.rising == null ? '' : L.rising ? '▲' : '▼') : '';
+        pText('NOAA LIVE', mx + MS, my - 20, 150, 'right', 1, true); pText([tide, L.temp != null ? L.temp.toFixed(0) + '°C' : ''].filter(Boolean).join(' '), mx + MS, my - 14, 190, 'right', 1, true); pText(kt + 'KT', mx + MS, my - 8, 160, 'right', 1, true); } }
     const ob = opa(bl); if (ob > 0.01 && W > 120) pText(bl.textContent, 3, H - 7, 120 * ob, 'left', 1, true);
     if (document.body.classList.contains('touch')) {
       for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
@@ -1731,7 +1811,7 @@ function drawPanel() {
       if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
     }
   }
-  const os = opa(storyEl) * (1 - opa($('chapter'))); if (os > 0.01) {   // story line (hidden while a chapter card is up)
+  const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
     const b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.min(cols, 64));
     let y = H - 14 - lines.length * 10; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center'); y += 10; } }
   const card = $('chapter'), oc = opa(card); if (oc > 0.01) {   // chapter card
@@ -1746,8 +1826,8 @@ function drawPanel() {
   if (oMap) {   // fast travel: the bay as dots
     pText('FAST TRAVEL', cx, 3, 230, 'center');
     const land = W > H * 1.3, S = Math.max(20, land ? Math.min(H - 20, (W >> 1) - 8) : Math.min(W - 12, Math.floor(H * 0.55))), mx = land ? W - S - 6 : (W - S) >> 1, my = 14;
-    if (!panel.map || panel.mapS !== S) { const tt = TILES.outer; panel.map = new Uint8Array(S * S); panel.mapS = S;
-      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const d = tt.data[Math.floor(j / S * tt.h) * tt.w + Math.floor(i / S * tt.w)]; panel.map[j * S + i] = d > 0 ? ((i + j) % 4 === 0 ? 18 : 0) : 40 + 140 * (1 - Math.min(1, -d / 35)); } }
+    const tt = TILES.outer, span = tt.xmax - tt.xmin, ccx = (tt.xmin + tt.xmax) / 2, ccz = (tt.zmin + tt.zmax) / 2;
+    if (!panel.map || panel.mapS !== S) { panel.map = Bay.chart(ccx, ccz, span, S); panel.mapS = S; }
     for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) pDot(mx + i, my + j, panel.map[j * S + i]);
     checkpoints.forEach((c, i) => { const [px, py] = mapXY(c.x, c.z, S), v = i === mapSel ? (Math.sin(t * 8) > 0 ? 255 : 120) : 220; for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) pDot(mx + px + dx, my + py + dy, v); });
     { const [px, py] = mapXY(P.pos.x, P.pos.z, S); if (Math.sin(t * 5) > -0.3) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(mx + px + dx, my + py + dy, 255); }
@@ -1847,7 +1927,7 @@ async function boot() {
   const stage = async (msg, fn) => { loadmsg.textContent = msg; try { await fn(); } catch (e) { loadmsg.textContent = 'ERROR IN ' + msg + ': ' + e.message; console.error(e); throw e; } };
   bridges = BRIDGES_FALLBACK.map(b => ({ name: b.name, pts: b.pts.map(p => toXZ(...p)) }));
   await stage('BUILDING STRUCTURES', () => buildStructures());
-  await stage('DRAWING CHARTS', () => { miniImg = demImage(180); bigImg = demImage(560); });
+  Bay.loadLive().then(() => { const L = Bay.live; if (L.ok) $('noaaline').textContent = `LIVE · NOAA ${NOAA.tideStation.name} · ${L.temp != null ? L.temp.toFixed(1) + '°C' : ''}${L.next ? ' · ' + L.next.type + ' TIDE ' + new Date(L.next.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}`; }).catch(() => {});   // live NOAA tide, temperature and currents arrive in the background
   // OpenStreetMap bridges arrive in the background and replace the fallback set
   loadBridges().then(() => { try { buildStructures(); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
