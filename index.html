@@ -112,9 +112,7 @@
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
   <p id="noaaline"></p>
-  <p id="titlehint">WASD SWIM · SPACE RISE · C DIVE
-SHIFT BURST · E ABILITY · M MAP
-ENTER · FULL SCREEN TO BEGIN</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
+  <p id="titlehint">PRESS ENTER</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
     <b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
@@ -1479,7 +1477,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-const TITLE_HINT = 'WASD SWIM · SPACE RISE · C DIVE\nSHIFT BURST · E ABILITY · M MAP\nENTER · FULL SCREEN TO BEGIN';
+const TITLE_HINT = 'PRESS ENTER';
 function startGame(save) { if (canFull && !DEV) goFull(); started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
@@ -1704,7 +1702,7 @@ function frame() {
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepFever(dt, t); stepAudio(!started ? above : P.pos.y > -0.2);   // sound follows your ears, not the camera stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepFever(dt, t); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
 
@@ -1801,14 +1799,13 @@ function drawPanel() {
   const oFull = needFull() ? 1 : 0;
   dotPass.uniforms.uDim.value = Math.max(oFade, oLoad, oHelp * 0.85, oMap * 0.9, oFull * 0.85);
   if (oLoad > 0.01) {   // loading
-    const y = Math.round(H * 0.36), sc = W > 120 ? 2 : 1; pText('BRACKISH', cx, y, 240 * oLoad, 'center', sc);
-    const bw = Math.min(60, W - 20), pct = (parseFloat($('bar').style.width) || 0) / 100, by = y + 7 * sc + 8;
-    for (let i = 0; i < bw; i++) pDot(cx - bw / 2 + i, by, (i < bw * pct ? 230 : 50) * oLoad);
-    wrap(loadmsg.textContent, cols).forEach((l, i) => pText(l, cx, by + 6 + i * 10, 200 * oLoad, 'center'));
+    const bw = Math.min(40, W - 20), pct = (parseFloat($('bar').style.width) || 0) / 100, by = H >> 1;   // loading: one line of dots, nothing else
+    for (let i = 0; i < bw; i++) pDot(cx - bw / 2 + i, by, (i < bw * pct ? 200 : 26) * oLoad);
+    if (/ERROR|UNREACHABLE/.test(loadmsg.textContent)) wrap(loadmsg.textContent, cols).forEach((l, i) => pText(l, cx, by + 6 + i * 10, 200 * oLoad, 'center'));
     panel.tex.needsUpdate = true; return;
   }
   if (oTitle > 0.01) {   // title text, under the bubble logo
-    const ps = [...$('title').querySelectorAll('p, small')].filter(el => el.style.display !== 'none');
+    const ps = [$('titlehint'), $('restart')].filter(el => el && el.style.display !== 'none');   // the title is the logo and one prompt
     let y = Math.round(H * 0.6);
     for (const el of ps) { const o = oTitle * opa(el), small = el.tagName === 'SMALL';
       for (const l of wrap(el.textContent, cols)) { pText(l, cx, y, (small ? 120 : 215) * o, 'center'); y += 10; } y += 5; }
@@ -1891,8 +1888,8 @@ function cycleCreature(dir = 1) {
 }
 function setTitleHint() {
   const ch = loadedSave ? CHAPTERS[loadedSave.ch].title : null;
-  $('titlehint').textContent = MOBILE ? (ch ? `TAP  continue · ${ch}` : 'TAP  begin') + '\nDRAG ANYWHERE  swim\nHOLD ►►  burst    TAP ◆  ability'
-    : ch ? `ENTER TO CONTINUE · ${ch}\nR TO START OVER\nWASD SWIM · SPACE RISE · C DIVE` : TITLE_HINT;
+  $('titlehint').textContent = MOBILE ? (ch ? 'TAP TO CONTINUE' : 'TAP TO BEGIN')
+    : ch ? 'ENTER TO CONTINUE\nR TO START OVER' : TITLE_HINT;
   $('restart').style.display = ch && MOBILE ? '' : 'none';
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
