@@ -184,7 +184,7 @@ function stepAmbient(dt, t) {
 }
 function stepHud(dt) {
   const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
-  tl.textContent = `${Math.max(0, -P.pos.y).toFixed(1)}M  ▼${(-f).toFixed(0)}M  ${'♥'.repeat(P.hp)}${P.fed ? '  +' + P.fed : ''}`;
+  tl.textContent = `DOWN ${Math.max(0, -P.pos.y).toFixed(1)}M  FLOOR ${(-f).toFixed(0)}M  ${'♥'.repeat(P.hp)}${P.fed ? '  +' + P.fed : ''}`;
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }

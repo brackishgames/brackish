@@ -80,6 +80,9 @@ function drawPanel() {
     { const age = (performance.now() - lastSaved) / 1000; if (age < 2) pText('SAVED', W - SL, ST + 9, 150 * Math.min(1, 2 - age), 'right', 1, true); }
     const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(SL + i * 4 + x, ST + 9, on ? 220 : 60); }
     { const ready = (P.actReady || 0) <= t; pText('E ' + abilityName(), SL, ST + 12, ready ? 170 : 70, 'left', 1, true); }
+    { const gx = SL, g0 = Math.round(H * 0.34), gh = Math.max(16, Math.round(H * 0.3)), floor = Math.max(1, -floorAt(P.pos.x, P.pos.z)), at = THREE.MathUtils.clamp(-P.pos.y / floor, 0, 1);   /* depth gauge: surface at the top, the bottom of the bay below, you between */
+      for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
+      const py = g0 + Math.round(at * gh); for (let x = -1; x <= 2; x++) { pDot(gx + x, py, 255); pDot(gx + x, py + 1, 255); } }
     if ((P.air ?? 1) < 0.999) { const low = P.air < 0.25; pText('AIR', SL, ST + 19, low ? 150 + 105 * (0.5 + 0.5 * Math.sin(t * 8)) : 170, 'left', 1, true); for (let i = 0; i < 8; i++) { const on = i < Math.ceil(P.air * 8); for (let x = 0; x < 3; x++) pDot(SL + 14 + i * 4 + x, ST + 21, on ? 220 : 60); } }   // lungs
     if (huntHeat > 0) { const n = Math.ceil(huntHeat * 3); pText('HUNTED ' + '◆'.repeat(n) + '·'.repeat(3 - n), SL, ST + ((P.air ?? 1) < 0.999 ? 26 : 19), 150 + 105 * (0.5 + 0.5 * Math.sin(t * 6)), 'left', 1, true); }   // stars: break contact to drain them
     if (mouseSteering() && aim.yaw != null) { _v.copy(fwdOf(aim.yaw, aim.pitch)).multiplyScalar(14).add(P.pos).project(camera);
