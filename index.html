@@ -438,20 +438,20 @@ function stepStrokes(dt) { for (const m of creatureMats) m.uniforms.uPhase.value
 
 // Species of the bay. sizes in metres; cruise/max in m/s; zone picks the wild AI's preferred depth.
 const SPECIES = [
-  { id: 'cownose', name: 'Cownose Ray', kind: 'ray', span: 0.9, len: 0.6, pointy: 1.0, tail: 0.9, cruise: 2.2, max: 6, turn: 1.8, alt: 0.4, zone: 'shallow', freq: 2.6, amp: 0.55 },
-  { id: 'manta', name: 'Manta Ray', kind: 'ray', span: 3.8, len: 2.6, pointy: 0.75, tail: 1.9, lobes: true, cruise: 1.6, max: 4.5, turn: 1.1, alt: 0.9, zone: 'deep', freq: 2.0, amp: 0.62 },
-  { id: 'eagle', name: 'Spotted Eagle Ray', kind: 'ray', span: 2.4, len: 1.4, pointy: 1.3, tail: 3.0, cruise: 1.5, max: 5, turn: 1.4, alt: 0.7, zone: 'any', freq: 2.2, amp: 0.6 },
-  { id: 'stingray', name: 'Southern Stingray', kind: 'ray', span: 1.3, len: 1.2, pointy: 0.5, tail: 1.5, cruise: 0.8, max: 3, turn: 1.6, alt: 0.3, zone: 'bottom', freq: 2.4, amp: 0.4 },
-  { id: 'dolphin', name: 'Bottlenose Dolphin', kind: 'fish', len: 2.6, fat: 0.23, dorsal: 1, pect: 1, fluke: 'h', cruise: 2.5, max: 7, turn: 1.5, alt: 0.8, zone: 'surface', freq: 3, amp: 0.08 },
-  { id: 'manatee', name: 'West Indian Manatee', kind: 'fish', len: 3.0, fat: 0.42, round: 0.45, dorsal: 0, pect: 0.6, fluke: 'paddle', cruise: 0.8, max: 2.5, turn: 0.8, alt: 0.6, zone: 'shallow', freq: 1.2, amp: 0.06 },
-  { id: 'tarpon', name: 'Tarpon', kind: 'fish', len: 1.8, fat: 0.15, dorsal: 0.6, pect: 0.5, fluke: 'v', cruise: 1.5, max: 5.5, turn: 1.6, alt: 0.5, zone: 'any', freq: 4, amp: 0.1 },
-  { id: 'snook', name: 'Snook', kind: 'fish', len: 0.9, fat: 0.13, dorsal: 0.6, pect: 0.4, fluke: 'v', cruise: 1, max: 4, turn: 2, alt: 0.3, zone: 'shallow', freq: 5, amp: 0.1 },
-  { id: 'redfish', name: 'Redfish', kind: 'fish', len: 0.8, fat: 0.16, dorsal: 0.5, pect: 0.4, fluke: 'v', cruise: 0.9, max: 3.5, turn: 2, alt: 0.25, zone: 'bottom', freq: 5, amp: 0.1 },
-  { id: 'bull', name: 'Bull Shark', kind: 'fish', len: 2.4, fat: 0.2, dorsal: 1.3, pect: 1.2, fluke: 'shark', cruise: 1.8, max: 6, turn: 1.2, alt: 0.8, zone: 'deep', freq: 2.2, amp: 0.11 },
-  { id: 'hammer', name: 'Great Hammerhead', kind: 'fish', len: 3.4, fat: 0.13, dorsal: 1.7, pect: 1, fluke: 'shark', hammer: true, cruise: 1.8, max: 6, turn: 1.0, alt: 0.9, zone: 'deep', freq: 2, amp: 0.1 },
-  { id: 'goliath', name: 'Goliath Grouper', kind: 'fish', len: 2.0, fat: 0.26, round: 0.55, dorsal: 0.7, pect: 0.7, fluke: 'v', cruise: 0.6, max: 2.5, turn: 1, alt: 0.5, zone: 'structure', freq: 1.6, amp: 0.07 },
-  { id: 'loggerhead', name: 'Loggerhead Turtle', kind: 'turtle', len: 1.0, cruise: 0.8, max: 2.5, turn: 1.2, alt: 0.5, zone: 'any', freq: 1.6, amp: 0.3 },
-  { id: 'mullet', name: 'Striped Mullet', kind: 'fish', len: 0.45, fat: 0.14, dorsal: 0.4, pect: 0.3, fluke: 'v', cruise: 1, max: 3, turn: 2.5, alt: 0.2, zone: 'shallow', freq: 6, amp: 0.1 },
+  { id: 'cownose', name: 'Cownose Ray', kind: 'ray', span: 0.9, len: 0.6, pointy: 1.0, tail: 0.9, cruise: 3.3, max: 8.4, turn: 1.8, alt: 0.4, zone: 'shallow', freq: 2.6, amp: 0.55 },
+  { id: 'manta', name: 'Manta Ray', kind: 'ray', span: 3.8, len: 2.6, pointy: 0.75, tail: 1.9, lobes: true, cruise: 2.4, max: 6.3, turn: 1.1, alt: 0.9, zone: 'deep', freq: 2.0, amp: 0.62 },
+  { id: 'eagle', name: 'Spotted Eagle Ray', kind: 'ray', span: 2.4, len: 1.4, pointy: 1.3, tail: 3.0, cruise: 2.25, max: 7.0, turn: 1.4, alt: 0.7, zone: 'any', freq: 2.2, amp: 0.6 },
+  { id: 'stingray', name: 'Southern Stingray', kind: 'ray', span: 1.3, len: 1.2, pointy: 0.5, tail: 1.5, cruise: 1.2, max: 4.2, turn: 1.6, alt: 0.3, zone: 'bottom', freq: 2.4, amp: 0.4 },
+  { id: 'dolphin', name: 'Bottlenose Dolphin', kind: 'fish', len: 2.6, fat: 0.23, dorsal: 1, pect: 1, fluke: 'h', cruise: 3.75, max: 9.8, turn: 1.5, alt: 0.8, zone: 'surface', freq: 3, amp: 0.08 },
+  { id: 'manatee', name: 'West Indian Manatee', kind: 'fish', len: 3.0, fat: 0.42, round: 0.45, dorsal: 0, pect: 0.6, fluke: 'paddle', cruise: 1.2, max: 3.5, turn: 0.8, alt: 0.6, zone: 'shallow', freq: 1.2, amp: 0.06 },
+  { id: 'tarpon', name: 'Tarpon', kind: 'fish', len: 1.8, fat: 0.15, dorsal: 0.6, pect: 0.5, fluke: 'v', cruise: 2.25, max: 7.7, turn: 1.6, alt: 0.5, zone: 'any', freq: 4, amp: 0.1 },
+  { id: 'snook', name: 'Snook', kind: 'fish', len: 0.9, fat: 0.13, dorsal: 0.6, pect: 0.4, fluke: 'v', cruise: 1.5, max: 5.6, turn: 2, alt: 0.3, zone: 'shallow', freq: 5, amp: 0.1 },
+  { id: 'redfish', name: 'Redfish', kind: 'fish', len: 0.8, fat: 0.16, dorsal: 0.5, pect: 0.4, fluke: 'v', cruise: 1.35, max: 4.9, turn: 2, alt: 0.25, zone: 'bottom', freq: 5, amp: 0.1 },
+  { id: 'bull', name: 'Bull Shark', kind: 'fish', len: 2.4, fat: 0.2, dorsal: 1.3, pect: 1.2, fluke: 'shark', cruise: 2.7, max: 8.4, turn: 1.2, alt: 0.8, zone: 'deep', freq: 2.2, amp: 0.11 },
+  { id: 'hammer', name: 'Great Hammerhead', kind: 'fish', len: 3.4, fat: 0.13, dorsal: 1.7, pect: 1, fluke: 'shark', hammer: true, cruise: 2.7, max: 8.4, turn: 1.0, alt: 0.9, zone: 'deep', freq: 2, amp: 0.1 },
+  { id: 'goliath', name: 'Goliath Grouper', kind: 'fish', len: 2.0, fat: 0.26, round: 0.55, dorsal: 0.7, pect: 0.7, fluke: 'v', cruise: 0.9, max: 3.5, turn: 1, alt: 0.5, zone: 'structure', freq: 1.6, amp: 0.07 },
+  { id: 'loggerhead', name: 'Loggerhead Turtle', kind: 'turtle', len: 1.0, cruise: 1.2, max: 3.5, turn: 1.2, alt: 0.5, zone: 'any', freq: 1.6, amp: 0.3 },
+  { id: 'mullet', name: 'Striped Mullet', kind: 'fish', len: 0.45, fat: 0.14, dorsal: 0.4, pect: 0.3, fluke: 'v', cruise: 1.5, max: 4.2, turn: 2.5, alt: 0.2, zone: 'shallow', freq: 6, amp: 0.1 },
 ];
 const speciesById = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 
@@ -1061,7 +1061,7 @@ function stepAudio(above) {
   audio.lap.g.gain.setTargetAtTime(nearSurf * 0.22 * (above ? 1.3 : 1), t, 0.4);
   if (above) every('wave', 3 + Math.random() * 5, () => burst({ buf: 'pink', type: 'lowpass', f0: 300, f1: 1200, f2: 250, attack: 0.5, length: 2.2, g: 0.18 }));
   // your body in the water: rush with speed, thrash on the flap stroke when you work hard near the top
-  const spd = THREE.MathUtils.clamp((P.speed || 0) / (P.sp.max * 1.45), 0, 1), stroke = 0.5 + 0.5 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0);
+  const spd = THREE.MathUtils.clamp((P.speed || 0) / (P.sp.max * 1.6), 0, 1), stroke = 0.5 + 0.5 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0);
   audio.rush.g.gain.setTargetAtTime(spd * spd * 0.22, t, k); audio.rush.f.frequency.setTargetAtTime(250 + spd * 500, t, k);
   const effort = spd * (0.4 + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) * 1.5)) * nearSurf;
   audio.thrash.g.gain.setTargetAtTime(effort * effort * 0.35 * (0.4 + 0.6 * stroke), t, 0.05);
@@ -1293,9 +1293,9 @@ function stepPlayer(dt) {
   // burst: Space spends stamina for a real sprint, then it has to come back
   P.sta ??= 1; const wantBurst = keys.Space && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = wantBurst ? sp.max * 1.45 : (keys.Space && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = wantBurst ? sp.max * 1.6 : (keys.Space && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
-  const thrust = THREE.MathUtils.clamp((wantSpeed - along) * 1.6, -0.5 * sp.max, 1.9 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
+  const thrust = THREE.MathUtils.clamp((wantSpeed - along) * 2.2, -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
   P.vel.addScaledVector(fwd, thrust * dt);
   const vlen = P.vel.length(); if (vlen > 0.01) P.vel.addScaledVector(P.vel, -0.12 * vlen * dt / Math.max(0.3, sp.len ?? 1));
   P.vel.lerp(fwd.clone().multiplyScalar(along), Math.min(1, 2.5 * dt));           // the body streamlines into its own motion
