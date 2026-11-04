@@ -599,6 +599,20 @@ function stepSeeps(dt) {
     sp.t -= dt; if (sp.t <= 0) { sp.t = sp.rate * (0.5 + Math.random()); emitBubble(sp.p.x + (Math.random() - .5) * 0.3, sp.p.y, sp.p.z + (Math.random() - .5) * 0.3); }
   }
 }
+// spray: droplets thrown into the air by a blow, a fin or a wingtip; they arc and fall back
+const SPRAY_N = 200, sprayPos = new Float32Array(SPRAY_N * 3), sprayVel = new Float32Array(SPRAY_N * 3), sprayLife = new Float32Array(SPRAY_N).fill(9);
+const sprayGeo = new THREE.BufferGeometry(); sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPos, 3)); sprayGeo.setAttribute('aLife', new THREE.BufferAttribute(sprayLife, 1));
+const spray = new THREE.Points(sprayGeo, mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `attribute float aLife; varying float vL; void main(){ vL = aLife; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = aLife < 1.0 ? 2.0 : 0.0; }`,
+  fragmentShader: GLSL_COMMON + `varying float vL; void main(){ gl_FragColor = outB(0.95 * (1.0 - vL * vL)); }` }));
+spray.frustumCulled = false; scene.add(spray);
+let sprayNext = 0;
+function emitSpray(x, y, z, vx, vy, vz) { const i = sprayNext; sprayNext = (sprayNext + 1) % SPRAY_N; sprayPos.set([x, y, z], i * 3); sprayVel.set([vx, vy, vz], i * 3); sprayLife[i] = 0; }
+function stepSpray(dt) {
+  for (let i = 0; i < SPRAY_N; i++) { if (sprayLife[i] >= 1) continue; sprayLife[i] += dt / 1.1; sprayVel[i * 3 + 1] -= 9.8 * dt;
+    for (let k = 0; k < 3; k++) sprayPos[i * 3 + k] += sprayVel[i * 3 + k] * dt; if (sprayPos[i * 3 + 1] < 0) sprayLife[i] = 1; }   // back into the water
+  sprayGeo.attributes.position.needsUpdate = true; sprayGeo.attributes.aLife.needsUpdate = true;
+}
 let bubbleNext = 0;
 function emitBubble(x, y, z) { const i = bubbleNext; bubbleNext = (bubbleNext + 1) % 600; const a = bubbles.geometry.attributes.position.array; bubbleLife[i] = 0; a[i * 3] = x; a[i * 3 + 1] = y; a[i * 3 + 2] = z; }   // a ring: the oldest bubble is reused
 
@@ -1749,7 +1763,7 @@ function stepPlayer(dt) {
   P.speed = Math.max(0, along);
   if (HOLD[sp.id]) {   // lungs: air drains under, comes back in a few breaths at the top, twice as fast when you burst
     P.air ??= 1; const up = P.pos.y > -0.3;
-    if (up) { if (P.air < 0.97 && !P.breathing) { P.breathing = true; blow(sp.id === 'dolphin'); } P.air = Math.min(1, P.air + dt / 1.5); P.drownT = 0; if (P.air >= 1) P.breathing = false; }
+    if (up) { if (P.air < 0.97 && !P.breathing) { P.breathing = true; blow(sp.id === 'dolphin'); P.surf = { t: 0, len: sp.id === 'dolphin' ? 1.5 : 3.2, puff: false }; } P.air = Math.min(1, P.air + dt / 1.5); P.drownT = 0; if (P.air >= 1) P.breathing = false; }
     else { P.breathing = false; P.air = Math.max(0, P.air - dt / HOLD[sp.id] * (wantBurst ? 2 : 1)); }
     if (!up && P.air < 0.5) tip('air', () => `${kn('rise')} rises. breathe at the top before the bar runs out.`);
     if (!up && P.air < 0.25 && !P.airWarned) { P.airWarned = true; say('you need air', 2.5); } if (P.air > 0.5) P.airWarned = false;
@@ -1765,7 +1779,19 @@ function stepPlayer(dt) {
   lastFloor = fHere; P.current = _cur.length();
   if (P.pos.y > -0.4) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - Math.random() * 0.1, P.pos.z + Math.sin(a) * r); } } }
   const upNow = P.pos.y > -0.25; if (upNow !== !!P.wasUp && Math.abs(P.vel.y) > 0.4) { for (let i = 0; i < 30; i++) emitBubble(P.pos.x + (Math.random() - .5) * 1.5 * (sp.span ?? sp.len), -0.1 - Math.random() * 1.5, P.pos.z + (Math.random() - .5) * 1.5); splash(Math.min(1, Math.abs(P.vel.y) / 3)); P.shake = Math.max(P.shake || 0, 0.25); } P.wasUp = upNow;
-  P.mesh.position.copy(P.pos); P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch, P.roll);
+  // surfacing, as each body really does it: a dolphin rolls through in an arc and blows; a manatee lifts its snout, breathes, and sinks
+  let surfPitch = 0, surfY = 0;
+  if (P.surf) { const S = P.surf; S.t += dt; const u = Math.min(1, S.t / S.len), head = fwdOf(P.yaw, 0).multiplyScalar((sp.len || 1) * 0.35).add(P.pos);
+    if (sp.id === 'dolphin') { surfPitch = 0.5 * Math.cos(Math.PI * u); surfY = 0.3 * Math.sin(Math.PI * u); if (!S.puff && u > 0.2) { S.puff = true; for (let i = 0; i < 26; i++) emitSpray(head.x, 0.2, head.z, (Math.random() - .5) * 0.8, 2.5 + Math.random() * 2, (Math.random() - .5) * 0.8); } }
+    else { surfPitch = 0.32 * Math.sin(Math.PI * u); surfY = 0.12 * Math.sin(Math.PI * u); if (!S.puff && u > 0.35) { S.puff = true; for (let i = 0; i < 8; i++) emitSpray(head.x, 0.08, head.z, (Math.random() - .5) * 0.4, 0.8 + Math.random() * 0.6, (Math.random() - .5) * 0.4); } }
+    if (u >= 1) P.surf = null; }
+  // at the top: a cownose ray's wingtips cut the water; a shark's dorsal leaves a wake
+  if (P.pos.y > -0.45 && P.speed > 0.3) { P.cutT = (P.cutT || 0) - dt; if (P.cutT <= 0) { P.cutT = 0.12;
+    const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), b = fwdOf(P.yaw, 0);
+    if (sp.kind === 'ray') for (const side of [-1, 1]) { const x = P.pos.x + rx * side * (sp.span || 1) * 0.5, z = P.pos.z + rz * side * (sp.span || 1) * 0.5; emitBubble(x, -0.06, z); if (Math.random() < 0.5) emitSpray(x, 0.02, z, -b.x * P.speed * 0.3 + rx * side * 0.4, 0.6 + Math.random() * 0.5, -b.z * P.speed * 0.3 + rz * side * 0.4); }
+    else if (PREDATORS.has(sp.id) && P.pos.y > -0.6) { emitBubble(P.pos.x - b.x * 0.4, -0.06, P.pos.z - b.z * 0.4); for (const side of [-1, 1]) emitSpray(P.pos.x + rx * side * 0.1, 0.02, P.pos.z + rz * side * 0.1, rx * side * 0.6 - b.x * 0.3, 0.5 + Math.random() * 0.4, rz * side * 0.6 - b.z * 0.3); } } }
+  P.mesh.position.copy(P.pos); P.mesh.position.y += surfY;
+  P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch + surfPitch, P.roll);
   P.mesh.material.uniforms.uGlow.value += ((P.lit ? 2.4 : P.hidden ? 0.35 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
   { const u = P.mesh.material.uniforms, work = THREE.MathUtils.clamp(thrust / (0.6 * sp.max) + 0.15, 0, 1);
     if (sp.kind === 'ray') {   // rays glide between beats when there's little to do
@@ -1784,13 +1810,13 @@ function stepCamera(dt) {
   const back = fwdOf(yawT, P.pitch * 0.45).multiplyScalar(-dist); back.y += h;
   const want = P.pos.clone().add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
-  if (P.pos.y > -0.12) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;
+  if (P.pos.y > 0.05) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;   // breathing happens just under the line; only a breach takes the camera up
   if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
   want.x += Math.sin(WU.uTime.value * 0.35) * 0.12; want.y += Math.sin(WU.uTime.value * 0.5 + 1.0) * 0.08;
   camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 1.6, 0)), Math.min(1, 8 * dt));
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
   camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
@@ -1874,7 +1900,7 @@ function frame() {
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); } stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); } stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
 
