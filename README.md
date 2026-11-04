@@ -32,3 +32,15 @@ Every push to `main` deploys the site through the workflow in `.github/workflows
 
 
 Depths are NOAA NCEI soundings. Tide, water temperature and tidal currents come live from NOAA CO-OPS (St. Petersburg and 15 current stations). When you run it locally (localhost or the file itself), `?dev` opens every place and body and `?dev&clock=22` sets the hour; the published site ignores both, and dev mode never touches your save.
+
+## Code
+
+No build step. `index.html` holds the markup and styles and loads three.js as modules; the game is plain scripts in
+`src/`, run in order and sharing one scope, one file per system: `00-config`, `01-geo` (the real-world frame, NOAA
+data and the `Bay` API), `02-render` (renderer, dot-matrix post, seafloor, sky and water), `03-creatures`, `04-logo`,
+`05-structures`, `06-wildlife` (wild animals, the fever, food, schools), `07-boats` (boats and giggers), `08-input`
+(keys, pause menu, gamepad), `09-audio`, `10-hud`, `11-save`, `12-story`, `13-frame` (the main loop, the player,
+the camera), `14-panel` (the dot font and every word on screen), `15-touch` and `16-boot`. A name declared twice
+across files stops the game at load, which is on purpose. Serve the folder (`python3 -m http.server`) and open
+`localhost:8000/?dev` to explore; `tools/marks.py` redraws the logos.
+
