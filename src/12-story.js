@@ -65,7 +65,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (done) { const place = c.title.replace(/^[IVX]+ · /, ''); if (checkpoints.some(k => k.name === place)) chimeCheckpoint(); discover(place, P.pos.x, P.pos.z);   /* a replayed chapter still rings */ if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
 const TITLE_HINT = 'PRESS ENTER OR CLICK';
-function startGame(save) { if (canFull && !DEV) goFull(); started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
+function startGame(save) { if (canFull && !DEV) goFull(); started = true; lockPointer(); document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3) fever.moving = true; return; }
   story.begin(0); }

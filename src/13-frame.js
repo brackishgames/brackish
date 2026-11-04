@@ -10,10 +10,15 @@ const _cur = new THREE.Vector3();
 function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
-  const turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn + pad.turn, -1, 1);
-  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.Space ? 1 : 0) - (keys.ArrowDown || keys.KeyC ? 1 : 0) + touch.climb + pad.climb, -1, 1);
+  let turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn + pad.turn, -1, 1);
+  let climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.Space ? 1 : 0) - (keys.ArrowDown || keys.KeyC ? 1 : 0) + touch.climb + pad.climb, -1, 1);
   const throttle = stunned ? 0 : THREE.MathUtils.clamp((keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + pad.throttle + (touch.id !== null || !usingWASD() ? 1 : 0), -1, 1);   // touch and arrow players cruise on their own
 
+  if (mouseSteering() && !stunned) {   // the mouse sets where you mean to go; the body still turns at its own rate and banks into it
+    aim.yaw ??= P.yaw;
+    if (turn) aim.yaw = P.yaw; else { const d = Math.atan2(Math.sin(aim.yaw - P.yaw), Math.cos(aim.yaw - P.yaw)); turn = THREE.MathUtils.clamp(d * 2.5, -1, 1); aim.yaw = P.yaw + THREE.MathUtils.clamp(d, -1.2, 1.2); }
+    if (climb) aim.pitch = P.pitch; else { const c = THREE.MathUtils.clamp(aim.pitch / 0.8, -1, 1); if (Math.abs(c) > 0.06) climb = c; }
+  } else aim.yaw = null;
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
   P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.leapT = Math.max(0, (P.leapT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
   P.idleT = climb ? 0 : (P.idleT || 0) + dt;
@@ -95,8 +100,11 @@ function stepCamera(dt) {
   const size = P.mesh.userData.size, dist = 2.4 + size * 2.5 + P.speed * 0.12, h = 1.0 + size * 0.6;
   P.idleCam = (keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const drift = started ? Math.sin(WU.uTime.value * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(WU.uTime.value * 0.07) * 0.5;
-  const yawT = P.yaw + drift + (P.endingCam ? Math.sin(WU.uTime.value * 0.08) * 1.2 : 0);
-  const back = fwdOf(yawT, P.pitch * 0.45).multiplyScalar(-dist); back.y += h;
+  if (Math.abs(pad.lookX) > 0 || Math.abs(pad.lookY) > 0) { aim.lookYaw -= pad.lookX * 2.4 * dt; aim.lookPitch = THREE.MathUtils.clamp(aim.lookPitch + pad.lookY * 1.6 * dt, -0.8, 0.8); aim.lookT = 0; }
+  aim.lookT += dt; if (!aim.look && aim.lookT > 0.8) { const k = Math.min(1, 2.5 * dt); aim.lookYaw *= 1 - k; aim.lookPitch *= 1 - k; }   // let go and it comes back behind you
+  aim.lookYaw = Math.atan2(Math.sin(aim.lookYaw), Math.cos(aim.lookYaw));
+  const yawT = P.yaw + drift + aim.lookYaw + (P.endingCam ? Math.sin(WU.uTime.value * 0.08) * 1.2 : 0);
+  const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist); back.y += h;
   const want = P.pos.clone().add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
   if (P.pos.y > 0.05) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;   // breathing happens just under the line; only a breach takes the camera up
@@ -105,7 +113,7 @@ function stepCamera(dt) {
   camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6 * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
   camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);

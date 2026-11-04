@@ -44,14 +44,14 @@ function stepBoats(dt, t) {
         const k = 1 - (rel.z - L / 2) / (big ? 90 : 25);
         P.vel.x += (Math.random() - 0.5) * 6 * k * dt; P.vel.y += (Math.random() - 0.3) * 5 * k * dt; P.vel.z += (Math.random() - 0.5) * 6 * k * dt;
         P.vel.addScaledVector(fwdInto(_f, b.yaw), -b.type.speed * 0.35 * k * dt * 3);
-        P.shake = Math.max(P.shake || 0, k * (big ? 0.8 : 0.3)); P.wash = Math.max(P.wash || 0, k);
+        P.shake = Math.max(P.shake || 0, k * (big ? 0.8 : 0.3)); P.wash = Math.max(P.wash || 0, k); if (Math.random() < 0.1) rumble(0.1, 0.5 * k, 120);
         for (let i = 0; i < (big ? 4 : 1); i++) emitBubble(P.pos.x + (Math.random() - .5) * 3, P.pos.y + (Math.random() - .5) * 2, P.pos.z + (Math.random() - .5) * 3);
       }
     }
   }
 }
 function hurt(k, msg) {
-  if (P.stun > 0) return; thud(k); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
+  if (P.stun > 0) return; rumble(0.4 + k * 0.5, 0.6, 320); thud(k); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
   if (settings.flash) { flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180); }
   say(P.hp > 0 ? msg : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
   if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500);

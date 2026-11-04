@@ -3,14 +3,55 @@
 //  INPUT (arrows + space), AUDIO
 // ═══════════════════════════════════════════════════════════════════
 const keys = {};
+// ── controllers: any pad the browser sees (USB or Bluetooth: Xbox, PlayStation, Switch Pro...) on the standard layout.
+//    left stick steers, RT swims, LT eases off, A / ✕ bursts, X / □ is the ability, right stick looks around,
+//    Y / △ the map, LB the creature you have been, START pause, BACK help. Buttons go through the keyboard handler.
+const pad = { turn: 0, throttle: 0, climb: 0, burst: false, lookX: 0, lookY: 0, active: false, held: {}, sony: false, ref: null };
+const PAD_KEYS = { 0: () => (menu || mapOpen || !started) ? 'Enter' : null, 1: () => menu ? 'Escape' : helpOpen ? 'KeyH' : mapOpen ? 'KeyM' : null, 2: () => started && !menu && !mapOpen ? 'KeyE' : null,
+  3: () => 'KeyM', 4: () => 'Tab', 8: () => 'KeyH', 9: () => 'KeyP', 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
+const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst   □ ability   R STICK look   △ map   OPTIONS pause' : 'L STICK steer   RT swim   A burst   X ability   R STICK look   Y map   START pause';
+addEventListener('gamepadconnected', e => { pad.sony = /054c|dualsense|dualshock|playstation|wireless controller/i.test(e.gamepad.id); if (started) say('CONTROLLER CONNECTED', 2); });
+addEventListener('gamepaddisconnected', () => { pad.active = false; pad.ref = null; bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help'; if (started) say('CONTROLLER DISCONNECTED', 2); });
+function pollPad() {
+  const g = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null; pad.ref = g;
+  if (!g) { pad.turn = pad.throttle = pad.climb = pad.lookX = pad.lookY = 0; pad.burst = false; return; }
+  const dz = v => Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85, val = i => g.buttons[i] ? g.buttons[i].value : 0, inv = settings.invertY ? -1 : 1;   // a dead zone that doesn't jump
+  pad.turn = -dz(g.axes[0] || 0); pad.climb = -dz(g.axes[1] || 0) * inv; pad.throttle = val(7) - val(6) * 0.6; pad.burst = val(0) > 0.5 || val(5) > 0.5;
+  pad.lookX = dz(g.axes[2] || 0); pad.lookY = -dz(g.axes[3] || 0) * inv;
+  if (!pad.active && (g.buttons.some(b => b.pressed) || g.axes.some(a => Math.abs(a) > 0.4))) { pad.active = true; wasdSeen = true; pad.sony = pad.sony || /054c|dualsense|dualshock|playstation|wireless controller/i.test(g.id); bl.textContent = PAD_HINT(); if (!started) $('titlehint').textContent = pad.sony ? 'PRESS ✕' : 'PRESS A'; }
+  for (const i in PAD_KEYS) { const down = !!(g.buttons[i] && g.buttons[i].pressed);
+    if (down && !pad.held[i]) { const code = PAD_KEYS[i](); if (code) { pad.held[i] = code; dispatchEvent(new KeyboardEvent('keydown', { code })); } else pad.held[i] = 'none'; }
+    else if (!down && pad.held[i]) { if (pad.held[i] !== 'none') dispatchEvent(new KeyboardEvent('keyup', { code: pad.held[i] })); pad.held[i] = null; } }
+}
+function rumble(strong, weak = strong * 0.6, ms = 220) {   // felt in the hands, where the controller can
+  const v = pad.ref && pad.ref.vibrationActuator; if (!v || !pad.active || !settings.shake) return;
+  try { v.playEffect('dual-rumble', { duration: ms, strongMagnitude: Math.min(1, strong), weakMagnitude: Math.min(1, weak) }); } catch {}
+}
+const KEYNAME = { burst: ['SHIFT', 'A', '✕'], rise: ['SPACE', 'L STICK UP', 'L STICK UP'], dive: ['C', 'L STICK DOWN', 'L STICK DOWN'], ability: ['E', 'X', '□'], map: ['M', 'Y', '△'], tab: ['TAB', 'LB', 'L1'] };
+const kn = n => KEYNAME[n][pad.active ? (pad.sony ? 2 : 1) : 0];
+const needFull = () => started && canFull && !DEV && !isFull() && !pad.active;   // a controller player may stay windowed
+
+// ── mouse: steer where you point (pointer locked to the game); hold the right button to look around without turning
+const aim = { yaw: null, pitch: 0, look: false, lookYaw: 0, lookPitch: 0, lookT: 9 };
+const mouseSteering = () => settings.mouseSteer && !MOBILE && document.pointerLockElement === document.documentElement;
+function lockPointer() { if (!MOBILE && settings.mouseSteer && started && !document.pointerLockElement) try { document.documentElement.requestPointerLock()?.catch?.(() => {}); } catch {} }
+addEventListener('mousemove', e => {
+  if (!started || paused) return; const s = 0.0022 * settings.mouse, dy = e.movementY * (settings.invertY ? -1 : 1);
+  if (aim.look) { aim.lookYaw -= e.movementX * s; aim.lookPitch = Math.max(-0.8, Math.min(0.8, aim.lookPitch - dy * s)); aim.lookT = 0; }
+  else if (mouseSteering()) { aim.yaw = (aim.yaw ?? P.yaw) - e.movementX * s; aim.pitch = Math.max(-0.9, Math.min(0.9, aim.pitch - dy * s)); }
+});
+addEventListener('mousedown', e => { if (e.button === 2 && started) aim.look = true; });
+addEventListener('mouseup', e => { if (e.button === 2) aim.look = false; });
+addEventListener('contextmenu', e => { if (started) e.preventDefault(); });
+document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && started && !menu && settings.mouseSteer && !MOBILE) openMenu('main'); });   // ESC lets the mouse go: that's a pause
 let mapOpen = false, mapSel = 0, helpOpen = false, started = false, paused = false;
 // ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
 let menu = null;
 const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
 const onOff = v => v ? 'ON' : 'OFF';
-function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; }
+function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; aim.look = false; if (document.pointerLockElement) document.exitPointerLock?.(); }
 function closeMenu() { menu = null; }
-function resume() { closeMenu(); if (canFull && !DEV && !isFull() && !pad.active) goFull(); }
+function resume() { closeMenu(); if (canFull && !DEV && !isFull() && !pad.active) goFull(); lockPointer(); }
 function restartChapter() { closeMenu(); if (story.ch === 0) travelTo({ name: CHAPTERS[0].title, x: START[0], z: START[1] }); story.begin(story.ch); resume(); }
 function menuItems() {
   if (menu.kind === 'settings') return [
@@ -18,6 +59,9 @@ function menuItems() {
     { label: () => `TURN SPEED  ${(settings.turn / 100).toFixed(1)}X`, adj: d => settings.turn = clampI(settings.turn + d * 10, 50, 150) },
     { label: () => `SCREEN SHAKE  ${onOff(settings.shake)}`, adj: () => settings.shake = !settings.shake },
     { label: () => `HIT FLASH  ${onOff(settings.flash)}`, adj: () => settings.flash = !settings.flash },
+    { label: () => `MOUSE STEERING  ${onOff(settings.mouseSteer)}`, adj: () => settings.mouseSteer = !settings.mouseSteer },
+    { label: () => `MOUSE SPEED  ${settings.mouse.toFixed(1)}X`, adj: d => settings.mouse = Math.round(clampI(settings.mouse * 10 + d, 3, 30)) / 10 },
+    { label: () => `INVERT Y  ${onOff(settings.invertY)}`, adj: () => settings.invertY = !settings.invertY },
     { label: () => `LARGE TEXT  ${onOff(settings.bigText)}`, adj: () => settings.bigText = !settings.bigText },
     { label: () => 'SHOW TIPS AGAIN', act: () => { settings.tips = {}; say('tips will show again', 1.5); } },
     { label: () => 'BACK', act: () => { menu.kind = 'main'; menu.sel = 1; } }];

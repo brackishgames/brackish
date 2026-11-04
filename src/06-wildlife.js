@@ -87,7 +87,7 @@ function stepWild(dt, t) {
       else if (why) { steerTo(w, w.seen.x, w.seen.z, 2); v = w.sp.max * (why === 'far' ? 0.85 : 0.6); ty = w.seen.y; L.phase = 'stalk'; L.t = 0; }   // searching where it last had you
       else if (L.phase === 'stalk') { const f = fwdOf(P.yaw); steerTo(w, P.pos.x - f.x * 6 + Math.cos(P.yaw) * L.side * 5, P.pos.z - f.z * 6 - Math.sin(P.yaw) * L.side * 5, 2.2); v = w.sp.max * 0.7; ty = P.pos.y - 2;   // out of sight, behind and under
         if (L.t > 1.8 && d < 12) { L.phase = 'wind'; L.t = 0; } }
-      else if (L.phase === 'wind') { if (!hammer && !w.bumped && d < 4) { w.bumped = true; P.shake = Math.max(P.shake || 0, 0.35); thud(0.3); say('it bumps you. it is testing.', 1.8); }   // a bull shark tastes before it commits
+      else if (L.phase === 'wind') { if (!hammer && !w.bumped && d < 4) { w.bumped = true; P.shake = Math.max(P.shake || 0, 0.35); rumble(0.5, 0.2, 180); thud(0.3); say('it bumps you. it is testing.', 1.8); }   // a bull shark tastes before it commits
         steerTo(w, P.pos.x + Math.cos(P.yaw) * L.side * 6, P.pos.z - Math.sin(P.yaw) * L.side * 6, 2.5); v = w.sp.cruise * 0.6; ty = P.pos.y;
         if (L.t > 1.0) { L.phase = 'lunge'; L.t = 0; whump(w.pos.x, w.pos.z); L.tx = P.pos.x + P.vel.x * 0.5; L.tz = P.pos.z + P.vel.z * 0.5; L.dodged = false; } }
       else if (L.phase === 'lunge') { steerTo(w, L.tx, L.tz, 1.2); v = w.sp.max; ty = P.pos.y;

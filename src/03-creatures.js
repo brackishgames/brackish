@@ -135,21 +135,6 @@ function creatureMesh(sp, glow = 1) {
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
-// gamepad: sticks drive like the keys; buttons are sent through the keyboard handler, so every path is the same
-const pad = { turn: 0, throttle: 0, climb: 0, burst: false, active: false, held: {} };
-const PAD_KEYS = { 0: () => (menu || mapOpen || !started) ? 'Enter' : 'KeyE', 1: () => menu ? 'Escape' : helpOpen ? 'KeyH' : mapOpen ? 'KeyM' : null, 3: () => 'KeyM', 4: () => 'Tab', 8: () => 'KeyH', 9: () => 'KeyP', 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
-function pollPad() {
-  const g = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null;
-  if (!g) { pad.turn = pad.throttle = pad.climb = 0; pad.burst = false; return; }
-  const dz = v => Math.abs(v) < 0.18 ? 0 : v, val = i => g.buttons[i] ? g.buttons[i].value : 0;
-  pad.turn = -dz(g.axes[0] || 0); pad.throttle = -dz(g.axes[1] || 0); pad.climb = val(7) - val(6) - dz(g.axes[3] || 0); pad.burst = val(5) > 0.5 || val(10) > 0.5;   // RT rise, LT dive, RB burst
-  if (!pad.active && (g.buttons.some(b => b.pressed) || g.axes.some(a => Math.abs(a) > 0.4))) { pad.active = true; wasdSeen = true; bl.textContent = 'L STICK swim   RT rise   LT dive   RB burst   A ability   Y map   START pause'; }
-  for (const i in PAD_KEYS) { const down = !!(g.buttons[i] && g.buttons[i].pressed);
-    if (down && !pad.held[i]) { const code = PAD_KEYS[i](); if (code) { pad.held[i] = code; dispatchEvent(new KeyboardEvent('keydown', { code })); } else pad.held[i] = 'none'; }
-    else if (!down && pad.held[i]) { if (pad.held[i] !== 'none') dispatchEvent(new KeyboardEvent('keyup', { code: pad.held[i] })); pad.held[i] = null; } }
-}
-const KEYNAME = { burst: ['SHIFT', 'RB'], rise: ['SPACE', 'RT'], dive: ['C', 'LT'], ability: ['E', 'A'], map: ['M', 'Y'], tab: ['TAB', 'LB'] }, kn = n => KEYNAME[n][pad.active ? 1 : 0];
-const needFull = () => started && canFull && !DEV && !isFull() && !pad.active;   // a gamepad player may stay windowed
 for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { for (const k in keys) keys[k] = false; if (isFull() && menu) closeMenu(); });
 const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight || pad.burst);
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
