@@ -147,6 +147,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const MOBILE = matchMedia('(pointer: coarse)').matches;
 const DEV = new URLSearchParams(location.search).has('dev');
+// settings live in this browser only; everything works without them
+const settings = (() => { const d = { volume: 8, turn: 100, shake: true, flash: true, bigText: false, tips: {} }; try { return { ...d, ...JSON.parse(localStorage.getItem('brackish.settings') || '{}') }; } catch { return d; } })();
+const saveSettings = () => { try { localStorage.setItem('brackish.settings', JSON.stringify(settings)); } catch {} };
 // full screen is the price of entry on desktop: leave it and the bay waits for you
 const canFull = !MOBILE && !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
@@ -727,9 +730,23 @@ function creatureMesh(sp, glow = 1) {
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
-const needFull = () => started && canFull && !DEV && !isFull();
-for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { for (const k in keys) keys[k] = false; });
-const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight);
+// gamepad: sticks drive like the keys; buttons are sent through the keyboard handler, so every path is the same
+const pad = { turn: 0, throttle: 0, climb: 0, burst: false, active: false, held: {} };
+const PAD_KEYS = { 0: () => (menu || mapOpen || !started) ? 'Enter' : 'KeyE', 1: () => menu ? 'Escape' : helpOpen ? 'KeyH' : mapOpen ? 'KeyM' : null, 3: () => 'KeyM', 4: () => 'Tab', 8: () => 'KeyH', 9: () => 'KeyP', 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
+function pollPad() {
+  const g = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null;
+  if (!g) { pad.turn = pad.throttle = pad.climb = 0; pad.burst = false; return; }
+  const dz = v => Math.abs(v) < 0.18 ? 0 : v, val = i => g.buttons[i] ? g.buttons[i].value : 0;
+  pad.turn = -dz(g.axes[0] || 0); pad.throttle = -dz(g.axes[1] || 0); pad.climb = val(7) - val(6) - dz(g.axes[3] || 0); pad.burst = val(5) > 0.5 || val(10) > 0.5;   // RT rise, LT dive, RB burst
+  if (!pad.active && (g.buttons.some(b => b.pressed) || g.axes.some(a => Math.abs(a) > 0.4))) { pad.active = true; wasdSeen = true; bl.textContent = 'L STICK swim   RT rise   LT dive   RB burst   A ability   Y map   START pause'; }
+  for (const i in PAD_KEYS) { const down = !!(g.buttons[i] && g.buttons[i].pressed);
+    if (down && !pad.held[i]) { const code = PAD_KEYS[i](); if (code) { pad.held[i] = code; dispatchEvent(new KeyboardEvent('keydown', { code })); } else pad.held[i] = 'none'; }
+    else if (!down && pad.held[i]) { if (pad.held[i] !== 'none') dispatchEvent(new KeyboardEvent('keyup', { code: pad.held[i] })); pad.held[i] = null; } }
+}
+const KEYNAME = { burst: ['SHIFT', 'RB'], rise: ['SPACE', 'RT'], dive: ['C', 'LT'], ability: ['E', 'A'], map: ['M', 'Y'], tab: ['TAB', 'LB'] }, kn = n => KEYNAME[n][pad.active ? 1 : 0];
+const needFull = () => started && canFull && !DEV && !isFull() && !pad.active;   // a gamepad player may stay windowed
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { for (const k in keys) keys[k] = false; if (isFull() && menu) closeMenu(); });
+const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight || pad.burst);
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
 let wasdSeen = false; const usingWASD = () => wasdSeen;
 
@@ -954,7 +971,7 @@ function stepWild(dt, t) {
       const dim = dayClock < 7.5 || dayClock > 18;   // they hunt the low light
       const rate = fr < 0.85 ? -0.3 : (fr < 1.2 ? 0.22 : 0.14) * (P.speed > P.sp.cruise * 1.2 ? 1.8 : 1) * (P.hp < 3 ? 1.5 : 1) * (dim ? 1.3 : 1);   // panic and blood draw it in
       w.interest = THREE.MathUtils.clamp((w.interest || 0) + rate * dt, 0, 1);
-      if (w.interest > 0.45 && !w.warned) { w.warned = true; say('something large is keeping pace below you', 2.5); }
+      if (w.interest > 0.45 && !w.warned) { w.warned = true; say('something large is keeping pace below you', 2.5); tip('burst', () => `${kn('burst')} bursts. a hard turn inside its lunge makes it miss. lose it in the fever, or far away.`); }
     } else if (!w.hunting) { w.interest = Math.max(0, (w.interest || 0) - 0.05 * dt); if (w.interest < 0.2) w.warned = false; }
     if (w.hunting || (rel === 'hunt' && !P.hidden && d < 45 && w.cool <= 0 && started && w.interest >= 1 && !otherHunter)) {
       // the fight: come up from behind and below, telegraph a side, lunge. a hard turn or a burst inside the lunge makes it miss.
@@ -1067,6 +1084,7 @@ function stepFood(dt, t) {
     if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(3, P.hp + 1); say('♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
       for (let i = 0; i < 3; i++) setTimeout(() => bloop(0.6), i * 90); rebuildFood(); break; }
     const pulse = 1 + 0.25 * Math.sin(t * 3 + fd.ph);
+    if (fd.clam && d < 14 && (ABILITY[P.sp.id] === 'sense' || ABILITY[P.sp.id] === 'echo') && started) tip('sense', () => `${kn('ability')} ${abilityName().toLowerCase()}s the sand. buried clams give a heart back.`);
     if (fd.clam) { const vis = Math.max(THREE.MathUtils.clamp(1 - (d - 2) / 2, 0, 1), d < (P.revealRange || 50) * 0.3 ? (P.reveal || 0) : 0);   // buried: felt through the sand, not seen
       if (vis > 0.03) for (let i = 0; i < 3 && k < FOOD_MAX; i++) placeInstance(foodMesh, k++, fd.x + Math.cos(fd.ph + i * 2.1) * 0.35, fd.y, fd.z + Math.sin(fd.ph + i * 2.1) * 0.35, 0, fd.ph, 0, 0.7 * pulse * vis, 0.45 * pulse * vis, 0.7 * pulse * vis); }
     else { for (let i = 0; i < 5 && k < FOOD_MAX; i++) { const a = t * 1.5 + fd.ph + i * 1.26; placeInstance(foodMesh, k++, fd.x + Math.cos(a) * 0.5, fd.y + Math.sin(a * 1.7) * 0.3, fd.z + Math.sin(a) * 0.5, 0, 0, 0, 0.35 * pulse); } }
@@ -1223,7 +1241,7 @@ function stepBoats(dt, t) {
 }
 function hurt(k, msg) {
   if (P.stun > 0) return; thud(k); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
-  flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180);
+  if (settings.flash) { flash.style.opacity = 0.75; setTimeout(() => flash.style.opacity = 0, 180); }
   say(P.hp > 0 ? msg : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
   if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500);
 }
@@ -1266,11 +1284,47 @@ function strike(b) {
 //  INPUT (arrows + space), AUDIO
 // ═══════════════════════════════════════════════════════════════════
 const keys = {};
-let mapOpen = false, mapSel = 0, helpOpen = false, started = false;
+let mapOpen = false, mapSel = 0, helpOpen = false, started = false, paused = false;
+// ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
+let menu = null;
+const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
+const onOff = v => v ? 'ON' : 'OFF';
+function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; }
+function closeMenu() { menu = null; }
+function resume() { closeMenu(); if (canFull && !DEV && !isFull() && !pad.active) goFull(); }
+function restartChapter() { closeMenu(); if (story.ch === 0) travelTo({ name: CHAPTERS[0].title, x: START[0], z: START[1] }); story.begin(story.ch); resume(); }
+function menuItems() {
+  if (menu.kind === 'settings') return [
+    { label: () => 'VOLUME  ' + '◆'.repeat(settings.volume) + '·'.repeat(10 - settings.volume), adj: d => settings.volume = clampI(settings.volume + d, 0, 10) },
+    { label: () => `TURN SPEED  ${(settings.turn / 100).toFixed(1)}X`, adj: d => settings.turn = clampI(settings.turn + d * 10, 50, 150) },
+    { label: () => `SCREEN SHAKE  ${onOff(settings.shake)}`, adj: () => settings.shake = !settings.shake },
+    { label: () => `HIT FLASH  ${onOff(settings.flash)}`, adj: () => settings.flash = !settings.flash },
+    { label: () => `LARGE TEXT  ${onOff(settings.bigText)}`, adj: () => settings.bigText = !settings.bigText },
+    { label: () => 'SHOW TIPS AGAIN', act: () => { settings.tips = {}; say('tips will show again', 1.5); } },
+    { label: () => 'BACK', act: () => { menu.kind = 'main'; menu.sel = 1; } }];
+  return [
+    { label: () => 'RESUME', act: resume },
+    { label: () => 'SETTINGS', act: () => { menu.kind = 'settings'; menu.sel = 0; } },
+    { label: () => 'HOW TO SWIM', act: () => { closeMenu(); helpOpen = true; help.classList.remove('gone'); } },
+    { label: () => 'FAST TRAVEL', act: () => { closeMenu(); toggleMap(); } },
+    { label: () => 'RESTART CHAPTER', act: restartChapter }];
+}
+function menuKey(code) {
+  const items = menuItems(), it = items[menu.sel];
+  if (code === 'ArrowUp' || code === 'KeyW') menu.sel = (menu.sel + items.length - 1) % items.length;
+  else if (code === 'ArrowDown' || code === 'KeyS') menu.sel = (menu.sel + 1) % items.length;
+  else if ((code === 'ArrowLeft' || code === 'KeyA') && it.adj) it.adj(-1);
+  else if ((code === 'ArrowRight' || code === 'KeyD') && it.adj) it.adj(1);
+  else if (code === 'Enter' || code === 'Space') { if (it.act) it.act(); else if (it.adj) it.adj(1); }
+  else if (code === 'Escape' || code === 'Backspace' || code === 'KeyP') { if (menu.kind === 'settings') { menu.kind = 'main'; menu.sel = 1; } else if (code !== 'Escape' || !needFull()) resume(); }
+  saveSettings();
+}
 addEventListener('keydown', e => {
   keys[e.code] = true; if (e.code === 'KeyW' || e.code === 'KeyS') wasdSeen = true; startAudio(); pressedAny();
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', 'KeyC'].includes(e.code)) e.preventDefault();
-  if (started && needFull()) { if (e.code !== 'Escape') goFull(); return; }
+  if (started && needFull() && !menu) openMenu('main');
+  if (started && menu) { menuKey(e.code); return; }
+  if (started && (e.code === 'KeyP' || (e.code === 'Escape' && !isFull()))) { if (mapOpen) toggleMap(); if (helpOpen) { helpOpen = false; help.classList.add('gone'); } openMenu('main'); return; }
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
   if (e.code === 'KeyM') toggleMap();
@@ -1327,7 +1381,7 @@ function startAudio() {
     o1.start(); o2.start(); return { src, e, out, pan, lp, o1, o2 }; };
   audio.engines = [...boats.map(b => voice(b, b.type === BOAT_TYPES.ship ? 'ship' : b.type === BOAT_TYPES.cruiser ? 'cruiser' : 'skiff')), voice(gig, 'troll')];
   audio.heartNext = 0; audio.nextT.omen = ac.currentTime + 35;
-  master.gain.setTargetAtTime(0.5, ac.currentTime, 2.5);
+  master.gain.setTargetAtTime(masterLevel(), ac.currentTime, 2.5); audio.level = masterLevel();
 }
 const now = () => audio.ac.currentTime;
 function oneShot(build, when = 0) { if (!audio || !audioOn) return; build(audio.ac, now() + when); }
@@ -1411,7 +1465,9 @@ function creak() {   // steel under load: a wreck, a piling
   burst({ buf: 'brown', type: 'bandpass', f0: 320, f1: 260, f2: 180, q: 9, attack: 0.4, length: 2.2, g: 0.22 });
   burst({ buf: 'brown', type: 'bandpass', f0: 520, f1: 470, f2: 400, q: 12, attack: 0.3, length: 1.6, g: 0.12, when: 0.5 });
 }
-function toggleAudio() { if (!audio) return; audioOn = !audioOn; audio.master.gain.setTargetAtTime(audioOn ? 0.5 : 0, now(), 0.3); }
+const masterLevel = () => audioOn ? 0.5 * settings.volume / 10 * (paused ? 0.35 : 1) : 0;
+function toggleAudio() { if (!audio) return; audioOn = !audioOn; }
+function stepVolume() { if (!audio) return; const v = masterLevel(); if (Math.abs(v - (audio.level ?? -1)) > 1e-3) { audio.level = v; audio.master.gain.setTargetAtTime(v, now(), 0.25); } }
 const every = (key, secs, fn) => { const t = now(); if (!audio.nextT[key] || t > audio.nextT[key]) { audio.nextT[key] = t + secs; fn(); } };
 function stepAudio(above) {
   if (!audio) return; const t = now(), depth = Math.max(0, -P.pos.y), k = 0.25, nearSurf = THREE.MathUtils.clamp(1 - depth / 2.5, 0, 1);
@@ -1440,6 +1496,7 @@ function stepAudio(above) {
   // engines: water carries them far and muffled; close in they open up, and the nearest come from their side
   P.wash = Math.max(0, (P.wash || 0) - 0.02);
   for (const v of audio.engines) { const on = v.src === gig ? gig.on : true, d = v.src.pos.distanceTo(P.pos), n = on ? THREE.MathUtils.clamp(1 - d / v.e.range, 0, 1) : 0;
+    if (n > 0.55 && v.src !== gig && started) tip('dive', () => `${kn('dive')} dives. a hull only reaches the top few metres.`);
     v.out.gain.setTargetAtTime(n * n * v.e.g * (above ? 0.6 : 1) * (1 + 0.8 * (P.wash || 0) * n), t, k);   // in air the hull hides the prop
     v.lp.frequency.setTargetAtTime(120 + 2600 * n * n * n, t, 0.3);
     if (v.pan) v.pan.pan.setTargetAtTime(panAt(v.src.pos.x, v.src.pos.z), t, 0.2); }
@@ -1463,6 +1520,9 @@ const $ = id => document.getElementById(id);
 const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('story'), flash = $('flash'), help = $('help'), mapEl = $('map');
 const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
 let sayTimer = 0;
+const tipQueue = [];
+function tip(id, text) { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text }); }
+function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started) return; const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), 5, 'TIP'); }
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
 bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help';
 
@@ -1475,7 +1535,7 @@ const bearingTo = (x, z) => ((Math.atan2(x - P.pos.x, -(z - P.pos.z)) * 180 / Ma
 // checkpoints: discovered places you can fast travel to
 const checkpoints = [{ name: 'Skyway north', x: START[0], z: START[1] }];
 let lastCheckpoint = checkpoints[0];
-function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
+function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
   P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; P.air = 1; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
@@ -1502,8 +1562,10 @@ function stepGoalBeam(t) {
 const SAVE_KEY = 'brackish.save', SAVE_SALT = 'egmont-25m-' + location.host;
 async function sha(text) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
 let saveTimer = 0, loadedSave = null;
+let lastSaved = -1e9;
 async function saveGame() {
   if (!started || DEV) return;   // dev mode never overwrites a real save
+  lastSaved = performance.now();
   const data = { v: 1, ch: story.ch, unlocked: [...unlocked], cps: checkpoints, fed: P.fed || 0, eaten: [...eaten].slice(-400), clock: dayClock, pos: [P.pos.x, P.pos.y, P.pos.z], yaw: P.yaw, sp: P.sp.id, t: Date.now() };
   const json = JSON.stringify(data);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ json, sig: await sha(SAVE_SALT + json) })); } catch {}
@@ -1605,9 +1667,9 @@ const _cur = new THREE.Vector3();
 function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
-  const turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn, -1, 1);
-  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.Space ? 1 : 0) - (keys.ArrowDown || keys.KeyC ? 1 : 0) + touch.climb, -1, 1);
-  const throttle = stunned ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + (touch.id !== null || !usingWASD() ? 1 : 0);   // touch and arrow players cruise on their own
+  const turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn + pad.turn, -1, 1);
+  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.Space ? 1 : 0) - (keys.ArrowDown || keys.KeyC ? 1 : 0) + touch.climb + pad.climb, -1, 1);
+  const throttle = stunned ? 0 : THREE.MathUtils.clamp((keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + pad.throttle + (touch.id !== null || !usingWASD() ? 1 : 0), -1, 1);   // touch and arrow players cruise on their own
 
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
   if (P.hidden && (turn || climb > 0 || sprinting())) P.hidden = false;
@@ -1616,7 +1678,7 @@ function stepPlayer(dt) {
 
   // body attitude: a turn needs speed and banks the body; the turning circle grows with speed
   const speedFrac = Math.min(1, P.speed / sp.max);
-  const yawWant = turn * sp.turn * (0.55 + 0.6 * Math.min(1, P.speed / sp.cruise)) / (1 + speedFrac * 1.4);
+  const yawWant = turn * sp.turn * (settings.turn / 100) * (0.55 + 0.6 * Math.min(1, P.speed / sp.cruise)) / (1 + speedFrac * 1.4);
   P.yawRate += (yawWant - P.yawRate) * Math.min(1, 4 * dt); P.yaw += P.yawRate * dt;
   P.roll += (P.yawRate * 0.9 * (0.4 + speedFrac) - P.roll) * Math.min(1, 2.5 * dt);   // bank into the turn
   let pitchWant = climb * 0.8;
@@ -1651,6 +1713,7 @@ function stepPlayer(dt) {
     P.air ??= 1; const up = P.pos.y > -0.3;
     if (up) { if (P.air < 0.97 && !P.breathing) { P.breathing = true; blow(sp.id === 'dolphin'); } P.air = Math.min(1, P.air + dt / 1.5); P.drownT = 0; if (P.air >= 1) P.breathing = false; }
     else { P.breathing = false; P.air = Math.max(0, P.air - dt / HOLD[sp.id] * (wantBurst ? 2 : 1)); }
+    if (!up && P.air < 0.5) tip('air', () => `${kn('rise')} rises. breathe at the top before the bar runs out.`);
     if (!up && P.air < 0.25 && !P.airWarned) { P.airWarned = true; say('you need air', 2.5); } if (P.air > 0.5) P.airWarned = false;
     if (!up && P.air <= 0) { P.drownT = (P.drownT || 0) + dt; if (P.drownT > 5) { P.drownT = 0; hurt(0.3, 'OUT OF AIR\nget to the surface'); P.pitch = 0.5; } }
   } else P.air = 1;
@@ -1690,7 +1753,7 @@ function stepCamera(dt) {
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
   camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 1.6, 0)), Math.min(1, 8 * dt));
-  camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
+  camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
   WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * (1 - 0.55 * (P.reveal || 0)); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
@@ -1763,14 +1826,17 @@ function frame() {
   booting = false;
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t; stepStrokes(dt);
-  if (started) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
+  pollPad(); if (started && needFull() && !menu) openMenu('main');
+  paused = started && (mapOpen || helpOpen || !!menu || needFull());   // a real pause: sharks, boats and lights wait too
+  stepVolume(); stepTips();
+  if (started && !paused) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
-  if (started && !mapOpen && !helpOpen && !needFull()) { stepPlayer(dt); story.step(dt); }
+  if (started && !paused) { stepPlayer(dt); story.step(dt); }
   if (!started) {   // attract: after a while the ray wanders off on its own and the words fade
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); } stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
 
@@ -1864,7 +1930,7 @@ function drawPanel() {
   if (!panel.data) return; panel.data.fill(0); { const now = performance.now(); fadeDt = Math.min(0.1, Math.max(1 / 120, (now - fadeT) / 1000)); fadeT = now; }   // always progress, even if the clock stalls
   const W = panel.w, H = panel.h, ST = Math.round(H * 0.045), SL = 3 + Math.round(W * 0.012), SB = Math.round(H * 0.02), cx = W >> 1, t = WU.uTime.value, cols = Math.max(12, Math.floor((W - 8) / 6));
   const oLoad = opa($('load')), oTitle = opa($('title')), oHelp = opa(help), oMap = mapOpen ? 1 : 0, oFade = opa($('fade'));
-  const oFull = needFull() ? 1 : 0;
+  const oFull = menu ? 1 : 0;
   dotPass.uniforms.uDim.value = Math.max(oFade, oLoad, oHelp * 0.85, oMap * 0.9, oFull * 0.85);
   if (oLoad > 0.01) {   // loading
     const bw = Math.min(40, W - 20), pct = (parseFloat($('bar').style.width) || 0) / 100, by = H >> 1;   // loading: one line of dots, nothing else
@@ -1878,8 +1944,9 @@ function drawPanel() {
     for (const el of ps) { const o = oTitle * opa(el), small = el.tagName === 'SMALL';
       for (const l of wrap(el.textContent, cols)) { pText(l, cx, y, (small ? 120 : 215) * o, 'center'); y += 10; } y += 5; }
   }
-  if (document.body.classList.contains('playing') && !mapOpen && oHelp < 0.05) {   // HUD, inset clear of notches and rounded corners
+  if (document.body.classList.contains('playing') && !mapOpen && !menu && oHelp < 0.05) {   // HUD, inset clear of notches and rounded corners
     pText(tl.textContent, SL, ST + 2, 230, 'left', 1, true); pText(tr.textContent, W - SL, ST + 2, 180, 'right', 1, true);
+    { const age = (performance.now() - lastSaved) / 1000; if (age < 2) pText('SAVED', W - SL, ST + 9, 150 * Math.min(1, 2 - age), 'right', 1, true); }
     const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(SL + i * 4 + x, ST + 9, on ? 220 : 60); }
     { const ready = (P.actReady || 0) <= t; pText('E ' + abilityName(), SL, ST + 12, ready ? 170 : 70, 'left', 1, true); }
     if ((P.air ?? 1) < 0.999) { const low = P.air < 0.25; pText('AIR', SL, ST + 19, low ? 150 + 105 * (0.5 + 0.5 * Math.sin(t * 8)) : 170, 'left', 1, true); for (let i = 0; i < 8; i++) { const on = i < Math.ceil(P.air * 8); for (let x = 0; x < 3; x++) pDot(SL + 14 + i * 4 + x, ST + 21, on ? 220 : 60); } }   // lungs
@@ -1913,9 +1980,9 @@ function drawPanel() {
       if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
     }
   }
-  const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
-    const b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.min(cols, 64));
-    let y = H - 14 - SB - lines.length * 10; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center'); y += 10; } }
+  const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen || menu ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
+    const ts = settings.bigText && W > 200 ? 2 : 1, b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.floor(Math.min(cols, 64) / ts));
+    let y = H - 14 - SB - lines.length * 10 * ts; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center', ts); y += 10 * ts; } }
   const card = $('chapter'), oc = 0; if (oc > 0.01) {   // titles are shown once, with the story at the bottom   // chapter card
     const txt = card.textContent, sc = [...txt].length * 12 <= W - 10 ? 2 : 1; wrap(txt, Math.floor((W - 8) / (6 * sc))).forEach((l, i) => pText(l, cx, Math.round(H * 0.36) + i * 9 * sc, 240 * oc, 'center', sc)); }
   if (oHelp > 0.01) {   // help
@@ -1925,10 +1992,11 @@ function drawPanel() {
     y += 6; for (const l of wrap(help.querySelector('.lore').textContent, cols)) { pText(l, cx, y, 150 * oHelp, 'center'); y += 10; }
     pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, y + 6, 110 * oHelp, 'center');
   }
-  if (oFull && !oHelp && !oMap) {   // the bay waits
-    const sc = W > 160 ? 2 : 1, y = Math.round(H * 0.4);
-    pText('FULL SCREEN TO SWIM', cx, y, 240, 'center', sc);
-    pText('CLICK OR PRESS ANY KEY', cx, y + 7 * sc + 10, 160 + 70 * (0.5 + 0.5 * Math.sin(t * 3)), 'center');
+  if (menu && !oHelp && !oMap) {   // paused
+    const sc = W > 160 ? 2 : 1, items = menuItems(); let y = Math.round(H * 0.26);
+    pText(menu.kind === 'settings' ? 'SETTINGS' : 'PAUSED', cx, y, 240, 'center', sc); y += 7 * sc + 14; menu.rows = [];
+    items.forEach((it, i) => { const on = i === menu.sel; pText((on ? '► ' : '  ') + it.label() + (on ? ' ◄' : '  '), cx, y, on ? 255 : 150, 'center'); menu.rows.push([y - 2, y + 8]); y += 12; });
+    pText(pad.active ? 'A CHOOSE   ◄ ► CHANGE   B BACK' : 'ENTER OR CLICK TO CHOOSE   ◄ ► CHANGE   ESC BACK', cx, y + 8, 110, 'center');
     panel.tex.needsUpdate = true; return;
   }
   if (oMap) {   // fast travel: the bay as dots
@@ -1964,7 +2032,9 @@ function setTitleHint() {
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
 addEventListener('pointerdown', e => {
-  unlockAudio(); pressedAny(); if (!MOBILE && started) { if (needFull()) goFull(); return; }   // desktop plays on the keyboard
+  unlockAudio(); pressedAny();
+  if (started && menu) { const cy = toCell(e.clientY), i = menu.rows.findIndex(([a, b]) => cy >= a && cy <= b); if (i >= 0) { menu.sel = i; menuKey('Enter'); } return; }
+  if (!MOBILE && started) { if (needFull()) openMenu('main'); return; }   // desktop plays on the keyboard
   if (!started) { startGame(loadedSave); return; }
   if (helpOpen) { helpOpen = false; help.classList.add('gone'); return; }
   if (touch.id !== null) return;
@@ -1972,6 +2042,7 @@ addEventListener('pointerdown', e => {
   stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.style.display = 'block';
 });
 addEventListener('pointermove', e => {
+  if (started && menu) { const cy = toCell(e.clientY), i = menu.rows.findIndex(([a, b]) => cy >= a && cy <= b); if (i >= 0) menu.sel = i; return; }
   if (e.pointerId !== touch.id) return;
   const dx = e.clientX - touch.ox, dy = e.clientY - touch.oy, d = Math.hypot(dx, dy), k = Math.min(1, d / STICK_R) / Math.max(d, 1e-3);
   touch.turn = -dx * k; touch.climb = -dy * k;
