@@ -30,7 +30,8 @@
   .panel { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 14px; background: #000000e6; z-index: 10; letter-spacing: 4px; text-transform: uppercase; transition: opacity .5s; }
   .panel.gone { opacity: 0; pointer-events: none; }
-  .panel.title { background: linear-gradient(#0000 40%, #000c 75%); justify-content: flex-start; }
+  .panel.title { background: linear-gradient(#0000 45%, #000b 80%); justify-content: flex-start; }
+  .panel.title p { font-size: 12px; }
   .panel h1 { font-weight: normal; font-size: 30px; letter-spacing: 12px; margin: 0 0 10px; text-shadow: 0 0 10px #ffb000, 0 0 30px #ff900088; }
   .panel p { margin: 0; font-size: 13px; line-height: 2; text-align: center; white-space: pre; }
   .panel small { font-size: 10px; opacity: .6; letter-spacing: 2px; }
@@ -52,9 +53,9 @@
 </script>
 </head>
 <body>
-<div id="load" class="panel"><img src="logo.svg" alt="BRACKISH" style="width:min(420px,70vw);margin-bottom:10px"><div class="bar"><i id="bar"></i></div><p id="loadmsg">CONNECTING TO NOAA NCEI</p>
+<div id="load" class="panel"><h1>BRACKISH</h1><div class="bar"><i id="bar"></i></div><p id="loadmsg">CONNECTING TO NOAA NCEI</p>
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
-<div id="title" class="panel title gone"><div style="height:34vh"></div>
+<div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · TO SCALE</p>
   <p id="titlehint">ARROWS  swim        SPACE  fast
 M  map · fast travel      TAB  creatures you have been
@@ -126,7 +127,7 @@ const WRECKS = [
   { ll: [27.86, -82.49], name: 'Hillsborough hulk', kind: 'cruiser', s: 2.2 }, { ll: [27.93, -82.63], name: 'Old Tampa Bay skiff', kind: 'cruiser', s: 1 },
 ];
 const FEVER_PATH = [[27.604, -82.758], [27.600, -82.800], [27.592, -82.850], [27.580, -82.910], [27.565, -82.980]].map(p => toXZ(...p));   // Egmont hole, out the Egmont Channel, onto the shelf
-const START = toXZ(27.632, -82.665);
+const START = toXZ(27.607, -82.751);   // chapter I: the Egmont pass
 
 // ═══════════════════════════════════════════════════════════════════
 //  DATA  —  NOAA float TIFFs + OSM bridges, cached in IndexedDB.
@@ -521,8 +522,10 @@ const logo = (() => {
 function stepLogo(dt) {
   const u = logo.m.uniforms; if (u.uGo.value >= 0) { u.uGo.value += dt; if (u.uGo.value > 5) { logo.mesh.visible = false; return; } }
   const dist = 7.5, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-  if (u.uGo.value < 0) { u.uOrigin.value.copy(camPos).addScaledVector(fwd, dist).addScaledVector(up, 0.8); u.uRight.value.copy(right); u.uUp.value.copy(up); }
-  const gh = dotPass.uniforms.uGrid.value.y || 300; u.uSpacing.value = 2.6 * (2 * dist * Math.tan(camera.fov * Math.PI / 360)) / gh; u.uSize.value = 2.2;
+  if (u.uGo.value < 0 && !started) { u.uOrigin.value.copy(camPos).addScaledVector(fwd, dist).addScaledVector(up, 1.1); u.uRight.value.copy(right); u.uUp.value.copy(up);
+    const gh = dotPass.uniforms.uGrid.value.y || 300; u.uSpacing.value = 3.0 * (2 * dist * Math.tan(camera.fov * Math.PI / 360)) / gh; }
+  u.uSize.value = 3.0;
+  if (u.uGo.value < 0 && started) { logo.held = (logo.held || 0) + dt; if (P.pos.distanceTo(u.uOrigin.value) < 3.0 || logo.held > 14) logo.release(); }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -960,10 +963,10 @@ const CHAPTERS = [
 const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
     this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i];
-    const fade = $('fade'), card = $('chapter'); fade.style.opacity = 1;
+    const fade = $('fade'), card = $('chapter'); if (i > 0) fade.style.opacity = 1;
     setTimeout(() => {
       if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock;
-      if (c.start) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
+      if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
       card.textContent = c.title; card.style.opacity = 1;
       setTimeout(() => { fade.style.opacity = 0; }, 900);
       setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.title); }, 3600);
@@ -983,7 +986,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); }
   } };
-function startGame() { started = true; logo.release(); document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000); $('title').classList.add('gone'); story.begin(0); }
+function startGame() { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000); $('title').classList.add('gone'); story.begin(0); }
 
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
@@ -1194,7 +1197,7 @@ async function boot() {
   // OpenStreetMap bridges arrive in the background and replace the fallback set
   loadBridges().then(() => { try { buildStructures(); say('BRIDGES UPDATED FROM OPENSTREETMAP', 2.5); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
-  P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) + 1.5, -6);
+  P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); dayClock = CHAPTERS[0].clock ?? dayClock;
   await stage('WAKING THE BAY', () => { becomeSpecies(speciesById.cownose); camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos); rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); $('title').classList.remove('gone');
   frame();
