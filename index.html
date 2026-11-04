@@ -35,6 +35,10 @@
   .panel h1 { font-weight: normal; font-size: 30px; letter-spacing: 12px; margin: 0 0 10px; text-shadow: 0 0 10px #ffb000, 0 0 30px #ff900088; }
   .panel p { margin: 0; font-size: 13px; line-height: 2; text-align: center; white-space: pre; }
   .panel small { font-size: 10px; opacity: .6; letter-spacing: 2px; }
+  .keys { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 10px 22px; align-items: center; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; max-width: 760px; }
+  .keys b { font-weight: normal; padding: 4px 10px; border: 1px solid #ffb00066; border-radius: 3px; text-align: center; box-shadow: 0 0 8px #ff900033 inset; white-space: nowrap; }
+  .keys span { opacity: .85; text-transform: none; letter-spacing: 1.5px; }
+  .lore { margin-top: 18px; font-size: 12px; opacity: .7; text-transform: none; letter-spacing: 2px; line-height: 2; }
   .bar { width: 260px; height: 10px; border: 1px solid #ffb00088; }
   .bar i { display: block; height: 100%; width: 0; background: #ffb000; box-shadow: 0 0 10px #ffb000; }
   #map { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; gap: 40px; background: #000000f0; z-index: 9; }
@@ -60,12 +64,16 @@
   <p id="titlehint">ARROWS  swim        SPACE  burst
 M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small></div>
-<div id="help" class="panel gone"><h1>HOW</h1><p>← →   turn          ↑ ↓   up · down
-SPACE   put on speed       TAB   become another creature
-M   map and fast travel    ENTER   next line of the story
-N   sound        V   depth ×3      -  =   dot size
-
-boats hum before they arrive. dive.
+<div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
+  <div class="keys">
+    <b>← →</b><span>turn</span><b>↑ ↓</b><span>up · down</span>
+    <b>SPACE</b><span>burst, while the dots last</span><b>TAB</b><span>become a creature you have been</span>
+    <b>M</b><span>map and fast travel</span><b>ENTER</b><span>next line of the story</span>
+    <b>N</b><span>sound on · off</span><b>V</b><span>depth ×3 · true scale</span>
+    <b>− =</b><span>dot size</span><b>H</b><span>this screen</span>
+  </div>
+  <p class="lore">boats hum before they arrive. dive.
+sharks lose interest if you keep away.
 the surface is not the end of the world.</p><small>H to close</small></div>
 <div id="map"><div><h2>FAST TRAVEL — ↑↓ pick · ENTER go · M close</h2><ul id="cplist"></ul></div><canvas id="bigmap" width="560" height="560"></canvas></div>
 <div class="hud" id="tl"></div>
