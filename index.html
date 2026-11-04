@@ -433,7 +433,7 @@ function creatureMat(o = {}) {
 
 // Species of the bay. sizes in metres; cruise/max in m/s; zone picks the wild AI's preferred depth.
 const SPECIES = [
-  { id: 'cownose', name: 'Cownose Ray', kind: 'ray', span: 0.9, len: 0.6, pointy: 1.0, tail: 0.9, cruise: 1.8, max: 6, turn: 1.8, alt: 0.4, zone: 'shallow', freq: 2.6, amp: 0.55 },
+  { id: 'cownose', name: 'Cownose Ray', kind: 'ray', span: 0.9, len: 0.6, pointy: 1.0, tail: 0.9, cruise: 2.2, max: 6, turn: 1.8, alt: 0.4, zone: 'shallow', freq: 2.6, amp: 0.55 },
   { id: 'manta', name: 'Manta Ray', kind: 'ray', span: 3.8, len: 2.6, pointy: 0.75, tail: 1.9, lobes: true, cruise: 1.6, max: 4.5, turn: 1.1, alt: 0.9, zone: 'deep', freq: 2.0, amp: 0.62 },
   { id: 'eagle', name: 'Spotted Eagle Ray', kind: 'ray', span: 2.4, len: 1.4, pointy: 1.3, tail: 3.0, cruise: 1.5, max: 5, turn: 1.4, alt: 0.7, zone: 'any', freq: 2.2, amp: 0.6 },
   { id: 'stingray', name: 'Southern Stingray', kind: 'ray', span: 1.3, len: 1.2, pointy: 0.5, tail: 1.5, cruise: 0.8, max: 3, turn: 1.6, alt: 0.3, zone: 'bottom', freq: 2.4, amp: 0.4 },
@@ -915,7 +915,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM') toggleMap();
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
     if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
-  if (e.code === 'Tab') { const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) say('you have not yet become anyone else', 2); else { const i = list.indexOf(P.sp); becomeSpecies(list[(i + (e.shiftKey ? list.length - 1 : 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); } }
+  if (e.code === 'Tab') { const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) say('you have not yet become anyone else', 2); else { const i = list.indexOf(P.sp); becomeSpecies(list[(i + (e.shiftKey ? list.length - 1 : 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); splash(0.4); } }
 });
 addEventListener('keyup', e => keys[e.code] = false);
 
@@ -1092,7 +1092,7 @@ function drawCompass(landmarks) {
   const goal = landmarks.find(l => l.goal);
   if (goal) { const rel = THREE.MathUtils.clamp(((goal.bearing - hdg + 540) % 360) - 180, -62, 62), x = W / 2 + rel * pxPerDeg;
     cctx.fillStyle = '#fff'; cctx.beginPath(); cctx.moveTo(x, 6); cctx.lineTo(x + 5, 13); cctx.lineTo(x, 20); cctx.lineTo(x - 5, 13); cctx.fill();
-    cctx.fillText(goal.dist > 500 ? (goal.dist / 1000).toFixed(1) + ' km' : Math.round(goal.dist) + ' m', x, 32); }
+    cctx.fillText(goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + ' km' : Math.round(goal.dist / 10) * 10 + ' m', x, 32); }
   cctx.fillStyle = '#fff'; cctx.fillRect(W / 2 - 1, 36, 2, 6);
 }
 const headingDeg = () => ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
@@ -1151,27 +1151,27 @@ function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch {} }
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════
 const CHAPTERS = [
-  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.607, -82.751], goal: () => toXZ(27.604, -82.764), radius: 60,
+  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.607, -82.751], goal: () => toXZ(27.6055, -82.7565), radius: 60,
     lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'] },
-  { title: 'II · THE CHANNEL', start: [27.616, -82.690], goal: () => toXZ(27.624, -82.642), radius: 90,
+  { title: 'II · THE CHANNEL', start: [27.618, -82.662], goal: () => toXZ(27.6215, -82.6555), radius: 90,
     lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },
-  { title: 'III · THE FEVER', start: [27.600, -82.722], goal: () => [fever.c.x, fever.c.z], radius: 60,
+  { title: 'III · THE FEVER', start: [27.602, -82.752], goal: () => [fever.c.x, fever.c.z], radius: 60,
     lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'] },
-  { title: 'IV · THE GULF', follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 240 && lastFloor < -14,
+  { title: 'IV · THE GULF', follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 150,
     lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'] },
   { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true, clock: 17.5,
     lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
-  { title: 'VI · THE POD', species: 'dolphin', start: [27.60, -82.73], goal: () => toXZ(27.6205, -82.6555), radius: 120,
+  { title: 'VI · THE POD', species: 'dolphin', start: [27.6175, -82.664], goal: () => toXZ(27.6205, -82.6555), radius: 120,
     lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and the pod is racing the ships to the Skyway.', 'Beat them to the main span. Breathe when you need to.'] },
-  { title: 'VII · THE PILINGS', species: 'goliath', start: [27.650, -82.650], goal: () => toXZ(27.598, -82.652), radius: 50,
+  { title: 'VII · THE PILINGS', species: 'goliath', start: [27.604, -82.651], goal: () => toXZ(27.598, -82.652), radius: 50,
     lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
   { title: 'VIII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. Burst through a school to take one. Eight will do.'] },
-  { title: 'IX · SLOW WATER', species: 'manatee', start: [27.80, -82.43], goal: () => toXZ(27.794, -82.404), radius: 120,
+  { title: 'IX · SLOW WATER', species: 'manatee', start: [27.798, -82.412], goal: () => toXZ(27.794, -82.404), radius: 120,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
-  { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.55, -82.88), radius: 150,
+  { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.535, -82.769), radius: 120,
     lines: ['A loggerhead turtle swims the long way, out past Anna Maria into the Gulf.', 'You must breathe. Surface three times on the way.', 'The beam marks open water.'] },
-  { title: 'XI · THE DEEP', species: 'hammer', clock: 13, start: [27.70, -82.93], goal: () => toXZ(27.70, -82.95), radius: 60,
+  { title: 'XI · THE DEEP', species: 'hammer', clock: 13, start: [27.70, -82.93], goal: () => toXZ(27.70, -82.937), radius: 60,
     lines: ['Twenty metres down on the shelf, something lies on the bottom.', 'You are a great hammerhead, and nothing here is afraid of you except the thing in the wreck.', 'Find it.'] },
   { title: 'XII · DAWN', species: 'manta', start: [27.52, -83.17], surface: true, clock: 5.6,
     lines: ['A manta ray four metres across moves like a slow bird.', 'This is the last body. Rise with it.', 'Break the surface at dawn.'] },
@@ -1203,12 +1203,12 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.surface) { this.surfaceT = P.pos.y > -0.35 ? this.surfaceT + dt : 0; done = this.surfaceT > 4; }
     if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && Math.random() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
-    if (done) { discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
+    if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
 const TITLE_HINT = 'ARROWS  swim        SPACE  burst\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
 function startGame(save) { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
-  if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; say(c.lines[0], 7, c.title); if (save.ch === 3) fever.moving = true; return; }
+  if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
   story.begin(0); }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1302,10 +1302,10 @@ function stepAmbient(dt, t) {
     placeInstance(shafts, i, x, 0, z, 0, Math.atan2(camPos.x - x, camPos.z - z) + Math.sin(t * 0.3 + s.s) * 0.2, 0, s.w, 26 + Math.sin(t * 0.2 + s.s) * 4, 1); });
   shafts.instanceMatrix.needsUpdate = true;
   { const a = snow.geometry.attributes.position.array, hb = snowBox / 2;
-    for (let i = 0; i < a.length; i += 3) { a[i + 1] -= 0.08 * dt; for (let k = 0; k < 3; k++) { const d = a[i + k] - camPos.getComponent(k); if (d > hb) a[i + k] -= snowBox; else if (d < -hb) a[i + k] += snowBox; } }
+    for (let i = 0; i < a.length; i += 3) { a[i + 1] -= 0.08 * dt; a[i] += _cur.x * dt; a[i + 2] += _cur.z * dt; for (let k = 0; k < 3; k++) { const d = a[i + k] - camPos.getComponent(k); if (d > hb) a[i + k] -= snowBox; else if (d < -hb) a[i + k] += snowBox; } }
     snow.geometry.attributes.position.needsUpdate = true; }
   { const a = bubbles.geometry.attributes.position.array;
-    for (let i = 0; i < 400; i++) { bubbleLife[i] += dt; if (bubbleLife[i] <= 6) { a[i * 3 + 1] = Math.min(-0.05, a[i * 3 + 1] + 0.45 * dt); a[i * 3] += Math.sin(t * 5 + i) * 0.05 * dt; } else a[i * 3 + 1] = 9999; }
+    for (let i = 0; i < 400; i++) { bubbleLife[i] += dt; if (bubbleLife[i] <= 6) { a[i * 3 + 1] = Math.min(-0.05, a[i * 3 + 1] + (0.35 + bubbleLife[i] * 0.12) * dt); a[i * 3] += Math.sin(t * 5 + i) * 0.08 * dt; a[i * 3 + 2] += Math.cos(t * 4 + i) * 0.06 * dt; } else a[i * 3 + 1] = 9999; }
     bubbles.geometry.attributes.position.needsUpdate = true; }
   if (world.buoyMesh) { world.buoys.forEach((b, i) => { _m.makeRotationZ(Math.sin(t * 0.8 + b.ph) * 0.08); _m.setPosition(b.x, Math.sin(t * 1.1 + b.ph) * 0.2 - 0.4, b.z); world.buoyMesh.setMatrixAt(i, _m); }); world.buoyMesh.instanceMatrix.needsUpdate = true; }
   // moon jellies: slow, pulsing, harmless, lovely in the dark
