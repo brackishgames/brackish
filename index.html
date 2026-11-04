@@ -224,12 +224,12 @@ addEventListener('resize', resize);
 //  SHARED GLSL  —  brightness-only shading, fog to a target brightness
 //  (black under water, haze above), sunlight fading with depth.
 // ═══════════════════════════════════════════════════════════════════
-const WU = { uTime: { value: 0 }, uFogD: { value: 0.014 }, uFogB: { value: 0 } };
+const WU = { uTime: { value: 0 }, uFogD: { value: 0.014 }, uFogB: { value: 0 }, uSun: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) } };
 const GLSL_COMMON = /* glsl */`
-  uniform float uTime, uFogD, uFogB;
+  uniform float uTime, uFogD, uFogB, uSun; uniform vec3 uSunDir;
   float fogF(float d) { float k = d * uFogD; return 1.0 - exp(-k * k); }
   float applyFog(float b, float d) { return mix(b, uFogB, fogF(d)); }
-  float depthLight(float y) { return exp(min(y, 0.0) * 0.045); }
+  float depthLight(float y) { return exp(min(y, 0.0) * 0.045) * (0.10 + 0.90 * uSun); }
 `;
 const DEM_GLSL = /* glsl */`
   uniform sampler2D uDemO, uDemI; uniform vec4 uBoxO, uBoxI; uniform float uVex;
@@ -276,7 +276,7 @@ const floorFrag = GLSL_COMMON + /* glsl */`
       float iso = abs(fract(y + 0.5) - 0.5) / max(fwidth(y), 1e-4);
       b += 0.22 * (1.0 - smoothstep(0.0, 1.4, iso)) * mix(0.25, 1.0, depthLight(vW.y));
     } else {
-      b = 0.16 + 0.12 * l;
+      b = (0.16 + 0.12 * l) * (0.25 + 0.75 * uSun);
       float iso = abs(fract(y * 0.5 + 0.5) - 0.5) / max(fwidth(y * 0.5), 1e-4);
       b += 0.10 * (1.0 - smoothstep(0.0, 1.4, iso));
       b += 0.35 * (1.0 - smoothstep(0.0, 0.6, y));   // shoreline
@@ -297,8 +297,10 @@ function updateClipmap(px, pz) { for (const m of clipLevels) { const s = m.mater
 const sky = new THREE.Mesh(new THREE.SphereGeometry(25000, 24, 12), mat({ side: THREE.BackSide, depthWrite: false,
   vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: GLSL_COMMON + `varying vec3 vDir;
-    void main(){ float h = max(vDir.y, 0.0); float b = mix(0.34, 0.10, pow(h, 0.5));
-      b += 0.5 * pow(max(dot(vDir, normalize(vec3(-0.7, 0.12, -0.3))), 0.0), 90.0);
+    float hash(vec3 p) { return fract(sin(dot(floor(p * 60.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+    void main(){ float h = max(vDir.y, 0.0); float b = mix(mix(0.05, 0.42, uSun), mix(0.01, 0.16, uSun), pow(h, 0.5));
+      float sd = max(dot(vDir, uSunDir), 0.0); b += (0.6 * pow(sd, 120.0) + 0.25 * pow(sd, 6.0)) * smoothstep(-0.05, 0.1, uSunDir.y);
+      b += step(0.9965, hash(vDir)) * 0.7 * (1.0 - uSun) * smoothstep(0.02, 0.2, vDir.y);   // stars
       b = mix(b, uFogB, step(uFogB, 0.001));   // under water the sky is black
       gl_FragColor = vec4(vec3(b), 1.0); }` }));
 sky.frustumCulled = false; scene.add(sky);
@@ -315,7 +317,7 @@ const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 48), ma
       if (gl_FrontFacing) {   // seen from the air: dark glassy water you can see into, sparkle toward the horizon
         vec3 v = normalize(cameraPosition - vW); float g = 1.0 - max(v.y, 0.0);
         float s2 = sin(vW.x * 1.7 + uTime * 1.3) * sin(vW.z * 1.4 - uTime * 1.1);
-        b = 0.07 + 0.16 * g * g + 0.35 * pow(max(s2, 0.0), 6.0) * (0.3 + 0.7 * g) + 0.15 * pow(p, 4.0) * g;
+        b = (0.07 + 0.16 * g * g + 0.35 * pow(max(s2, 0.0), 6.0) * (0.3 + 0.7 * g) + 0.15 * pow(p, 4.0) * g) * (0.25 + 0.75 * uSun);
         alpha = 0.45 + 0.5 * g * g;
       } else b = 0.14 + 0.6 * pow(p, 5.0);
       gl_FragColor = vec4(vec3(applyFog(b, vD)), alpha);
@@ -375,7 +377,7 @@ const creatureFrag = GLSL_COMMON + /* glsl */`
     vec3 n = normalize(cross(dFdx(vW), dFdy(vW))); vec3 v = normalize(cameraPosition - vW); if (dot(n, v) < 0.0) n = -n;
     float l = 0.12 + 0.26 * max(dot(n, normalize(vec3(0.2, 1.0, 0.1))), 0.0);
     float rim = pow(1.0 - max(dot(n, v), 0.0), 1.8);
-    float light = vW.y > 0.0 ? 1.0 : mix(0.5, 1.0, depthLight(vW.y));
+    float light = vW.y > 0.0 ? (0.2 + 0.8 * uSun) : mix(0.5, 1.0, depthLight(vW.y));
     float b = (l * light + rim * 0.95) * uGlow;
     if (uMode == 1.0) { float e = smoothstep(0.82, 1.0, vUv.x) + smoothstep(0.80, 0.86, vUv.y) * step(vUv.y, 0.87) + (1.0 - smoothstep(0.0, 0.07, vUv.y)); b = b * (1.0 - 0.35 * vUv.x) + 0.35 * clamp(e, 0.0, 1.0) * uGlow; }
     gl_FragColor = vec4(vec3(applyFog(min(b, 1.0), vD)), 1.0);
@@ -832,7 +834,7 @@ function stepGoalBeam(t) {
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════
 const CHAPTERS = [
-  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', start: [27.607, -82.751], goal: () => toXZ(27.604, -82.764), radius: 60,
+  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.607, -82.751], goal: () => toXZ(27.604, -82.764), radius: 60,
     lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'] },
   { title: 'II · THE CHANNEL', start: [27.616, -82.690], goal: () => toXZ(27.624, -82.642), radius: 90,
     lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },
@@ -840,27 +842,27 @@ const CHAPTERS = [
     lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'] },
   { title: 'IV · THE GULF', follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 240 && lastFloor < -14,
     lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'] },
-  { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true,
+  { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true, clock: 17.5,
     lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
   { title: 'VI · THE POD', species: 'dolphin', start: [27.60, -82.73], goal: () => toXZ(27.6205, -82.6555), radius: 120,
     lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and the pod is racing the ships to the Skyway.', 'Beat them to the main span. Breathe when you need to.'] },
   { title: 'VII · THE PILINGS', species: 'goliath', start: [27.650, -82.650], goal: () => toXZ(27.598, -82.652), radius: 50,
     lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
-  { title: 'VIII · THE SHADOW', species: 'bull', start: [27.84, -82.47], feed: 8,
+  { title: 'VIII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. Eight will do.'] },
   { title: 'IX · SLOW WATER', species: 'manatee', start: [27.80, -82.43], goal: () => toXZ(27.794, -82.404), radius: 120,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
   { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.55, -82.88), radius: 150,
     lines: ['A loggerhead turtle swims the long way, out past Anna Maria into the Gulf.', 'You must breathe. Surface three times on the way.', 'The beam marks open water.'] },
-  { title: 'XI · THE DEEP', species: 'hammer', start: [27.70, -82.93], goal: () => toXZ(27.70, -82.95), radius: 60,
+  { title: 'XI · THE DEEP', species: 'hammer', clock: 13, start: [27.70, -82.93], goal: () => toXZ(27.70, -82.95), radius: 60,
     lines: ['Twenty metres down on the shelf, something lies on the bottom.', 'You are a great hammerhead, and nothing here is afraid of you except the thing in the wreck.', 'Find it.'] },
-  { title: 'XII · DAWN', species: 'manta', start: [27.52, -83.17], surface: true,
+  { title: 'XII · DAWN', species: 'manta', start: [27.52, -83.17], surface: true, clock: 5.6,
     lines: ['A manta ray four metres across moves like a slow bird.', 'This is the last body. Rise with it.', 'Break the surface at dawn.'] },
   { title: 'FREE SWIM', free: true,
     lines: ['The bay is yours, and every body you have been.', 'TAB to change. M for the map and fast travel.', 'There are things on the bottom nobody talks about.'] },
 ];
 const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
-  begin(i) { this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i]; if (c.species) becomeSpecies(speciesById[c.species]); if (c.start) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); } say(c.lines[0], 7, c.title); if (i === 3) fever.moving = true; },
+  begin(i) { this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i]; if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock; if (c.start) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); } say(c.lines[0], 7, c.title); if (i === 3) fever.moving = true; },
   advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7, c.title); } },
   step(dt) {
     const c = CHAPTERS[this.ch]; if (c.free) { this.goal = null; return; }
@@ -952,7 +954,7 @@ function stepCamera(dt) {
   camera.position.copy(camPos); P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.014, 0.00018, aboveMix); WU.uFogB.value = 0.28 * aboveMix;
+  WU.uFogD.value = THREE.MathUtils.lerp(0.014, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
 }
 function stepAmbient(dt, t) {
   updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
@@ -999,7 +1001,8 @@ function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz 
 }
 function stepHud(dt) {
   const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
-  tl.textContent = `${P.sp.name}\nDEPTH ${Math.max(0, -P.pos.y).toFixed(1).padStart(5)} m\nFLOOR ${(-f).toFixed(1).padStart(5)} m\n${'♥'.repeat(P.hp)}${'·'.repeat(3 - P.hp)}${P.fed ? '   FED ' + P.fed : ''}\n${lat.toFixed(4)} N  ${(-lon).toFixed(4)} W${vex > 1 ? '\nDEPTH ×' + vex : ''}`;
+  const hh = Math.floor(dayClock), mm = Math.floor((dayClock - hh) * 60);
+  tl.textContent = `${P.sp.name}   ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nDEPTH ${Math.max(0, -P.pos.y).toFixed(1).padStart(5)} m\nFLOOR ${(-f).toFixed(1).padStart(5)} m\n${'♥'.repeat(P.hp)}${'·'.repeat(3 - P.hp)}${P.fed ? '   FED ' + P.fed : ''}\n${lat.toFixed(4)} N  ${(-lon).toFixed(4)} W${vex > 1 ? '\nDEPTH ×' + vex : ''}`;
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }
@@ -1018,6 +1021,8 @@ function stepHud(dt) {
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t;
+  if (started) dayClock = (dayClock + dt / 60) % 24;
+  { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   if (started && !mapOpen && !helpOpen) { stepPlayer(dt); story.step(dt); }
   stepCamera(dt); stepGoalBeam(t); stepAmbient(dt, t); stepWild(dt, t); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); composer.render();
