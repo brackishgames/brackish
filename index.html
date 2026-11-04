@@ -51,7 +51,7 @@
 <div id="title" class="panel gone"><h1>BAY RAY</h1>
   <p>TAMPA BAY · THE GULF · TO SCALE</p>
   <p id="titlehint">ARROWS  swim        SPACE  fast
-TAB  change creature      M  map · fast travel
+M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small></div>
 <div id="help" class="panel gone"><h1>HOW</h1><p>← →   turn          ↑ ↓   up · down
 SPACE   put on speed       TAB   become another creature
@@ -538,12 +538,13 @@ const world = { buoys: [], wrecks: [], buoyMesh: null, meshes: [] };
 //  WILDLIFE  —  the player's body, wild animals that loom out of the
 //  murk, mullet schools, pelicans and gulls, and the fever of rays.
 // ═══════════════════════════════════════════════════════════════════
+const unlocked = new Set();
 const P = { pos: new THREE.Vector3(START[0], -4, START[1]), yaw: Math.PI, pitch: 0, roll: 0, speed: 1.3, yawRate: 0, sp: speciesById.cownose, mesh: null, hp: 3, stun: 0, air: 0 };
 const playerMeshes = {};
 function becomeSpecies(sp) {
   if (P.mesh) P.mesh.visible = false;
   if (!playerMeshes[sp.id]) { playerMeshes[sp.id] = creatureMesh(sp); scene.add(playerMeshes[sp.id]); }
-  P.mesh = playerMeshes[sp.id]; P.mesh.visible = true; P.sp = sp; P.speed = sp.cruise;
+  P.mesh = playerMeshes[sp.id]; P.mesh.visible = true; P.sp = sp; P.speed = sp.cruise; unlocked.add(sp.id);
 }
 
 const WILD_N = 46, wild = [];
@@ -712,7 +713,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyM') toggleMap();
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
     if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
-  if (e.code === 'Tab') { const i = SPECIES.indexOf(P.sp); becomeSpecies(SPECIES[(i + (e.shiftKey ? SPECIES.length - 1 : 1)) % SPECIES.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); }
+  if (e.code === 'Tab') { const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) say('you have not yet become anyone else', 2); else { const i = list.indexOf(P.sp); becomeSpecies(list[(i + (e.shiftKey ? list.length - 1 : 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); } }
   if (e.code === 'Enter') story.advance();
   if (e.code === 'KeyV') { vex = vex === 1 ? 3 : 1; demUniforms.uVex.value = vex; grassCenter.set(1e9, 1e9); }
   if (e.code === 'KeyN') toggleAudio();
@@ -813,23 +814,46 @@ function stepGoalBeam(t) {
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════
 const CHAPTERS = [
-  { title: 'I · THE HOLE OFF EGMONT', lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'], start: [27.607, -82.751], goal: () => toXZ(27.604, -82.764), radius: 60, species: 'cownose' },
-  { title: 'II · THE CHANNEL', lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'], start: [27.616, -82.690], goal: () => toXZ(27.624, -82.642), radius: 90 },
-  { title: 'III · THE FEVER', lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'], start: [27.600, -82.722], goal: () => [fever.c.x, fever.c.z], radius: 60 },
-  { title: 'IV · THE GULF', lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'], follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 300 && lastFloor < -14 },
-  { title: 'V · THIRTY METRES', lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'], start: [27.52, -83.17], surface: true },
-  { title: 'FREE SWIM', lines: ['The Gulf is yours.', 'TAB to become any creature. M for the map and fast travel home.', 'There are things on the bottom nobody talks about.'], free: true },
+  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', start: [27.607, -82.751], goal: () => toXZ(27.604, -82.764), radius: 60,
+    lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'] },
+  { title: 'II · THE CHANNEL', start: [27.616, -82.690], goal: () => toXZ(27.624, -82.642), radius: 90,
+    lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },
+  { title: 'III · THE FEVER', start: [27.600, -82.722], goal: () => [fever.c.x, fever.c.z], radius: 60,
+    lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'] },
+  { title: 'IV · THE GULF', follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 240 && lastFloor < -14,
+    lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'] },
+  { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true,
+    lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
+  { title: 'VI · THE POD', species: 'dolphin', start: [27.60, -82.73], goal: () => toXZ(27.6205, -82.6555), radius: 120,
+    lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and the pod is racing the ships to the Skyway.', 'Beat them to the main span. Breathe when you need to.'] },
+  { title: 'VII · THE PILINGS', species: 'goliath', start: [27.650, -82.650], goal: () => toXZ(27.598, -82.652), radius: 50,
+    lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
+  { title: 'VIII · THE SHADOW', species: 'bull', start: [27.84, -82.47], feed: 8,
+    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. Eight will do.'] },
+  { title: 'IX · SLOW WATER', species: 'manatee', start: [27.80, -82.43], goal: () => toXZ(27.794, -82.404), radius: 120,
+    lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
+  { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.55, -82.88), radius: 150,
+    lines: ['A loggerhead turtle swims the long way, out past Anna Maria into the Gulf.', 'You must breathe. Surface three times on the way.', 'The beam marks open water.'] },
+  { title: 'XI · THE DEEP', species: 'hammer', start: [27.70, -82.93], goal: () => toXZ(27.70, -82.95), radius: 60,
+    lines: ['Twenty metres down on the shelf, something lies on the bottom.', 'You are a great hammerhead, and nothing here is afraid of you except the thing in the wreck.', 'Find it.'] },
+  { title: 'XII · DAWN', species: 'manta', start: [27.52, -83.17], surface: true,
+    lines: ['A manta ray four metres across moves like a slow bird.', 'This is the last body. Rise with it.', 'Break the surface at dawn.'] },
+  { title: 'FREE SWIM', free: true,
+    lines: ['The bay is yours, and every body you have been.', 'TAB to change. M for the map and fast travel.', 'There are things on the bottom nobody talks about.'] },
 ];
-const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, goal: null,
-  begin(i) { this.ch = i; this.line = 0; const c = CHAPTERS[i]; if (c.species) becomeSpecies(speciesById[c.species]); if (c.start) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); } say(c.lines[0], 7, c.title); if (i === 3) fever.moving = true; },
+const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
+  begin(i) { this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i]; if (c.species) becomeSpecies(speciesById[c.species]); if (c.start) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); } say(c.lines[0], 7, c.title); if (i === 3) fever.moving = true; },
   advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7, c.title); } },
   step(dt) {
     const c = CHAPTERS[this.ch]; if (c.free) { this.goal = null; return; }
     this.goal = c.goal ? c.goal() : null;
     let done = false;
     if (c.goal && !c.follow) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
+    if (c.breaths && !c.goal) done = false;
     if (c.follow) { const d = Math.hypot(fever.c.x - P.pos.x, fever.c.z - P.pos.z); fever.speed = d > 80 ? 0.6 : 2.6; if (d < 90) this.followT += dt; if (d < 90 && !keys.Space) P.speed = Math.max(P.speed, fever.speed + 0.2); if (d > 140 && sayTimer <= 0) say('the fever is pulling away', 2); done = c.done(); }
     if (c.surface) { this.surfaceT = P.pos.y > -0.35 ? this.surfaceT + dt : 0; done = this.surfaceT > 4; }
+    if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && Math.random() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
+    if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); }
   } };
 function startGame() { started = true; $('title').classList.add('gone'); story.begin(0); }
@@ -844,23 +868,24 @@ let above = false, aboveMix = 0, nearestPoi = '', poiTimer = 0, grassCenter = ne
 function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   const turn = stunned ? 0 : (keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0);
-  const climb = stunned ? -0.3 : (keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0);
+  const climb = stunned ? -0.4 : (keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0);
   const want = keys.Space && !stunned ? sp.max : sp.cruise;
   P.speed += (want - P.speed) * Math.min(1, (want > P.speed ? 3.5 : 1.2) * dt);
   P.yawRate += (turn * sp.turn * (keys.Space ? 0.8 : 1) - P.yawRate) * Math.min(1, 9 * dt); P.yaw += P.yawRate * dt;
-  // floor avoidance: look ahead and ease the nose up over rising bottom
-  const ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z), fHere = floorAt(P.pos.x, P.pos.z);
-  let autoPitch = fAhead + sp.alt + 0.6 > P.pos.y ? THREE.MathUtils.clamp((fAhead + sp.alt + 0.8 - P.pos.y) * 0.5, 0, 0.7) : 0;
-  if (!autoPitch && !climb) {   // left alone, settle to mid-water (or just off the bottom in the shallows)
-    const prefer = THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9);
-    autoPitch = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.25, -0.35, 0.35);
+  // vertical: up is up. hold ↑/↓ to rise or dive directly; the body tilts to match
+  const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
+  P.idleT = climb ? 0 : (P.idleT || 0) + dt;
+  let vy = climb * Math.max(1.2, sp.max * 0.45);
+  if (!climb) {
+    if (fAhead + sp.alt + 0.8 > P.pos.y) vy = Math.max(vy, (fAhead + sp.alt + 1.0 - P.pos.y) * 1.5);   // bottom rising ahead: ease up
+    else if (P.idleT > 3) { const prefer = THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9); vy = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.3, -0.5, 0.5); }
   }
-  const wantPitch = climb ? climb * 0.6 : autoPitch;
-  P.pitch += (wantPitch - P.pitch) * Math.min(1, (climb ? 6 : 2.5) * dt);
+  P.vy = (P.vy || 0) + (vy - (P.vy || 0)) * Math.min(1, 6 * dt);
+  P.pitch += (THREE.MathUtils.clamp(P.vy / Math.max(1, P.speed) * 0.8, -0.7, 0.7) - P.pitch) * Math.min(1, 6 * dt);
   P.roll += (-P.yawRate * 0.6 - P.roll) * Math.min(1, 3 * dt);
-  const fwd = fwdOf(P.yaw, P.pitch), next = P.pos.clone().addScaledVector(fwd, P.speed * dt);
+  const fwd = fwdOf(P.yaw, 0), next = P.pos.clone().addScaledVector(fwd, P.speed * dt);
   if (floorAt(next.x, next.z) > -sp.alt - 0.5) { P.speed = Math.max(0.3, P.speed * 0.5); P.yaw += 0.8 * dt; } else P.pos.copy(next);
-  P.pos.y = THREE.MathUtils.clamp(P.pos.y, fHere + sp.alt, 0.15);
+  P.pos.y = THREE.MathUtils.clamp(P.pos.y + P.vy * dt, fHere + sp.alt, 0.15);
   lastFloor = fHere;
   if (P.pos.y > -0.3 && !above && Math.random() < 0.3) emitBubble(P.pos.x, -0.05, P.pos.z);
   P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, P.pitch, P.roll);
@@ -868,10 +893,9 @@ function stepPlayer(dt) {
   if (P.speed > sp.cruise * 1.3 && Math.random() < 0.25) emitBubble(P.pos.x, P.pos.y, P.pos.z);
 }
 function stepCamera(dt) {
-  const size = P.mesh.userData.size, dist = 3.2 + size * 2.6, h = 1.1 + size * 0.6;
+  const size = P.mesh.userData.size, dist = 3.2 + size * 2.6 + P.speed * 0.15, h = 1.3 + size * 0.6;
   const back = fwdOf(P.yaw, 0).multiplyScalar(-dist); back.y = h;
-  const side = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)).multiplyScalar(0.9 + size * 0.35);
-  const want = P.pos.clone().add(back).add(side);
+  const want = P.pos.clone().add(back);
   // keep the camera clearly on one side of the surface
   if (P.pos.y > -0.6) want.y = Math.max(want.y, 1.0 + size * 0.3); else want.y = Math.min(want.y, -0.5);
   camPos.lerp(want, Math.min(1, 5 * dt));
