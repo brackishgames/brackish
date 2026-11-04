@@ -534,10 +534,10 @@ const logo = (() => {
       float h(float x) { return fract(sin(x * 12.9898) * 43758.5453); }
       void main() {
         vec3 p = uOrigin + uRight * aTarget.x * uSpacing + uUp * aTarget.y * uSpacing;
-        p += uUp * sin(uTime * 1.7 + aSeed) * uSpacing * 0.08 + uRight * sin(uTime * 1.1 + aSeed * 2.0) * uSpacing * 0.06;
+        p += uUp * sin(uTime * 1.7 + aSeed) * uSpacing * 0.04 + uRight * sin(uTime * 1.1 + aSeed * 2.0) * uSpacing * 0.03;
         // every bubble has a life: it rises into its slot, holds, slips away, and another rises to replace it
-        float period = 9.0 + h(aSeed + 3.0) * 8.0, ph = fract((uTime + h(aSeed + 4.0) * period * 3.0) / period);
-        float rise = 1.0 - smoothstep(0.0, 0.14, ph), leave = smoothstep(0.86, 1.0, ph);
+        float period = 16.0 + h(aSeed + 3.0) * 14.0, ph = fract((uTime + h(aSeed + 4.0) * period * 3.0) / period);
+        float rise = 1.0 - smoothstep(0.0, 0.05, ph), leave = smoothstep(0.95, 1.0, ph);
         p.y -= rise * rise * 2.5; p.y += leave * leave * 1.4; p.x += leave * sin(uTime * 3.0 + aSeed) * 0.25;
         float life = (1.0 - rise * 0.8) * (1.0 - leave);
         float go = max(uGo, 0.0), d = go + h(aSeed) * 0.6;   // on start they all let go: rise, wander, fade
