@@ -63,6 +63,7 @@
     border-radius: 50%; font: 11px "Courier New", monospace; letter-spacing: 2px; text-shadow: 0 0 6px #9fd0ff; box-shadow: 0 0 12px #5aa8ff33 inset; }
   .tbtn.on { background: #9fd0ff33; border-color: #e8f1ffaa; }
   #tBurst { right: calc(24px + env(safe-area-inset-right)); bottom: calc(28px + env(safe-area-inset-bottom)); width: 88px; height: 88px; }
+  #tAct { right: calc(124px + env(safe-area-inset-right)); bottom: calc(34px + env(safe-area-inset-bottom)); width: 64px; height: 64px; }
   #tMap { right: calc(20px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; }
   #tCreature { right: calc(76px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; font-size: 16px; }
   #stick { position: fixed; z-index: 6; width: 112px; height: 112px; margin: -56px 0 0 -56px; border: 1px solid #e8f1ff33; border-radius: 50%; display: none; pointer-events: none; }
@@ -94,13 +95,13 @@
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
-  <p id="titlehint">ARROWS  swim        SPACE  burst
+  <p id="titlehint">ARROWS  swim    SHIFT  burst    SPACE  ability
 M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
     <b>← →</b><span>turn</span><b>↑ ↓</b><span>up · down</span>
-    <b>SPACE</b><span>burst, while the dots last</span><b>TAB</b><span>become a creature you have been</span>
+    <b>SHIFT</b><span>burst, while the dots last</span><b>SPACE</b><span>your animal's ability: sense, echo, strike, settle, breathe or leap</span><b>TAB</b><span>become a creature you have been</span>
     <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
@@ -116,7 +117,7 @@ the surface is not the end of the world.</p><small>H to close</small></div>
 <div id="story"></div>
 <canvas id="mini" width="180" height="180"></canvas>
 <div id="flash"></div>
-<div id="touch"><div id="stick"><i></i></div><div class="tbtn" id="tBurst">BURST</div><div class="tbtn" id="tMap">MAP</div><div class="tbtn" id="tCreature">⇄</div></div>
+<div id="touch"><div id="stick"><i></i></div><div class="tbtn" id="tBurst">BURST</div><div class="tbtn" id="tAct">ACT</div><div class="tbtn" id="tMap">MAP</div><div class="tbtn" id="tCreature">⇄</div></div>
 <div id="fade"></div>
 <div id="chapter"></div>
 <script type="module">
@@ -427,18 +428,18 @@ function pointsCloud(n, size, bright, ring = false) {
     vertexShader: GLSL_COMMON + `uniform float uSize, uRing; attribute float aLife; varying float vD, vY, vL, vPS;
       void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vD = length(mv.xyz); vY = position.y; vL = aLife;
         float grow = uRing > 0.5 ? (1.0 + aLife * 0.6) : 1.0;   // bubbles swell as they rise
-        gl_PointSize = uRing > 0.5 ? clamp(uSize * grow * 14.0 / max(vD, 1.0), 1.5, 6.0) : uSize; vPS = gl_PointSize; gl_Position = projectionMatrix * mv; }`,
+        gl_PointSize = uRing > 0.5 ? clamp(uSize * grow * 5.0 / max(vD, 1.0), 1.0, 3.5) : uSize; vPS = gl_PointSize; gl_Position = projectionMatrix * mv; }`,
     fragmentShader: GLSL_COMMON + `uniform float uB, uRing; varying float vD, vY, vL, vPS;
       void main(){ float b = uB * (1.0 - fogF(vD)) * (0.5 + 0.5 * depthLight(vY)) * step(vY, 0.0);
         if (uRing < 0.5) b *= 0.55 + 0.45 * sin(uTime * 2.5 + vD * 7.0);
-        if (uRing > 0.5) { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0) discard; b *= smoothstep(1.5, 4.5, vD);   // nothing blooms in the lens b *= mix(1.0, 0.25 + 0.75 * smoothstep(0.45, 0.8, r), smoothstep(2.0, 5.0, vPS)); b *= 1.0 - smoothstep(12.0, 14.0, vL); if (vY > -0.3) b *= smoothstep(-0.05, -0.3, vY); }
+        if (uRing > 0.5) { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0) discard; b *= smoothstep(1.5, 4.5, vD); b *= mix(1.0, 0.25 + 0.75 * smoothstep(0.45, 0.8, r), smoothstep(2.0, 5.0, vPS)); b *= 1.0 - smoothstep(12.0, 14.0, vL); if (vY > -0.3) b *= smoothstep(-0.05, -0.3, vY); }
         gl_FragColor = outB(b); }` }));
   p.frustumCulled = false; scene.add(p); return p;
 }
 const snow = pointsCloud(MOBILE ? 1000 : 2500, 1, 0.28), snowBox = 110;
 { const a = snow.geometry.attributes.position.array; for (let i = 0; i < a.length; i++) a[i] = (Math.random() - 0.5) * snowBox; }
 const bubbles = pointsCloud(600, 2.2, 0.9, true), bubbleLife = new Float32Array(600).fill(99);
-const seeps = Array.from({ length: 14 }, () => ({ p: new THREE.Vector3(), t: Math.random() * 3, rate: 0.12 + Math.random() * 0.25 }));
+const seeps = Array.from({ length: 6 }, () => ({ p: new THREE.Vector3(), t: Math.random() * 3, rate: 0.4 + Math.random() * 0.6 }));
 function stepSeeps(dt) {
   for (const sp of seeps) {
     if (sp.p.lengthSq() === 0 || sp.p.distanceTo(P.pos) > 110) { const spot = spotNear(15, 90, 2.5); if (!spot) continue; sp.p.set(spot.x, spot.f + 0.1, spot.z); }
@@ -596,6 +597,7 @@ function creatureMesh(sp, glow = 1) {
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
+const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight);
 const fwdInto = (out, yaw, pitch = 0) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
 const fwdOf = (yaw, pitch = 0) => fwdInto(new THREE.Vector3(), yaw, pitch);
 const _s = new THREE.Vector3(), _f = new THREE.Vector3(), _M = new THREE.Matrix4(), _E = new THREE.Euler();
@@ -790,7 +792,7 @@ function stepWild(dt, t) {
     w.cool = Math.max(0, (w.cool || 0) - dt);
     const rel = relation(w); let v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph)); let ty = null;
     const otherHunter = wild.some(o => o !== w && o.hunting);
-    if (rel === 'hunt' && d < 45 && w.cool <= 0 && started && (!otherHunter || w.hunting)) {
+    if (rel === 'hunt' && !P.hidden && d < 45 && w.cool <= 0 && started && (!otherHunter || w.hunting)) {
       // the fight: stalk wide, telegraph a side, lunge. a hard turn or a burst inside the lunge makes it miss.
       if (!w.hunting) { w.hunting = true; w.huntT = 0; w.misses = 0; w.lunge = { phase: 'stalk', t: 0, side: Math.random() < 0.5 ? -1 : 1 }; say(`${w.sp.name.toUpperCase()}\nit has your scent. watch which side it comes from.`, 3); }
       w.huntT += dt; const L = w.lunge; L.t += dt;
@@ -800,7 +802,7 @@ function stepWild(dt, t) {
       else if (L.phase === 'wind') { steerTo(w, P.pos.x + Math.cos(P.yaw) * L.side * 6, P.pos.z - Math.sin(P.yaw) * L.side * 6, 2.5); v = w.sp.cruise * 0.6; ty = P.pos.y;
         if (L.t > 1.0) { L.phase = 'lunge'; L.t = 0; L.tx = P.pos.x + P.vel.x * 0.5; L.tz = P.pos.z + P.vel.z * 0.5; L.dodged = false; } }
       else if (L.phase === 'lunge') { steerTo(w, L.tx, L.tz, 1.2); v = w.sp.max * 1.6; ty = P.pos.y;
-        if (Math.abs(P.yawRate) > 0.9 || (keys.Space && P.sta > 0 && !P.spent)) L.dodged = true;
+        if (Math.abs(P.yawRate) > 0.9 || (sprinting() && P.sta > 0 && !P.spent)) L.dodged = true;
         if (L.t > 0.25 && d < 2.6 && !L.dodged && P.stun <= 0) { hurt(0.8, `${w.sp.name.toUpperCase()}\nbitten. it will circle back.`); L.phase = 'recover'; L.t = 0; }
         if (L.t > 0.7) { L.phase = 'recover'; L.t = 0; if (L.dodged) { w.misses++; say(w.misses >= 3 ? 'it gives up' : 'missed', 1.2); } } }
       else { steerTo(w, 2 * w.pos.x - P.pos.x, 2 * w.pos.z - P.pos.z, 2); v = w.sp.max * 0.8; ty = P.pos.y - 1;
@@ -829,7 +831,7 @@ function stepWild(dt, t) {
     w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), w.v * dt);
     w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, -0.5);
     w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, w.roll);
-    { const u = w.mesh.material.uniforms, work = Math.min(1, w.v / w.sp.max); u.uFlap.value += ((w.sp.kind === 'ray' ? 0.35 + 0.65 * work : 0.6 + 0.4 * work) - u.uFlap.value) * Math.min(1, 2 * dt);
+    { const u = w.mesh.material.uniforms, work = Math.min(1, w.v / w.sp.max); w.mesh.userData.baseGlow ??= u.uGlow.value; u.uGlow.value = w.mesh.userData.baseGlow * (1 + 0.9 * (P.reveal || 0) * (d < (P.revealRange || 50) ? 1 : 0)); u.uFlap.value += ((w.sp.kind === 'ray' ? 0.35 + 0.65 * work : 0.6 + 0.4 * work) - u.uFlap.value) * Math.min(1, 2 * dt);
       const target = w.sp.kind === 'ray' ? strouhalRad(w.sp, w.v, u.uFlap.value) : w.sp.freq * (0.55 + 0.9 * work); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); }
   }
 }
@@ -951,6 +953,22 @@ function stepFever(dt, t) {
   feverMesh.instanceMatrix.needsUpdate = true;
 }
 
+const ABILITY = { cownose: 'sense', manta: 'sense', eagle: 'sense', dolphin: 'echo', bull: 'strike', hammer: 'strike', snook: 'strike',
+  stingray: 'settle', goliath: 'settle', redfish: 'settle', loggerhead: 'breathe', manatee: 'breathe', tarpon: 'breathe', mullet: 'leap' };
+const ABILITY_CD = { sense: 3, echo: 2, strike: 1.2, settle: 0.4, breathe: 2, leap: 1.5 };
+const pulses = [];
+function act() {
+  const kind = ABILITY[P.sp.id] || 'sense', now = WU.uTime.value; if ((P.actReady || 0) > now) return; P.actReady = now + ABILITY_CD[kind];
+  if (kind === 'sense' || kind === 'echo') {   // rays feel electric fields; dolphins hear their own clicks come back
+    pulses.push({ t0: now, kind }); P.reveal = 1; P.revealRange = kind === 'echo' ? 90 : 50;
+    if (kind === 'echo') { click(3); setTimeout(() => click(3), 220); } else burst({ buf: 'brown', type: 'lowpass', f0: 120, f1: 380, f2: 70, attack: 0.06, length: 1.4, g: 0.35 });
+  } else if (kind === 'strike') { P.vel.addScaledVector(fwdOf(P.yaw, P.pitch), P.sp.max * 1.3); P.strikeT = 0.45; whoosh(0.7); }
+  else if (kind === 'settle') { P.hidden = !P.hidden; say(P.hidden ? 'still. buried. unseen.' : '', P.hidden ? 1.5 : 0.01); if (P.hidden) for (let i = 0; i < 12; i++) emitBubble(P.pos.x + (Math.random() - .5), P.pos.y - 0.2, P.pos.z + (Math.random() - .5)); }
+  else if (kind === 'breathe') { if (P.pos.y > -1.2) { P.sta = 1; P.spent = false; splash(0.3); say('a breath', 1.2); } else { say('too deep to breathe', 1.2); P.actReady = now + 0.3; } }
+  else if (kind === 'leap') { if (P.pos.y > -1.6) { P.vel.y = 6; P.vel.addScaledVector(fwdOf(P.yaw), 2); } else { say('get near the surface', 1.2); P.actReady = now + 0.3; } }
+}
+const abilityName = () => (ABILITY[P.sp.id] || 'sense').toUpperCase();
+
 // ═══════════════════════════════════════════════════════════════════
 //  BOATS  —  ships work the channel, small craft wander the flats.
 //  You hear them before you see them. Near the surface they can hit you.
@@ -1028,6 +1046,7 @@ addEventListener('keydown', e => {
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
     if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
   if (e.code === 'Tab') cycleCreature(e.shiftKey ? -1 : 1);
+  if (e.code === 'Space' && !e.repeat) act();
 });
 addEventListener('keyup', e => keys[e.code] = false);
 
@@ -1184,7 +1203,7 @@ const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('s
 const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
 let sayTimer = 0;
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
-bl.textContent = '← → ↑ ↓ swim   SPACE burst   TAB creature   M map   H help';
+bl.textContent = '← → ↑ ↓ swim   SHIFT burst   SPACE ability   TAB creature   M map   H help';
 
 function demImage(S) {
   const t = TILES.outer, img = new ImageData(S, S);
@@ -1278,7 +1297,7 @@ const CHAPTERS = [
   { title: 'VII · THE PILINGS', species: 'goliath', start: [27.604, -82.651], goal: () => toXZ(27.598, -82.652), radius: 50,
     lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
   { title: 'VIII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
-    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. Burst through a school to take one. Eight will do.'] },
+    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. SPACE to strike into a school. Eight will do.'] },
   { title: 'IX · SLOW WATER', species: 'manatee', start: [27.798, -82.412], goal: () => toXZ(27.794, -82.404), radius: 120,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
   { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.535, -82.769), radius: 120,
@@ -1318,13 +1337,13 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     let done = false;
     if (c.goal && !c.follow) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
     if (c.breaths && !c.goal) done = false;
-    if (c.follow) { const d = Math.hypot(fever.c.x - P.pos.x, fever.c.z - P.pos.z); fever.speed = d > 80 ? 0.6 : 2.6; if (d < 90) this.followT += dt; if (d < 90 && !keys.Space) P.speed = Math.max(P.speed, fever.speed + 0.2); if (d > 140 && sayTimer <= 0) say('the fever is pulling away', 2); done = c.done(); }
+    if (c.follow) { const d = Math.hypot(fever.c.x - P.pos.x, fever.c.z - P.pos.z); fever.speed = d > 80 ? 0.6 : 2.6; if (d < 90) this.followT += dt; if (d < 90 && !sprinting()) P.speed = Math.max(P.speed, fever.speed + 0.2); if (d > 140 && sayTimer <= 0) say('the fever is pulling away', 2); done = c.done(); }
     if (c.surface) { this.surfaceT = P.pos.y > -0.35 ? this.surfaceT + dt : 0; done = this.surfaceT > 4; }
     if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && Math.random() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-const TITLE_HINT = 'ARROWS  swim        SPACE  burst\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
+const TITLE_HINT = 'ARROWS  swim    SHIFT  burst    SPACE  ability\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
 function startGame(save) { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
@@ -1358,6 +1377,8 @@ function stepPlayer(dt) {
   const turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn, -1, 1);
   const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0) + touch.climb, -1, 1);
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
+  if (P.hidden && (turn || climb > 0 || sprinting())) P.hidden = false;
+  P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
   P.idleT = climb ? 0 : (P.idleT || 0) + dt;
 
   // body attitude: a turn needs speed and banks the body; the turning circle grows with speed
@@ -1374,9 +1395,9 @@ function stepPlayer(dt) {
 
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
   // burst: Space spends stamina for a real sprint, then it has to come back
-  P.sta ??= 1; const wantBurst = keys.Space && !stunned && P.sta > 0 && !P.spent;
+  P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = wantBurst ? sp.max * 1.6 : (keys.Space && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = P.hidden ? 0 : wantBurst ? sp.max * 1.6 : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
   const thrust = THREE.MathUtils.clamp((wantSpeed - along) * (wantBurst ? 4.0 : 2.2), -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
   const inAir = P.pos.y > 0.0;   // out of the water there is nothing to push against
@@ -1387,6 +1408,7 @@ function stepPlayer(dt) {
   if (inAir) { P.vel.y -= 9.8 * dt; P.pitch += (Math.atan2(P.vel.y, Math.hypot(P.vel.x, P.vel.z) + 0.01) - P.pitch) * Math.min(1, 6 * dt); }   // a leap: gravity, nose follows the arc
   else {
     P.vel.y += climb * 2.2 * dt * Math.max(1, sp.max * 0.35) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
+    if (P.hidden) P.vel.y -= 2.0 * dt;   // settling into the sand
     if (P.pos.y > -0.6 && P.vel.y > 0 && P.vel.y < 2.5) P.vel.y = Math.min(P.vel.y, (-0.08 - P.pos.y) * 4);   // a gentle rise floats you at the surface; only a burst breaches
   }
   P.speed = Math.max(0, along);
@@ -1401,6 +1423,7 @@ function stepPlayer(dt) {
   if (P.pos.y > -0.3) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - Math.random() * 0.1, P.pos.z + Math.sin(a) * r); } } }
   const upNow = P.pos.y > -0.25; if (upNow !== !!P.wasUp && Math.abs(P.vel.y) > 0.4) { for (let i = 0; i < 30; i++) emitBubble(P.pos.x + (Math.random() - .5) * 1.5 * (sp.span ?? sp.len), -0.1 - Math.random() * 1.5, P.pos.z + (Math.random() - .5) * 1.5); splash(Math.min(1, Math.abs(P.vel.y) / 3)); P.shake = Math.max(P.shake || 0, 0.25); } P.wasUp = upNow;
   P.mesh.position.copy(P.pos); P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch, P.roll);
+  P.mesh.material.uniforms.uGlow.value += ((P.hidden ? 0.35 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
   { const u = P.mesh.material.uniforms, work = THREE.MathUtils.clamp(thrust / (0.6 * sp.max) + 0.15, 0, 1);
     if (sp.kind === 'ray') {   // rays glide between beats when there's little to do
       P.glide = (P.glide || 0) + dt; const gliding = work < 0.25 && Math.sin(P.glide * 0.6) > 0.2;
@@ -1412,7 +1435,7 @@ function stepPlayer(dt) {
 }
 function stepCamera(dt) {
   const size = P.mesh.userData.size, dist = 2.4 + size * 2.5 + P.speed * 0.12, h = 1.0 + size * 0.6;
-  P.idleCam = (keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || keys.Space) ? 0 : (P.idleCam || 0) + dt;
+  P.idleCam = (keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const drift = started ? Math.sin(WU.uTime.value * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(WU.uTime.value * 0.07) * 0.5;
   const yawT = P.yaw + drift + (P.endingCam ? Math.sin(WU.uTime.value * 0.08) * 1.2 : 0);
   const back = fwdOf(yawT, 0).multiplyScalar(-dist); back.y = h;
@@ -1428,7 +1451,7 @@ function stepCamera(dt) {
   camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * (1 - 0.55 * (P.reveal || 0)); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
 }
 function stepAmbient(dt, t) {
   updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
@@ -1508,7 +1531,7 @@ function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz 
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
       const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
-      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' || P.sp.id === 'tarpon') && P.speed > P.sp.cruise * 1.3 && Math.abs(fx - P.pos.x) < 1 && Math.abs(fz - P.pos.z) < 1 && Math.abs(fy - P.pos.y) < 1) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
+      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' || P.sp.id === 'tarpon') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
       if (!fish.alive) _m.scale(new THREE.Vector3(0.001, 0.001, 0.001));
       _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }
@@ -1660,7 +1683,11 @@ function drawPanel() {
   }
   if (document.body.classList.contains('playing') && !mapOpen) {   // HUD
     pText(tl.textContent, 3, 2, 230, 'left', 1, true); pText(tr.textContent, W - 3, 2, 180, 'right', 1, true);
-    const sta = P.sta ?? 1; if (sta < 0.999 || keys.Space) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(3 + i * 4 + x, 9, on ? 220 : 60); }
+    const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(3 + i * 4 + x, 9, on ? 220 : 60); }
+    { const ready = (P.actReady || 0) <= t; pText('SPACE ' + abilityName(), 3, 12, ready ? 170 : 70, 'left', 1, true); }
+    _v.copy(P.pos).project(camera); const px = (_v.x * 0.5 + 0.5) * W, py = (0.5 - _v.y * 0.5) * H;
+    for (let i = pulses.length - 1; i >= 0; i--) { const age = t - pulses[i].t0, life = pulses[i].kind === 'echo' ? 1.8 : 1.4; if (age > life) { pulses.splice(i, 1); continue; }
+      const rings = pulses[i].kind === 'echo' ? 3 : 1; for (let k = 0; k < rings; k++) { const a = age - k * 0.18; if (a > 0) pRing(px, py, a / life * W * 0.55, 210 * (1 - a / life)); } }
     const hdg = headingDeg(), half = Math.max(24, Math.floor(W * 0.17)), ppd = half / 60;   // compass
     for (const [deg, name] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W'], [45, '·'], [135, '·'], [225, '·'], [315, '·']]) { const rel = ((deg - hdg + 540) % 360) - 180; if (Math.abs(rel) <= 60) pText(name, cx + Math.round(rel * ppd), 9, name === '·' ? 110 : 190, 'center', 1, true); }
     for (let y = 7; y <= 15; y += 8) { pDot(cx, y, 255); pDot(cx, y + 1, 255); }   // the lubber line above and below the cardinals
@@ -1671,8 +1698,8 @@ function drawPanel() {
     const ow = opa(warn); if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, 20, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center');
     const ob = opa(bl); if (ob > 0.01 && W > 120) pText(bl.textContent, 3, H - 7, 120 * ob, 'left', 1, true);
     if (document.body.classList.contains('touch')) {
-      for (const id of ['tBurst', 'tMap', 'tCreature']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
-        pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tMap: 'M', tCreature: '⇄' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
+      for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
+        pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tAct: '◆', tMap: 'M', tCreature: '⇄' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
       if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
     }
   }
@@ -1708,15 +1735,15 @@ function drawPanel() {
 // ═══════════════════════════════════════════════════════════════════
 const touch = { turn: 0, climb: 0, id: null, ox: 0, oy: 0 };
 const stickEl = $('stick'), knobEl = stickEl.querySelector('i'), STICK_R = 56;
-if (MOBILE) { document.body.classList.add('touch'); bl.textContent = 'drag anywhere to swim · hold burst'; }
+if (MOBILE) { document.body.classList.add('touch'); bl.textContent = 'drag to swim · hold burst · tap ◆'; }
 function cycleCreature(dir = 1) {
   const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) { say('you have not yet become anyone else', 2); return; }
   const i = list.indexOf(P.sp); becomeSpecies(list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); splash(0.4);
 }
 function setTitleHint() {
   const ch = loadedSave ? CHAPTERS[loadedSave.ch].title : null;
-  $('titlehint').textContent = MOBILE ? (ch ? `TAP  continue · ${ch}` : 'TAP  begin') + '\nDRAG ANYWHERE  swim\nHOLD BURST  speed'
-    : ch ? `ENTER  continue · ${ch}\nR  start over\n\nARROWS swim · SPACE burst · TAB creatures · M map` : TITLE_HINT;
+  $('titlehint').textContent = MOBILE ? (ch ? `TAP  continue · ${ch}` : 'TAP  begin') + '\nDRAG ANYWHERE  swim\nHOLD ►►  burst    TAP ◆  ability'
+    : ch ? `ENTER  continue · ${ch}\nR  start over\n\nARROWS swim · SHIFT burst · SPACE ability · M map` : TITLE_HINT;
   $('restart').style.display = ch && MOBILE ? '' : 'none';
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
@@ -1742,7 +1769,8 @@ function tbtn(id, down, up) {
   el.addEventListener('pointerdown', e => { stop(e); unlockAudio(); down(el); });
   if (up) for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, e => { stop(e); up(el); });
 }
-tbtn('tBurst', el => { keys.Space = true; el.classList.add('on'); }, el => { keys.Space = false; el.classList.remove('on'); });
+tbtn('tBurst', el => { keys.ShiftLeft = true; el.classList.add('on'); }, el => { keys.ShiftLeft = false; el.classList.remove('on'); });
+tbtn('tAct', () => { if (started) act(); });
 tbtn('tMap', () => { if (started) toggleMap(); });
 tbtn('tCreature', () => { if (started) cycleCreature(1); });
 $('restart').addEventListener('pointerdown', e => { e.stopPropagation(); wipeSave(); loadedSave = null; setTitleHint(); });
