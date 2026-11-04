@@ -478,7 +478,7 @@ function creatureMesh(sp, glow = 1) {
   m.userData.sp = sp; m.userData.size = size; m.frustumCulled = false; return m;
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
-function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(-pitch); obj.rotateZ(roll); }
+function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
 const fwdOf = (yaw, pitch) => new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1109,7 +1109,7 @@ function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz 
     else for (let i = 0; i < fl.n; i++) { const a = t * 0.25 + i * 0.42 + fl.ph, r = 25 + (i % 5) * 7; _e.set(0, -a + Math.PI, 0.3); _m.makeRotationFromEuler(_e);
       _m.setPosition(fl.c.x + Math.cos(a) * r, fl.h + 8 + Math.sin(t * 0.3 + i) * 4, fl.c.z + Math.sin(a) * r); birdMesh.setMatrixAt(k++, _m); }
   }
-  for (const d of dives) { if (!d.pos || k >= BIRDS) continue; _e.set(-d.pitch, d.yaw, 0); _m.makeRotationFromEuler(_e); _m.scale(new THREE.Vector3(d.fold, 1, 1)); _m.setPosition(d.pos.x, d.pos.y, d.pos.z); birdMesh.setMatrixAt(k++, _m); }
+  for (const d of dives) { if (!d.pos || k >= BIRDS) continue; _e.set(d.pitch, d.yaw, 0); _m.makeRotationFromEuler(_e); _m.scale(new THREE.Vector3(d.fold, 1, 1)); _m.setPosition(d.pos.x, d.pos.y, d.pos.z); birdMesh.setMatrixAt(k++, _m); }
   birdMesh.count = k; birdMesh.instanceMatrix.needsUpdate = true;
 }
 function stepHud(dt) {
