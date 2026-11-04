@@ -898,6 +898,7 @@ const unlocked = new Set();
 const P = { pos: new THREE.Vector3(START[0], -4, START[1]), yaw: Math.PI, pitch: 0, roll: 0, speed: 1.3, yawRate: 0, sp: speciesById.cownose, mesh: null, hp: 3, stun: 0, air: 0 };
 const playerMeshes = {};
 function becomeSpecies(sp) {
+  P.air = 1;
   if (P.mesh) P.mesh.visible = false;
   if (!playerMeshes[sp.id]) { playerMeshes[sp.id] = creatureMesh(sp, 1.3); scene.add(playerMeshes[sp.id]); }
   P.mesh = playerMeshes[sp.id]; P.mesh.visible = true; P.sp = sp; P.speed = sp.cruise; unlocked.add(sp.id);
@@ -1145,6 +1146,7 @@ function stepFever(dt, t) {
 }
 
 const AIR = new Set(['dolphin', 'loggerhead', 'manatee', 'tarpon']);   // the bodies that come up to breathe
+const HOLD = { dolphin: 75, manatee: 120, loggerhead: 240 };   // seconds of air, in proportion to the real animals; a tarpon gulps air but does not need it
 const ABILITY = { cownose: 'sense', manta: 'sense', eagle: 'sense', dolphin: 'echo', bull: 'strike', hammer: 'strike', snook: 'strike',
   stingray: 'settle', goliath: 'settle', redfish: 'settle', loggerhead: 'breathe', manatee: 'breathe', tarpon: 'breathe', mullet: 'leap' };
 const ABILITY_CD = { sense: 3, echo: 2, strike: 1.2, settle: 0.4, breathe: 2, leap: 1.5 };
@@ -1339,6 +1341,10 @@ function stab(x, z) {   // a gig going in: the plunk of the shaft, the hiss of i
   const p = panAt(x, z); burst({ buf: 'white', type: 'bandpass', f0: 1800, f1: 3000, f2: 900, q: 1.2, attack: 0.005, length: 0.18, g: 0.35, pan: p });
   burst({ buf: 'pink', type: 'bandpass', f0: 600, f1: 1400, f2: 300, q: 0.9, attack: 0.02, length: 0.6, g: 0.3, when: 0.03, pan: p });
 }
+function blow(sharp) {   // a breath at the surface: the blowhole's crack and the long draw back in
+  burst({ buf: 'white', type: 'highpass', f0: 1800, f1: 2400, f2: 1200, q: 0.5, attack: 0.01, length: sharp ? 0.35 : 0.6, g: sharp ? 0.32 : 0.18 });
+  burst({ buf: 'pink', type: 'bandpass', f0: 500, f1: 900, f2: 700, q: 0.7, attack: 0.25, length: 0.9, g: 0.12, when: sharp ? 0.35 : 0.55 });
+}
 function whump(x, z, k = 1) {   // a big body moving water right beside you: felt as much as heard
   burst({ buf: 'brown', type: 'lowpass', f0: 160, f1: 110, f2: 40, q: 0.7, attack: 0.05, length: 0.9, g: 0.55 * k, pan: panAt(x, z) });
 }
@@ -1465,7 +1471,7 @@ let lastCheckpoint = checkpoints[0];
 function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
-  P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
+  P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; P.air = 1; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
 }
 function toggleMap() { mapOpen = !mapOpen; mapEl.style.display = mapOpen ? 'flex' : 'none'; if (mapOpen) { mapSel = Math.max(0, checkpoints.indexOf(lastCheckpoint)); renderMapList(); } }
 function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join('');  }
@@ -1633,6 +1639,13 @@ function stepPlayer(dt) {
     if (!AIR.has(sp.id) && climb <= 0 && P.pos.y > -0.9) P.vel.y -= 2.0 * dt;   // let go of rise and a fish or a ray slips back down
   }
   P.speed = Math.max(0, along);
+  if (HOLD[sp.id]) {   // lungs: air drains under, comes back in a few breaths at the top, twice as fast when you burst
+    P.air ??= 1; const up = P.pos.y > -0.3;
+    if (up) { if (P.air < 0.97 && !P.breathing) { P.breathing = true; blow(sp.id === 'dolphin'); } P.air = Math.min(1, P.air + dt / 1.5); P.drownT = 0; if (P.air >= 1) P.breathing = false; }
+    else { P.breathing = false; P.air = Math.max(0, P.air - dt / HOLD[sp.id] * (wantBurst ? 2 : 1)); }
+    if (!up && P.air < 0.25 && !P.airWarned) { P.airWarned = true; say('you need air', 2.5); } if (P.air > 0.5) P.airWarned = false;
+    if (!up && P.air <= 0) { P.drownT = (P.drownT || 0) + dt; if (P.drownT > 5) { P.drownT = 0; hurt(0.3, 'OUT OF AIR\nget to the surface'); P.pitch = 0.5; } }
+  } else P.air = 1;
 
   Bay.current(P.pos.x, P.pos.z, _cur);
   const next = P.pos.clone().addScaledVector(P.vel, dt).addScaledVector(_cur, dt);
@@ -1861,7 +1874,8 @@ function drawPanel() {
     pText(tl.textContent, SL, ST + 2, 230, 'left', 1, true); pText(tr.textContent, W - SL, ST + 2, 180, 'right', 1, true);
     const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(SL + i * 4 + x, ST + 9, on ? 220 : 60); }
     { const ready = (P.actReady || 0) <= t; pText('E ' + abilityName(), SL, ST + 12, ready ? 170 : 70, 'left', 1, true); }
-    if (huntHeat > 0) { const n = Math.ceil(huntHeat * 3); pText('HUNTED ' + '◆'.repeat(n) + '·'.repeat(3 - n), SL, ST + 19, 150 + 105 * (0.5 + 0.5 * Math.sin(t * 6)), 'left', 1, true); }   // stars: break contact to drain them
+    if ((P.air ?? 1) < 0.999) { const low = P.air < 0.25; pText('AIR', SL, ST + 19, low ? 150 + 105 * (0.5 + 0.5 * Math.sin(t * 8)) : 170, 'left', 1, true); for (let i = 0; i < 8; i++) { const on = i < Math.ceil(P.air * 8); for (let x = 0; x < 3; x++) pDot(SL + 14 + i * 4 + x, ST + 21, on ? 220 : 60); } }   // lungs
+    if (huntHeat > 0) { const n = Math.ceil(huntHeat * 3); pText('HUNTED ' + '◆'.repeat(n) + '·'.repeat(3 - n), SL, ST + ((P.air ?? 1) < 0.999 ? 26 : 19), 150 + 105 * (0.5 + 0.5 * Math.sin(t * 6)), 'left', 1, true); }   // stars: break contact to drain them
     _v.copy(P.pos).project(camera); const px = (_v.x * 0.5 + 0.5) * W, py = (0.5 - _v.y * 0.5) * H;
     for (let i = pulses.length - 1; i >= 0; i--) { const age = t - pulses[i].t0, life = pulses[i].kind === 'echo' ? 1.8 : 1.4; if (age > life) { pulses.splice(i, 1); continue; }
       const rings = pulses[i].kind === 'echo' ? 3 : 1; for (let k = 0; k < rings; k++) { const a = age - k * 0.18; if (a > 0) pRing(px, py, a / life * W * 0.55, 210 * (1 - a / life)); } }
