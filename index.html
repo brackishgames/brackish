@@ -76,6 +76,11 @@
     .keys { grid-template-columns: auto 1fr; font-size: 10px; gap: 8px 14px; }
     #map { flex-direction: column; gap: 14px; } #map canvas { width: min(80vw, 46vh); height: auto; } #map ul { font-size: 12px; min-width: 0; }
   }
+  /* every visible word is drawn by the dot matrix; the DOM only carries text and fade timing */
+  .hud, #story, #chapter, .panel, .panel *, #map, #map *, .tbtn, .restart { color: transparent !important; text-shadow: none !important; }
+  .panel, #map, #fade { background: transparent !important; }
+  #compass, #bigmap, #mini, #load .bar, #stick { visibility: hidden !important; }
+  .keys b, .restart, .tbtn { border-color: transparent !important; box-shadow: none !important; background: transparent !important; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -230,13 +235,13 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 30000);
 
-let pitchCss = 5;
+let pitchCss = MOBILE ? 3 : 5;
 const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
 const DotShader = {
-  uniforms: { tScene: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 } },
+  uniforms: { tScene: { value: null }, tText: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 }, uDim: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D tScene; uniform vec2 uGrid; uniform float uPitch;
+    uniform sampler2D tScene, tText; uniform vec2 uGrid; uniform float uPitch, uDim;
     vec3 palette(float b) {
       b = clamp(b, 0.0, 1.0);
       vec3 c0 = vec3(0.03, 0.09, 0.24), c1 = vec3(0.05, 0.38, 0.98), c2 = vec3(0.38, 0.92, 1.0), c3 = vec3(0.96, 1.0, 1.0);
@@ -257,7 +262,10 @@ const DotShader = {
       vec3 col = palette(b) * mask;
       if (am > 0.03) { float ra = 0.5 + 0.45 * am, ma = 1.0 - smoothstep(ra - 0.3, ra + 0.05, d); col = mix(col, vec3(0.72, 0.84, 1.0) * (0.42 + 0.38 * am), ma); }
       vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = 1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc));
-      gl_FragColor = vec4((col + unlit) * vig, 1.0);
+      vec3 outc = (col * (1.0 - uDim) + unlit) * vig;
+      float tx = texture2D(tText, uv).r;   // the panel layer: every word and symbol is lit dots on the same matrix
+      if (tx > 0.0) { float rt = 0.5 + 0.42 * tx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = mix(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * tx), mt); }
+      gl_FragColor = vec4(outc, 1.0);
     }`,
 };
 const hdrOK = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
@@ -269,7 +277,7 @@ if (hdrOK) composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2
 function resize() {
   const dpr = renderer.getPixelRatio(), W = Math.floor(innerWidth * dpr), H = Math.floor(innerHeight * dpr);
   const pitch = Math.max(2, Math.round(pitchCss * dpr)), gw = Math.ceil(W / pitch), gh = Math.ceil(H / pitch);
-  lowRT.setSize(gw, gh); dotPass.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uPitch.value = pitch;
+  lowRT.setSize(gw, gh); dotPass.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uPitch.value = pitch; panelResize(gw, gh);
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 78 : 60; camera.updateProjectionMatrix();
 }
@@ -1196,20 +1204,8 @@ function drawMap(ctx, img, S, showCps) {
   const [x, y] = mapXY(P.pos.x, P.pos.z, S); ctx.fillStyle = '#e8f1ff'; ctx.shadowColor = '#e8f1ff'; ctx.shadowBlur = 6; ctx.fillRect(x - 2, y - 2, 4, 4);
   ctx.strokeStyle = '#e8f1ff'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - Math.sin(P.yaw) * 9, y - Math.cos(P.yaw) * 9); ctx.stroke(); ctx.shadowBlur = 0;
 }
-function drawCompass(landmarks) {
-  const W = cmp.width, H = cmp.height, hdg = headingDeg(), pxPerDeg = W / 120;
-  cctx.clearRect(0, 0, W, H); cctx.font = '11px "Courier New"'; cctx.textAlign = 'center'; cctx.fillStyle = '#e8f1ff'; cctx.strokeStyle = '#e8f1ff66'; cctx.shadowColor = '#9fd0ff'; cctx.shadowBlur = 6;
-  for (const [deg, name] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W'], [45, '·'], [135, '·'], [225, '·'], [315, '·']]) {
-    const rel = ((deg - hdg + 540) % 360) - 180; if (Math.abs(rel) > 60) continue; cctx.fillText(name, W / 2 + rel * pxPerDeg, 44);
-  }
-  const goal = landmarks.find(l => l.goal);
-  if (goal) { const raw = ((goal.bearing - hdg + 540) % 360) - 180, off = Math.abs(raw) > 52, x = W / 2 + THREE.MathUtils.clamp(raw, -52, 52) * pxPerDeg;
-    const label = goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + ' km' : Math.round(goal.dist / 10) * 10 + ' m';
-    cctx.fillStyle = '#fff'; cctx.beginPath();
-    if (off) { const d = Math.sign(raw); cctx.moveTo(x + d * 7, 13); cctx.lineTo(x - d * 3, 6); cctx.lineTo(x - d * 3, 20); } else { cctx.moveTo(x, 6); cctx.lineTo(x + 5, 13); cctx.lineTo(x, 20); cctx.lineTo(x - 5, 13); }
-    cctx.fill(); cctx.fillText(label, x, 32); }
-  cctx.fillStyle = '#fff'; cctx.fillRect(W / 2 - 1, 36, 2, 6);
-}
+let compassMarks = [];
+function drawCompass(landmarks) { compassMarks = landmarks; }
 const headingDeg = () => ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
 const bearingTo = (x, z) => ((Math.atan2(x - P.pos.x, -(z - P.pos.z)) * 180 / Math.PI) % 360 + 360) % 360;
 
@@ -1531,8 +1527,7 @@ function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz 
 }
 function stepHud(dt) {
   const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
-  const sta = P.sta ?? 1, bar = (sta < 0.999 || keys.Space) ? '   ' + '▮'.repeat(Math.round(sta * 8)) + '▯'.repeat(8 - Math.round(sta * 8)) : '';
-  tl.textContent = `${Math.max(0, -P.pos.y).toFixed(1)} m  ·  floor ${(-f).toFixed(0)} m   ${'♥'.repeat(P.hp)}${bar}${P.fed ? '  fed ' + P.fed : ''}`;
+  tl.textContent = `${Math.max(0, -P.pos.y).toFixed(1)}M  ▼${(-f).toFixed(0)}M  ${'♥'.repeat(P.hp)}${P.fed ? '  +' + P.fed : ''}`;
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }
@@ -1548,9 +1543,9 @@ function stepHud(dt) {
   for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 8000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
   drawCompass(landmarks);
   if (sayTimer > 0) { sayTimer -= dt; if (sayTimer <= 0) storyEl.style.opacity = 0; }
-  if (miniImg) drawMap(mctx, miniImg, 180, false);
 }
 function frame() {
+  booting = false;
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t; stepStrokes(dt);
   if (started) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
@@ -1561,7 +1556,7 @@ function frame() {
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
   stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
-  renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); composer.render();
+  renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
 
 // seagrass (instanced blades in the shallows)
@@ -1603,6 +1598,100 @@ function rebuildGrass(px, pz) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  PANEL  —  the display draws its own type: a 5×7 dot font, the compass,
+//  the map and every word, lit on the same matrix as the bay.
+// ═══════════════════════════════════════════════════════════════════
+const FONT = {"A": ".###.#...##...#######...##...##...#", "B": "####.#...##...#####.#...##...#####.", "C": ".###.#...##....#....#....#...#.###.", "D": "####.#...##...##...##...##...#####.", "E": "######....#....####.#....#....#####", "F": "######....#....####.#....#....#....", "G": ".###.#...##....#.####...##...#.####", "H": "#...##...##...#######...##...##...#", "I": ".###...#....#....#....#....#...###.", "J": "..###...#....#....#....#.#..#..##..", "K": "#...##..#.#.#..##...#.#..#..#.#...#", "L": "#....#....#....#....#....#....#####", "M": "#...###.###.#.##.#.##...##...##...#", "N": "#...##...###..##.#.##..###...##...#", "O": ".###.#...##...##...##...##...#.###.", "P": "####.#...##...#####.#....#....#....", "Q": ".###.#...##...##...##.#.##..#..##.#", "R": "####.#...##...#####.#.#..#..#.#...#", "S": ".#####....#.....###.....#....#####.", "T": "#####..#....#....#....#....#....#..", "U": "#...##...##...##...##...##...#.###.", "V": "#...##...##...##...##...#.#.#...#..", "W": "#...##...##...##.#.##.#.##.#.#.#.#.", "X": "#...##...#.#.#...#...#.#.#...##...#", "Y": "#...##...#.#.#...#....#....#....#..", "Z": "#####....#...#...#...#...#....#####", "0": ".###.#...##..###.#.###..##...#.###.", "1": "..#...##....#....#....#....#...###.", "2": ".###.#...#....#...#...#...#...#####", "3": "#####...#...#.....#.....##...#.###.", "4": "...#...##..#.#.#..#.#####...#....#.", "5": "######....####.....#....##...#.###.", "6": "..##..#...#....####.#...##...#.###.", "7": "#####....#...#...#...#....#....#...", "8": ".###.#...##...#.###.#...##...#.###.", "9": ".###.#...##...#.####....#...#..##..", " ": "...................................", ".": "..........................##...##..", ",": ".....................##....#...#...", "'": "..#....#...#.......................", "-": "................###................", ":": "......##...##........##...##.......", "/": "....#....#...#...#...#...#....#....", "!": "..#....#....#....#....#.........#..", "?": ".###.#...#....#...#...#.........#..", "(": "...#...#...#....#....#.....#.....#.", ")": ".#.....#.....#....#....#...#...#...", "·": ".................#.................", "×": ".....#...#.#.#...#...#.#.#...#.....", "♥": "......#.#.##########.###...#.......", "◆": "..#...###.#####.###...#............", "◄": "....#...##..###.####..###...##....#", "►": "#....##...###..####.###..##...#....", "▲": ".......#...###.#####...............", "▼": ".....#####.###...#.................", "←": ".......#...#...#####.#.....#.......", "→": ".......#.....#.#####...#...#.......", "↑": "..#...###.#.#.#..#....#....#....#..", "↓": "..#....#....#....#..#.#.#.###...#..", "⇄": "..#...#...#####.....#####...#...#..", "+": ".......#....#..#####..#....#.......", "=": "..........#####.....#####..........", "\"": ".#.#..#.#..........................", "&": ".##..#..#.#.#...#...#.#.##..#..##.#", ";": "......##...##........##....#...#...", "°": ".##..#..#..##......................", "#": ".#.#..#.#.#####.#.#.#####.#.#..#.#."};
+const panel = { w: 0, h: 0, data: null, tex: null, map: null, mapS: 0 };
+function panelResize(w, h) {
+  if (panel.w === w && panel.h === h) return;
+  if (panel.tex) panel.tex.dispose();
+  panel.w = w; panel.h = h; panel.data = new Uint8Array(w * h);
+  panel.tex = new THREE.DataTexture(panel.data, w, h, THREE.RedFormat, THREE.UnsignedByteType);
+  panel.tex.minFilter = panel.tex.magFilter = THREE.NearestFilter; panel.tex.unpackAlignment = 1; panel.tex.needsUpdate = true;
+  dotPass.uniforms.tText.value = panel.tex; panel.map = null;
+}
+function pDot(x, y, v) { x |= 0; y |= 0; if (x < 0 || y < 0 || x >= panel.w || y >= panel.h || v <= 0) return; const i = (panel.h - 1 - y) * panel.w + x; if (v > panel.data[i]) panel.data[i] = Math.min(255, v); }
+function pText(str, x, y, v = 230, align = 'left', scale = 1) {
+  const chars = [...String(str).toUpperCase()], w = chars.length * 6 * scale - scale;
+  let sx = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
+  for (const ch of chars) { const g = FONT[ch] || FONT['?'];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) if (g[r * 5 + c] === '#') for (let dy = 0; dy < scale; dy++) for (let dx = 0; dx < scale; dx++) pDot(sx + c * scale + dx, y + r * scale + dy, v);
+    sx += 6 * scale; }
+  return w;
+}
+function wrap(str, max) {
+  const out = []; for (const para of String(str).split('\n')) { let line = '';
+    for (const word of para.split(/\s+/).filter(Boolean)) { if ((line + ' ' + word).trim().length > max && line) { out.push(line); line = word; } else line = (line + ' ' + word).trim(); }
+    out.push(line); }
+  return out;
+}
+function pRing(cx, cy, r, v) { const n = Math.max(12, Math.round(r * 6)); for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; pDot(cx + Math.cos(a) * r, cy + Math.sin(a) * r, v); } }
+function opa(el) { if (!el) return 0; const cs = getComputedStyle(el); return cs.display === 'none' || cs.visibility === 'hidden' ? 0 : +cs.opacity; }
+const toCell = px => px * renderer.getPixelRatio() / dotPass.uniforms.uPitch.value;
+function drawPanel() {
+  if (!panel.data) return; panel.data.fill(0);
+  const W = panel.w, H = panel.h, cx = W >> 1, t = WU.uTime.value, cols = Math.max(12, Math.floor((W - 8) / 6));
+  const oLoad = opa($('load')), oTitle = opa($('title')), oHelp = opa(help), oMap = mapOpen ? 1 : 0, oFade = opa($('fade'));
+  dotPass.uniforms.uDim.value = Math.max(oFade, oLoad, oHelp * 0.85, oMap * 0.9);
+  if (oLoad > 0.01) {   // loading
+    const y = Math.round(H * 0.36), sc = W > 120 ? 2 : 1; pText('BRACKISH', cx, y, 240 * oLoad, 'center', sc);
+    const bw = Math.min(60, W - 20), pct = (parseFloat($('bar').style.width) || 0) / 100, by = y + 7 * sc + 8;
+    for (let i = 0; i < bw; i++) pDot(cx - bw / 2 + i, by, (i < bw * pct ? 230 : 50) * oLoad);
+    wrap(loadmsg.textContent, cols).forEach((l, i) => pText(l, cx, by + 6 + i * 10, 200 * oLoad, 'center'));
+    panel.tex.needsUpdate = true; return;
+  }
+  if (oTitle > 0.01) {   // title text, under the bubble logo
+    const ps = [...$('title').querySelectorAll('p, small')].filter(el => el.style.display !== 'none');
+    let y = Math.round(H * 0.6);
+    for (const el of ps) { const o = oTitle * opa(el), small = el.tagName === 'SMALL';
+      for (const l of wrap(el.textContent, cols)) { pText(l, cx, y, (small ? 120 : 215) * o, 'center'); y += 10; } y += 5; }
+  }
+  if (document.body.classList.contains('playing') && !mapOpen) {   // HUD
+    pText(tl.textContent, 3, 2, 225); pText(tr.textContent, W - 3, 2, 170, 'right');
+    const sta = P.sta ?? 1; if (sta < 0.999 || keys.Space) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) { pDot(3 + i * 4 + x, 11, on ? 220 : 60); pDot(3 + i * 4 + x, 12, on ? 220 : 60); } }
+    const hdg = headingDeg(), half = Math.max(24, Math.floor(W * 0.17)), ppd = half / 60;   // compass
+    for (const [deg, name] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W'], [45, '·'], [135, '·'], [225, '·'], [315, '·']]) { const rel = ((deg - hdg + 540) % 360) - 180; if (Math.abs(rel) <= 60) pText(name, cx + Math.round(rel * ppd), 10, name === '·' ? 110 : 190, 'center'); }
+    pDot(cx, 18, 255); pDot(cx, 19, 255);
+    const goal = compassMarks.find(l => l.goal);
+    if (goal) { const raw = ((goal.bearing - hdg + 540) % 360) - 180, off = Math.abs(raw) > 52, gx = cx + Math.round(THREE.MathUtils.clamp(raw, -52, 52) * ppd);
+      const label = goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + 'KM' : Math.round(goal.dist / 10) * 10 + 'M';
+      pText(off ? (raw > 0 ? '►' : '◄') : '◆', gx, 1, 255, 'center'); pText(label, gx + (raw > 0 ? -5 : 5), 1, 190, raw > 0 ? 'right' : 'left'); }
+    const ow = opa(warn); if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, 26, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center');
+    const ob = opa(bl); if (ob > 0.01 && W > 150) pText(bl.textContent, 3, H - 9, 120 * ob);
+    if (document.body.classList.contains('touch')) {
+      for (const id of ['tBurst', 'tMap', 'tCreature']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
+        pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tMap: 'M', tCreature: '⇄' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
+      if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
+    }
+  }
+  const os = opa(storyEl); if (os > 0.01) {   // story line
+    const b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.min(cols, 64));
+    let y = H - 14 - lines.length * 10; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center'); y += 10; } }
+  const card = $('chapter'), oc = opa(card); if (oc > 0.01) {   // chapter card
+    const txt = card.textContent, sc = [...txt].length * 12 <= W - 10 ? 2 : 1; wrap(txt, Math.floor((W - 8) / (6 * sc))).forEach((l, i) => pText(l, cx, Math.round(H * 0.36) + i * 9 * sc, 240 * oc, 'center', sc)); }
+  if (oHelp > 0.01) {   // help
+    let y = Math.max(4, Math.round(H * 0.14)); const big = W > 140; pText('HOW TO SWIM', cx, y, 240 * oHelp, 'center', big ? 2 : 1); y += big ? 24 : 14;
+    const ks = [...help.querySelectorAll('.keys > *')], keyX = Math.max(4, cx - 72), descX = keyX + 40, maxD = Math.max(8, Math.floor((W - descX - 3) / 6));
+    for (let i = 0; i + 1 < ks.length; i += 2) { pText(ks[i].textContent, keyX, y, 230 * oHelp); for (const l of wrap(ks[i + 1].textContent, maxD)) { pText(l, descX, y, 180 * oHelp); y += 10; } y += 2; }
+    y += 6; for (const l of wrap(help.querySelector('.lore').textContent, cols)) { pText(l, cx, y, 150 * oHelp, 'center'); y += 10; }
+    pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, y + 6, 110 * oHelp, 'center');
+  }
+  if (oMap) {   // fast travel: the bay as dots
+    pText('FAST TRAVEL', cx, 3, 230, 'center');
+    const land = W > H * 1.3, S = Math.max(20, land ? Math.min(H - 20, (W >> 1) - 8) : Math.min(W - 12, Math.floor(H * 0.55))), mx = land ? W - S - 6 : (W - S) >> 1, my = 14;
+    if (!panel.map || panel.mapS !== S) { const tt = TILES.outer; panel.map = new Uint8Array(S * S); panel.mapS = S;
+      for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { const d = tt.data[Math.floor(j / S * tt.h) * tt.w + Math.floor(i / S * tt.w)]; panel.map[j * S + i] = d > 0 ? ((i + j) % 4 === 0 ? 18 : 0) : 40 + 140 * (1 - Math.min(1, -d / 35)); } }
+    for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) pDot(mx + i, my + j, panel.map[j * S + i]);
+    checkpoints.forEach((c, i) => { const [px, py] = mapXY(c.x, c.z, S), v = i === mapSel ? (Math.sin(t * 8) > 0 ? 255 : 120) : 220; for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) pDot(mx + px + dx, my + py + dy, v); });
+    { const [px, py] = mapXY(P.pos.x, P.pos.z, S); if (Math.sin(t * 5) > -0.3) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(mx + px + dx, my + py + dy, 255); }
+    const lx = land ? 6 : mx, ly = land ? 16 : my + S + 6, maxN = Math.max(1, Math.floor((H - ly - 4) / 10)), first = Math.max(0, Math.min(mapSel - (maxN >> 1), checkpoints.length - maxN)), lc = Math.max(8, Math.floor((land ? mx - 10 : W - lx - 4) / 6) - 2);
+    checkpoints.slice(first, first + maxN).forEach((c, k) => { const i = first + k; pText((i === mapSel ? '► ' : '  ') + c.name.slice(0, lc), lx, ly + k * 10, i === mapSel ? 255 : 150); });
+  }
+  panel.tex.needsUpdate = true;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  TOUCH  —  drag anywhere to swim (an analog stick that appears under
 //  your thumb), hold BURST, tap MAP or ⇄. Works with a mouse as well.
 // ═══════════════════════════════════════════════════════════════════
@@ -1633,9 +1722,9 @@ addEventListener('pointermove', e => {
   const dx = e.clientX - touch.ox, dy = e.clientY - touch.oy, d = Math.hypot(dx, dy), k = Math.min(1, d / STICK_R) / Math.max(d, 1e-3);
   touch.turn = -dx * k; touch.climb = -dy * k;
   if (Math.abs(touch.turn) < 0.12) touch.turn = 0; if (Math.abs(touch.climb) < 0.12) touch.climb = 0;
-  knobEl.style.transform = `translate(${dx * k * STICK_R}px, ${dy * k * STICK_R}px)`;
+  touch.kx = dx * k * STICK_R; touch.ky = dy * k * STICK_R;
 });
-const endStick = e => { if (e.pointerId !== touch.id) return; touch.id = null; touch.turn = touch.climb = 0; stickEl.style.display = 'none'; knobEl.style.transform = ''; };
+const endStick = e => { if (e.pointerId !== touch.id) return; touch.id = null; touch.turn = touch.climb = touch.kx = touch.ky = 0; stickEl.style.display = 'none'; };
 addEventListener('pointerup', e => { unlockAudio(); endStick(e); }); addEventListener('pointercancel', endStick);
 function tbtn(id, down, up) {
   const el = $(id), stop = e => { e.stopPropagation(); e.preventDefault(); };
@@ -1668,7 +1757,13 @@ async function loadBridges() {
   } catch (e) { console.warn('bridges: keeping fallback set:', e.message); return; }
   for (const b of bridges) { if (b.name === 'bridge') continue; const [x, z] = b.pts[Math.floor(b.pts.length / 2)]; if (!POIS.some(p => p[2] === b.name)) { const [lat, lon] = toLL(x, z); POIS.push([lat, lon, b.name]); } }
 }
+let booting = true;
+function loadLoop() {   // until the world is ready, the display shows only the panel layer
+  if (!booting) return; requestAnimationFrame(loadLoop);
+  renderer.setRenderTarget(lowRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.setRenderTarget(null); drawPanel(); composer.render();
+}
 async function boot() {
+  resize(); loadLoop();
   const prog = [0, 0];
   const load = async (name, i) => {
     const t = TILES[name];
