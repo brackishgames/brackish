@@ -288,9 +288,18 @@ const floorFrag = GLSL_COMMON + /* glsl */`
     float y = vW.y / uVex, b;
     if (y < 0.0) {
       float r1 = sin(vW.x * 2.6 + sin(vW.z * 0.5) * 1.5 + uTime * 0.1), r2 = sin(vW.z * 2.1 - vW.x * 0.7);
-      b = l * (1.0 + 0.07 * r1 + 0.05 * r2) * mix(0.06, 0.40, depthLight(vW.y));
-      float iso = abs(fract(y + 0.5) - 0.5) / max(fwidth(y), 1e-4);
-      b += 0.22 * (1.0 - smoothstep(0.0, 1.4, iso)) * mix(0.25, 1.0, depthLight(vW.y));
+      float sand = 1.0 + 0.07 * r1 + 0.05 * r2;
+      // patchy bottom: broad dark beds of grass and mud, lighter sand between
+      float patch = sin(vW.x * 0.045 + sin(vW.z * 0.031) * 2.0) * sin(vW.z * 0.052 - vW.x * 0.017);
+      sand *= 0.78 + 0.35 * smoothstep(-0.3, 0.5, patch);
+      // speckle: shell and rubble
+      float sp = fract(sin(dot(floor(vW.xz * 1.3), vec2(12.9898, 78.233))) * 43758.5453);
+      sand += 0.35 * step(0.955, sp);
+      b = l * sand * mix(0.06, 0.40, depthLight(vW.y));
+      // caustics: sunlight focused by the surface, strongest in shallow water
+      float c1 = sin(vW.x * 0.9 + uTime * 0.8) * sin(vW.z * 0.7 - uTime * 0.6), c2 = sin((vW.x + vW.z) * 0.55 + uTime * 0.9) * sin((vW.x - vW.z) * 0.4 - uTime * 0.5);
+      float caus = pow(max(c1 + c2, 0.0) * 0.5, 2.2);
+      b += 0.45 * caus * depthLight(vW.y) * exp(y * 0.12);
     } else {
       b = (0.16 + 0.12 * l) * (0.25 + 0.75 * uSun);
       float iso = abs(fract(y * 0.5 + 0.5) - 0.5) / max(fwidth(y * 0.5), 1e-4);
@@ -381,6 +390,7 @@ const creatureVert = GLSL_COMMON + /* glsl */`
     else if (uMode == 2.0) { float s = clamp(p.z / uLen + 0.5, 0.0, 1.0); p.x += sin(ph - s * 3.0) * s * s * uAmp * uLen; }
     else if (uMode == 3.0) { p.y += sin(ph) * max(0.0, abs(p.x) - uHalf * 0.45) * 0.5; }
     else if (uMode == 4.0) { p.y += sin(ph) * abs(p.x) * uAmp; }
+    else if (uMode == 5.0) { float q = 1.0 + 0.14 * sin(ph); p.xz *= mix(q, 1.0, step(p.y, -0.01)); p.y *= mix(2.0 - q, 1.0, step(p.y, -0.01)); if (p.y < -0.01) p.x += sin(ph * 0.7 + p.y * 3.0) * 0.04 * -p.y; }
     #ifdef USE_INSTANCING
       vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0);
     #else
@@ -705,6 +715,27 @@ function stepWild(dt, t) {
     w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, -w.turn * 0.5);
     w.mesh.material.uniforms.uFlap.value = 0.6 + 0.4 * Math.min(1, v / w.sp.max);
   }
+}
+
+// moon jellies: slow, pulsing, harmless, lovely in the dark
+function jellyGeometry() {
+  const bell = new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.6, 1);
+  const parts = [bell];
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; parts.push(new THREE.PlaneGeometry(0.02, 0.5).translate(0, -0.26, 0).rotateY(a).translate(Math.cos(a) * 0.12, 0, Math.sin(a) * 0.12)); }
+  return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
+}
+const JELLIES = 36;
+const jellyMesh = new THREE.InstancedMesh(jellyGeometry(), creatureMat({ mode: 5, freq: 1.4, glow: 0.85 }), JELLIES);
+{ const ph = new Float32Array(JELLIES); for (let i = 0; i < JELLIES; i++) ph[i] = Math.random() * 6.28; jellyMesh.geometry.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1)); }
+jellyMesh.frustumCulled = false; scene.add(jellyMesh);
+const jellies = Array.from({ length: JELLIES }, () => ({ p: new THREE.Vector3(), ph: Math.random() * 6.28, s: 0.6 + Math.random() * 1.2 }));
+function stepJellies(dt, t) {
+  for (let i = 0; i < JELLIES; i++) { const j = jellies[i];
+    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const a = Math.random() * 6.28, r = 20 + Math.random() * 90; j.p.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); const f = floorAt(j.p.x, j.p.z); if (f > -3) { j.p.set(0, 0, 0); _m.makeScale(0.001, 0.001, 0.001); jellyMesh.setMatrixAt(i, _m); continue; } j.p.y = f * (0.3 + Math.random() * 0.5); }
+    const f = floorAt(j.p.x, j.p.z);
+    j.p.y = THREE.MathUtils.clamp(j.p.y + Math.sin(t * 0.3 + j.ph) * 0.08 * dt + 0.02 * dt, f + 1, -1.5); j.p.x += Math.sin(t * 0.1 + j.ph) * 0.05 * dt; j.p.z += Math.cos(t * 0.13 + j.ph) * 0.05 * dt;
+    _e.set(Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2); _m.makeRotationFromEuler(_e); _m.scale(new THREE.Vector3(j.s, j.s, j.s)); _m.setPosition(j.p.x, j.p.y, j.p.z); jellyMesh.setMatrixAt(i, _m); }
+  jellyMesh.instanceMatrix.needsUpdate = true;
 }
 
 // mullet schools
@@ -1171,7 +1202,28 @@ function stepAmbient(dt, t) {
     for (let i = 0; i < 400; i++) { bubbleLife[i] += dt; if (bubbleLife[i] <= 6) { a[i * 3 + 1] = Math.min(-0.05, a[i * 3 + 1] + 0.45 * dt); a[i * 3] += Math.sin(t * 5 + i) * 0.05 * dt; } else a[i * 3 + 1] = 9999; }
     bubbles.geometry.attributes.position.needsUpdate = true; }
   if (world.buoyMesh) { world.buoys.forEach((b, i) => { _m.makeRotationZ(Math.sin(t * 0.8 + b.ph) * 0.08); _m.setPosition(b.x, Math.sin(t * 1.1 + b.ph) * 0.2 - 0.4, b.z); world.buoyMesh.setMatrixAt(i, _m); }); world.buoyMesh.instanceMatrix.needsUpdate = true; }
-  // mullet schools
+  // moon jellies: slow, pulsing, harmless, lovely in the dark
+function jellyGeometry() {
+  const bell = new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.6, 1);
+  const parts = [bell];
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; parts.push(new THREE.PlaneGeometry(0.02, 0.5).translate(0, -0.26, 0).rotateY(a).translate(Math.cos(a) * 0.12, 0, Math.sin(a) * 0.12)); }
+  return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
+}
+const JELLIES = 36;
+const jellyMesh = new THREE.InstancedMesh(jellyGeometry(), creatureMat({ mode: 5, freq: 1.4, glow: 0.85 }), JELLIES);
+{ const ph = new Float32Array(JELLIES); for (let i = 0; i < JELLIES; i++) ph[i] = Math.random() * 6.28; jellyMesh.geometry.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1)); }
+jellyMesh.frustumCulled = false; scene.add(jellyMesh);
+const jellies = Array.from({ length: JELLIES }, () => ({ p: new THREE.Vector3(), ph: Math.random() * 6.28, s: 0.6 + Math.random() * 1.2 }));
+function stepJellies(dt, t) {
+  for (let i = 0; i < JELLIES; i++) { const j = jellies[i];
+    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const a = Math.random() * 6.28, r = 20 + Math.random() * 90; j.p.set(P.pos.x + Math.cos(a) * r, 0, P.pos.z + Math.sin(a) * r); const f = floorAt(j.p.x, j.p.z); if (f > -3) { j.p.set(0, 0, 0); _m.makeScale(0.001, 0.001, 0.001); jellyMesh.setMatrixAt(i, _m); continue; } j.p.y = f * (0.3 + Math.random() * 0.5); }
+    const f = floorAt(j.p.x, j.p.z);
+    j.p.y = THREE.MathUtils.clamp(j.p.y + Math.sin(t * 0.3 + j.ph) * 0.08 * dt + 0.02 * dt, f + 1, -1.5); j.p.x += Math.sin(t * 0.1 + j.ph) * 0.05 * dt; j.p.z += Math.cos(t * 0.13 + j.ph) * 0.05 * dt;
+    _e.set(Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2); _m.makeRotationFromEuler(_e); _m.scale(new THREE.Vector3(j.s, j.s, j.s)); _m.setPosition(j.p.x, j.p.y, j.p.z); jellyMesh.setMatrixAt(i, _m); }
+  jellyMesh.instanceMatrix.needsUpdate = true;
+}
+
+// mullet schools
 function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
   let k = 0;
   for (const s of schools) {
@@ -1228,7 +1280,7 @@ function frame() {
   if (started) dayClock = (dayClock + dt / 60) % 24;
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   if (started && !mapOpen && !helpOpen) { stepPlayer(dt); story.step(dt); }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); composer.render();
 }
 
@@ -1240,6 +1292,9 @@ const grass = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.06, 0.75).transl
       vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vY = w.y; vU = uv.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
   fragmentShader: GLSL_COMMON + `varying float vD, vY, vU; void main(){ float b = (0.22 + 0.45 * vU) * mix(0.4, 1.0, depthLight(vY)); gl_FragColor = outB(applyFog(b, vD)); }` }), GRASS_MAX);
 grass.frustumCulled = false; grass.count = 0; scene.add(grass);
+const ROCK_MAX = 1600, FAN_MAX = 1200;
+const rocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), structMat, ROCK_MAX); rocks.frustumCulled = false; rocks.count = 0; scene.add(rocks);
+const fans = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.9, 1.1).translate(0, 0.55, 0), grass.material, FAN_MAX); fans.frustumCulled = false; fans.count = 0; scene.add(fans);
 const hash2 = (x, z) => { let n = Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) | 0; n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
 function rebuildGrass(px, pz) {
   const m = new THREE.Matrix4(), R = 70, step = 1.4; let k = 0; const cx = Math.round(px / step) * step, cz = Math.round(pz / step) * step;
@@ -1249,6 +1304,18 @@ function rebuildGrass(px, pz) {
     m.makeRotationY(hash2(x + 3, z) * 6.28); m.scale(new THREE.Vector3(1, s, 1)); m.setPosition(x + jx, floorAt(x + jx, z + jz), z + jz); grass.setMatrixAt(k++, m);
   }
   grass.count = k; grass.instanceMatrix.needsUpdate = true; grassCenter.set(px, pz);
+  // rocks where the bottom is steep (channel walls, the hole), sea fans on deeper hard bottom
+  let kr = 0, kf = 0; const stepR = 2.2;
+  for (let z = cz - R; z <= cz + R; z += stepR) for (let x = cx - R; x <= cx + R; x += stepR) {
+    const f = floorAt(x, z); if (f > -1.2) continue;
+    const slope = Math.abs(floorAt(x + 3, z) - floorAt(x - 3, z)) + Math.abs(floorAt(x, z + 3) - floorAt(x, z - 3));
+    const h = hash2(x * 3 + 7, z * 5 + 1);
+    if (kr < ROCK_MAX && slope > 0.9 && h < Math.min(0.6, slope * 0.25)) { const sz = 0.3 + hash2(x, z + 9) * (0.6 + slope * 0.4);
+      m.makeRotationFromEuler(new THREE.Euler(hash2(x + 2, z) * 3, hash2(x, z + 2) * 6, 0)); m.scale(new THREE.Vector3(sz * 1.4, sz * 0.8, sz)); m.setPosition(x + (h - .5) * 2, f + sz * 0.35, z + (hash2(z, x) - .5) * 2); rocks.setMatrixAt(kr++, m); }
+    else if (kf < FAN_MAX && f < -6 && slope < 0.5 && h > 0.955) { const sz = 0.5 + hash2(x + 5, z) * 1.2;
+      m.makeRotationY(hash2(x + 3, z) * 6.28); m.scale(new THREE.Vector3(sz, sz, 1)); m.setPosition(x, f, z); fans.setMatrixAt(kf++, m); }
+  }
+  rocks.count = kr; rocks.instanceMatrix.needsUpdate = true; fans.count = kf; fans.instanceMatrix.needsUpdate = true;
 }
 
 // ═══════════════════════════════════════════════════════════════════
