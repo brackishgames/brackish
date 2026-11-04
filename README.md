@@ -9,7 +9,7 @@ Play it at https://brackishgames.github.io/brackish/
 <img src="screenshots/map.png" alt="Fast travel: places down the bay beside a dot-matrix chart" width="100%">
 
 You are an animal in Tampa Bay. The whole thing is drawn the way the old Pioneer car stereos drew
-their dolphin screensaver: blue dots on black, amber text for the readouts.
+their dolphin screensaver: cyan and blue dots on black, pale readouts lit on the same grid.
 
 The bay is real and to scale. One unit is one metre. Depths come from the NOAA NCEI DEM mosaic, which
 the page downloads the first time it runs and keeps in the browser after that. The ship channel is 12.5 m,

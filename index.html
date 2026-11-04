@@ -944,10 +944,10 @@ function stepWild(dt, t) {
     w.cool = Math.max(0, (w.cool || 0) - dt);
     const rel = relation(w); let v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph)); let ty = null;
     const otherHunter = wild.some(o => o !== w && o.hunting), fr = feverR(P.pos), pFloor = floorAt(P.pos.x, P.pos.z), hammer = w.sp.id === 'hammer';
-    // a shark picks the one it can single out: a ray alone, or one at the ragged edge of the fever. in the heart of it, you are one of a thousand.
+    // a shark picks the one it can single out: a ray alone, or one at the ragged edge of the fever. inside it, you are one of a thousand.
     if (rel === 'hunt' && !w.hunting && started && !P.hidden && d < 45 && w.cool <= 0 && !otherHunter && !(hammer && pFloor > -3)) {
       const dim = dayClock < 7.5 || dayClock > 18;   // they hunt the low light
-      const rate = fr < 0.7 ? -0.3 : (fr < 1.15 ? 0.22 : 0.14) * (P.speed > P.sp.cruise * 1.2 ? 1.8 : 1) * (P.hp < 3 ? 1.5 : 1) * (dim ? 1.3 : 1);   // panic and blood draw it in
+      const rate = fr < 0.85 ? -0.3 : (fr < 1.2 ? 0.22 : 0.14) * (P.speed > P.sp.cruise * 1.2 ? 1.8 : 1) * (P.hp < 3 ? 1.5 : 1) * (dim ? 1.3 : 1);   // panic and blood draw it in
       w.interest = THREE.MathUtils.clamp((w.interest || 0) + rate * dt, 0, 1);
       if (w.interest > 0.45 && !w.warned) { w.warned = true; say('something large is keeping pace below you', 2.5); }
     } else if (!w.hunting) { w.interest = Math.max(0, (w.interest || 0) - 0.05 * dt); if (w.interest < 0.2) w.warned = false; }
@@ -958,8 +958,8 @@ function stepWild(dt, t) {
       w.huntT += dt; const L = w.lunge; L.t += dt;
       const lose = why => { w.hunting = false; w.cool = 30; w.interest = 0; w.warned = false; if (why) say(why, 2.5); };
       // once it is on you it stays on you, like the law: you have to break contact long enough for it to lose you
-      const why = rel !== 'hunt' || d > 120 ? 'gone' : fr < 0.7 ? 'fever' : hammer && pFloor > -3 ? 'shallow' : P.hidden ? 'buried' : d > 28 ? 'far' : '';
-      if (!why) { w.track = Math.min(1, w.track + 0.5 * dt); w.seen.copy(P.pos); } else w.track -= dt / (why === 'buried' ? 3 : 6);
+      const why = rel !== 'hunt' || d > 120 ? 'gone' : fr < 0.85 ? 'fever' : hammer && pFloor > -3 ? 'shallow' : P.hidden ? 'buried' : d > 28 ? 'far' : '';
+      if (!why) { w.track = Math.min(1, w.track + 0.5 * dt); w.seen.copy(P.pos); } else w.track -= dt / (why === 'fever' ? 2 : why === 'buried' ? 3 : 6);   // among a thousand others it can't hold on to you
       if (why === 'gone') lose('');
       else if (w.track <= 0) { lose({ fever: 'it loses you among a thousand others', shallow: 'it will not follow you into the shallows', buried: 'it passes over you', far: 'you lost it' }[why]); if (why === 'fever') w.feverPass = 6; }
       if (w.hunting) huntHeat = Math.max(huntHeat, w.track);
@@ -969,7 +969,7 @@ function stepWild(dt, t) {
         if (L.t > 1.8 && d < 12) { L.phase = 'wind'; L.t = 0; } }
       else if (L.phase === 'wind') { if (!hammer && !w.bumped && d < 4) { w.bumped = true; P.shake = Math.max(P.shake || 0, 0.35); thud(0.3); say('it bumps you. it is testing.', 1.8); }   // a bull shark tastes before it commits
         steerTo(w, P.pos.x + Math.cos(P.yaw) * L.side * 6, P.pos.z - Math.sin(P.yaw) * L.side * 6, 2.5); v = w.sp.cruise * 0.6; ty = P.pos.y;
-        if (L.t > 1.0) { L.phase = 'lunge'; L.t = 0; L.tx = P.pos.x + P.vel.x * 0.5; L.tz = P.pos.z + P.vel.z * 0.5; L.dodged = false; } }
+        if (L.t > 1.0) { L.phase = 'lunge'; L.t = 0; whump(w.pos.x, w.pos.z); L.tx = P.pos.x + P.vel.x * 0.5; L.tz = P.pos.z + P.vel.z * 0.5; L.dodged = false; } }
       else if (L.phase === 'lunge') { steerTo(w, L.tx, L.tz, 1.2); v = w.sp.max * 1.6; ty = P.pos.y;
         const pinned = hammer && P.pos.y - pFloor < 2;   // a hammerhead pins a ray to the sand with its head; only getting off the bottom helps
         if (pinned ? P.vel.y > 1 : (Math.abs(P.yawRate) > 0.9 || (sprinting() && P.sta > 0 && !P.spent))) L.dodged = true;
@@ -1219,6 +1219,35 @@ function hurt(k, msg) {
   if (P.hp === 0) setTimeout(() => { travelTo(lastCheckpoint); P.hp = 3; }, 2500);
 }
 function nearestBoat() { let best = null, bd = 1e9; for (const b of boats) { const d = b.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = b; } } return { b: best, d: bd }; }
+// ── night gigging: a skiff poled over the flats with a light shining on the bottom. what the light finds, the gig takes.
+//    burying is no help: giggers look for exactly that outline. a gig reaches about two metres; deeper water or darkness is safe.
+const gigLight = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  vertexShader: `varying float vY; void main(){ vY = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: GLSL_COMMON + `varying float vY; void main(){ float b = 0.3 * (1.0 + vY) * (0.9 + 0.1 * sin(uTime * 7.0)); gl_FragColor = outB(b); }` }));
+gigLight.frustumCulled = false; gigLight.visible = false; scene.add(gigLight);
+const gig = { on: false, pos: new THREE.Vector3(), bow: new THREE.Vector3(), yaw: 0, turn: 0, inT: 0, strikeT: 0, mesh: new THREE.Mesh(BOAT_TYPES.skiff.geo, boatMat) };
+gig.mesh.visible = false; gig.mesh.frustumCulled = false; scene.add(gig.mesh);
+const isNight = () => dayClock < 5.8 || dayClock > 19.5;
+function stepGig(dt, t) {
+  if (!gig.on) { if (isNight() && started && Math.random() < dt / 25) { const sp = spotNear(70, 170, 0.5, 24); if (sp && sp.f > -2.2) { if (DEV) console.log('[gig] a light out on the flats'); gig.on = true; gig.pos.set(sp.x, 0, sp.z); gig.yaw = Math.random() * 6.28; gig.inT = 0; } } }
+  else if (!isNight() || gig.pos.distanceTo(P.pos) > 300) gig.on = false;
+  gig.mesh.visible = gigLight.visible = gig.on; P.lit = false; if (!gig.on) return;
+  // poled along the flats at a walk, turning back from the channel edge and the sand bars
+  const ahead = fwdOf(gig.yaw).multiplyScalar(12).add(gig.pos), fa = floorAt(ahead.x, ahead.z);
+  gig.turn += (Math.random() - 0.5) * dt; gig.turn *= 0.98; if (fa < -2.6 || fa > -0.3) gig.turn += 0.8 * dt;
+  gig.yaw += gig.turn * 0.4 * dt; gig.pos.addScaledVector(fwdOf(gig.yaw), 0.7 * dt); gig.pos.y = Math.sin(t * 1.2) * 0.05;
+  gig.mesh.position.copy(gig.pos); gig.mesh.rotation.set(0, gig.yaw, Math.sin(t * 0.9) * 0.02);
+  gig.bow.copy(fwdOf(gig.yaw)).multiplyScalar(2.5).add(gig.pos); const f = floorAt(gig.bow.x, gig.bow.z), depth = Math.max(0.5, -f), rad = 1.1 + depth * 0.45;
+  gigLight.position.set(gig.bow.x, 0.6, gig.bow.z); gigLight.scale.set(rad, depth + 0.6, rad);
+  const r = Math.hypot(P.pos.x - gig.bow.x, P.pos.z - gig.bow.z); P.lit = r < rad && P.pos.y > -2.6;
+  if (P.lit) { gig.inT += dt; if (!gig.warned) { gig.warned = true; say('a light on the water. get out of it.', 2); } } else { gig.inT = Math.max(0, gig.inT - dt * 0.5); if (gig.inT === 0) gig.warned = false; }
+  gig.strikeT = Math.max(0, gig.strikeT - dt);
+  if (P.lit && gig.inT > 1.4 && gig.strikeT <= 0) {   // a second and a half in the light is all they need to see you
+    gig.strikeT = 3; gig.inT = 0.5; stab(gig.bow.x, gig.bow.z);
+    for (let i = 0; i < 14; i++) { const k = i / 14; emitBubble(gig.bow.x + (P.pos.x - gig.bow.x) * k, P.pos.y * k, gig.bow.z + (P.pos.z - gig.bow.z) * k); }
+    if (r < 0.8 + (P.sp.span ?? P.sp.len) * 0.35 && P.stun <= 0) hurt(0.6, 'GIGGED\nthey look for your outline in the light. burying will not hide you.'); else say('it missed', 1.2);
+  }
+}
 function strike(b) {
   hurt(b.type === BOAT_TYPES.ship ? 1.2 : 0.7, `STRUCK BY A ${b.type.name.toUpperCase()}\nDIVE WHEN THE WATER HUMS`);
   if (P.vel) { P.vel.addScaledVector(fwdOf(b.yaw), b.type.speed * 0.8); P.vel.y = -(b.type === BOAT_TYPES.ship ? 5 : 2.5); }
@@ -1274,23 +1303,47 @@ function startAudio() {
   audio.thrash = bed(audio.brown, 'bandpass', 700, 0.5, 0);                                         // turbulence when you work hard near the surface
   audio.flutter = bed(audio.brown, 'bandpass', 600, 0.7, 0); lfo(audio.flutter.g.gain, 2.4, 0.5, 'triangle');   // the fever's wingbeats
   audio.current = bed(audio.brown, 'highpass', 300, 0.3, 0);                                         // tide pouring through the pass
-  // engine: triangles with a cylinder thump through a lowpass that opens as it nears
-  const eg = ac.createGain(); eg.gain.value = 0; const ef = ac.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 120; ef.Q.value = 1.2; ef.connect(eg).connect(master);
-  const e1 = ac.createOscillator(), e2 = ac.createOscillator(); e1.type = e2.type = 'triangle'; e1.frequency.value = 40; e2.frequency.value = 40; e2.detune.value = 9;
-  const em = ac.createGain(); em.gain.value = 0.5; e1.connect(em); e2.connect(em); em.connect(ef);
-  const thump = ac.createOscillator(); thump.type = 'square'; thump.frequency.value = 9; const tg = ac.createGain(); tg.gain.value = 0; thump.connect(tg); tg.connect(ef);
-  e1.start(); e2.start(); thump.start(); audio.engine = { g: eg, f: ef, o1: e1, o2: e2, thump: tg };
+  // engines: underwater a boat is its propeller. each hull gets a voice: a tone, the beat of the blades, and cavitation hiss riding on that beat.
+  //   ship: a slow five-blade prop, a thrum you feel at seven beats a second, heard for kilometres
+  //   cruiser, skiff: fast small props, a whine of a hundred-odd hertz and a lot of hiss, heard for a few hundred metres
+  //   gig skiff: no engine at all, or a trolling motor's thin electric whine you only hear close
+  const ENGINE = { ship: { tone: 26, wave: 'triangle', blade: 7, hiss: 700, range: 1500, g: 0.55 }, cruiser: { tone: 78, wave: 'sawtooth', blade: 13, hiss: 1800, range: 420, g: 0.3 },
+    skiff: { tone: 128, wave: 'sawtooth', blade: 21, hiss: 2800, range: 320, g: 0.26 }, troll: { tone: 820, wave: 'sine', blade: 0, hiss: 0, range: 45, g: 0.05 } };
+  const voice = (src, kind) => { const e = ENGINE[kind], out = ac.createGain(); out.gain.value = 0; const pan = ac.createStereoPanner ? ac.createStereoPanner() : null; (pan ? (out.connect(pan), pan) : out).connect(master);
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150; lp.Q.value = 0.9; lp.connect(out);
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.type = o2.type = e.wave; o1.frequency.value = o2.frequency.value = e.tone; o2.detune.value = 11;
+    const body = ac.createGain(); body.gain.value = 0.6; o1.connect(body); o2.connect(body); body.connect(lp);
+    let hiss = null; if (e.hiss) { const n = ac.createBufferSource(); n.buffer = audio.white; n.loop = true; const hf = ac.createBiquadFilter(); hf.type = 'bandpass'; hf.frequency.value = e.hiss; hf.Q.value = 0.7; hiss = ac.createGain(); hiss.gain.value = 0.18; n.connect(hf).connect(hiss).connect(out); n.start(); }
+    if (e.blade) { const b = ac.createOscillator(); b.frequency.value = e.blade * (0.95 + Math.random() * 0.1); const bd = ac.createGain(); bd.gain.value = 0.45; b.connect(bd).connect(body.gain); if (hiss) { const bh = ac.createGain(); bh.gain.value = 0.15; b.connect(bh).connect(hiss.gain); } b.start(); }
+    o1.start(); o2.start(); return { src, e, out, pan, lp, o1, o2 }; };
+  audio.engines = [...boats.map(b => voice(b, b.type === BOAT_TYPES.ship ? 'ship' : b.type === BOAT_TYPES.cruiser ? 'cruiser' : 'skiff')), voice(gig, 'troll')];
   audio.heartNext = 0; audio.nextT.omen = ac.currentTime + 35;
   master.gain.setTargetAtTime(0.5, ac.currentTime, 2.5);
 }
 const now = () => audio.ac.currentTime;
 function oneShot(build, when = 0) { if (!audio || !audioOn) return; build(audio.ac, now() + when); }
 // a noise burst with a filter sweep: the building block of every water sound
-function burst({ buf = 'pink', type = 'bandpass', f0 = 400, f1 = 1600, f2 = 300, q = 0.8, attack = 0.1, length = 1.0, g = 0.4, when = 0 }) {
+function burst({ buf = 'pink', type = 'bandpass', f0 = 400, f1 = 1600, f2 = 300, q = 0.8, attack = 0.1, length = 1.0, g = 0.4, when = 0, pan = 0 }) {
   oneShot((ac, t) => { const src = ac.createBufferSource(); src.buffer = audio[buf]; src.playbackRate.value = 0.8 + Math.random() * 0.4; const f = ac.createBiquadFilter(); f.type = type; f.Q.value = q;
     f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + attack * 2); f.frequency.exponentialRampToValueAtTime(f2, t + length);
     const gg = ac.createGain(); gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(g, t + attack); gg.gain.exponentialRampToValueAtTime(0.0005, t + length);
-    src.connect(f).connect(gg).connect(audio.master); src.start(t); src.stop(t + length + 0.05); }, when);
+    let out = gg; if (pan && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; gg.connect(p); out = p; }
+    src.connect(f).connect(gg); out.connect(audio.master); src.start(t); src.stop(t + length + 0.05); }, when);
+}
+const _ear = new THREE.Vector3();
+function panAt(x, z) {   // -1 left .. 1 right of where you are looking, narrowed with distance
+  camera.getWorldDirection(_ear); const dx = x - camPos.x, dz = z - camPos.z, d = Math.hypot(dx, dz) || 1, side = (dx * -_ear.z + dz * _ear.x) / (d * (Math.hypot(_ear.x, _ear.z) || 1));
+  return THREE.MathUtils.clamp(side * (0.2 + 0.8 * THREE.MathUtils.smoothstep(40 - d, 0, 35)), -1, 1);
+}
+function stab(x, z) {   // a gig going in: the plunk of the shaft, the hiss of its wake
+  const p = panAt(x, z); burst({ buf: 'white', type: 'bandpass', f0: 1800, f1: 3000, f2: 900, q: 1.2, attack: 0.005, length: 0.18, g: 0.35, pan: p });
+  burst({ buf: 'pink', type: 'bandpass', f0: 600, f1: 1400, f2: 300, q: 0.9, attack: 0.02, length: 0.6, g: 0.3, when: 0.03, pan: p });
+}
+function whump(x, z, k = 1) {   // a big body moving water right beside you: felt as much as heard
+  burst({ buf: 'brown', type: 'lowpass', f0: 160, f1: 110, f2: 40, q: 0.7, attack: 0.05, length: 0.9, g: 0.55 * k, pan: panAt(x, z) });
+}
+function flush(x, z, k = 1) {   // a school bolting: a hundred tails at once
+  burst({ buf: 'pink', type: 'bandpass', f0: 700, f1: 2200, f2: 500, q: 0.6, attack: 0.04, length: 0.7, g: 0.28 * k, pan: panAt(x, z) });
 }
 function whoosh(k = 1) { burst({ f0: 400, f1: 1600, f2: 300, attack: 0.12, length: 1.0, g: 0.45 * k }); }
 // breaking the surface: a splash whose size follows the speed through the surface, then droplets
@@ -1371,13 +1424,12 @@ function stepAudio(above) {
   const bottomLife = Math.min(1, (grass.count / GRASS_MAX) * 2 + (rocks.count / ROCK_MAX) * 1.5 + (fans.count / FAN_MAX)), nearBottom = THREE.MathUtils.clamp(1 - (P.pos.y - lastFloor) / 8, 0, 1);
   if (!above && Math.random() < (0.005 + 0.05 * bottomLife) * (0.3 + 0.7 * nearBottom)) crackle(0.04 + 0.06 * bottomLife * nearBottom);   // a few per second over grass
   // engines: every boat counts; distance muffles, prop wash shakes
-  let sum = 0, best = null, bn = 0;
-  for (const bt of boats) { const d = bt.pos.distanceTo(P.pos), n = THREE.MathUtils.clamp(1 - d / (bt.type === BOAT_TYPES.ship ? 480 : 170), 0, 1); sum += n * n; if (n > bn) { bn = n; best = bt; } }
-  const near = Math.min(1, sum), ship = best && best.type === BOAT_TYPES.ship; P.wash = Math.max(0, (P.wash || 0) - 0.02);
-  audio.engine.g.gain.setTargetAtTime(near * 0.5 * (above ? 0.7 : 1) * (1 + 0.8 * (P.wash || 0)), t, k);
-  audio.engine.f.frequency.setTargetAtTime(80 + 700 * bn * bn, t, 0.3);
-  audio.engine.o1.frequency.setTargetAtTime(ship ? 26 + bn * 6 : 55 + bn * 45, t, 0.4); audio.engine.o2.frequency.setTargetAtTime(ship ? 26 + bn * 6 : 55 + bn * 45, t, 0.4);
-  audio.engine.thump.gain.setTargetAtTime(ship ? 0.35 * bn : 0.1 * bn, t, 0.3);
+  // engines: water carries them far and muffled; close in they open up, and the nearest come from their side
+  P.wash = Math.max(0, (P.wash || 0) - 0.02);
+  for (const v of audio.engines) { const on = v.src === gig ? gig.on : true, d = v.src.pos.distanceTo(P.pos), n = on ? THREE.MathUtils.clamp(1 - d / v.e.range, 0, 1) : 0;
+    v.out.gain.setTargetAtTime(n * n * v.e.g * (above ? 0.6 : 1) * (1 + 0.8 * (P.wash || 0) * n), t, k);   // in air the hull hides the prop
+    v.lp.frequency.setTargetAtTime(120 + 2600 * n * n * n, t, 0.3);
+    if (v.pan) v.pan.pan.setTargetAtTime(panAt(v.src.pos.x, v.src.pos.z), t, 0.2); }
   if ((P.wash || 0) > 0.3 && Math.random() < 0.08) crackle(0.06 * P.wash);   // cavitation in the wash
   // the fever
   const fd = fever.c.distanceTo(P.pos), fn = THREE.MathUtils.clamp(1 - fd / 90, 0, 1); audio.flutter.g.gain.setTargetAtTime(fn * fn * 0.3, t, 0.4);
@@ -1592,7 +1644,7 @@ function stepPlayer(dt) {
   if (P.pos.y > -0.4) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - Math.random() * 0.1, P.pos.z + Math.sin(a) * r); } } }
   const upNow = P.pos.y > -0.25; if (upNow !== !!P.wasUp && Math.abs(P.vel.y) > 0.4) { for (let i = 0; i < 30; i++) emitBubble(P.pos.x + (Math.random() - .5) * 1.5 * (sp.span ?? sp.len), -0.1 - Math.random() * 1.5, P.pos.z + (Math.random() - .5) * 1.5); splash(Math.min(1, Math.abs(P.vel.y) / 3)); P.shake = Math.max(P.shake || 0, 0.25); } P.wasUp = upNow;
   P.mesh.position.copy(P.pos); P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch, P.roll);
-  P.mesh.material.uniforms.uGlow.value += ((P.hidden ? 0.35 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
+  P.mesh.material.uniforms.uGlow.value += ((P.lit ? 2.4 : P.hidden ? 0.35 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
   { const u = P.mesh.material.uniforms, work = THREE.MathUtils.clamp(thrust / (0.6 * sp.max) + 0.15, 0, 1);
     if (sp.kind === 'ray') {   // rays glide between beats when there's little to do
       P.glide = (P.glide || 0) + dt; const gliding = work < 0.25 && Math.sin(P.glide * 0.6) > 0.2;
@@ -1694,6 +1746,7 @@ function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz 
     if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + Math.random() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
     const pd = s.c.distanceTo(P.pos);
     if (pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3;   // a charge scatters the school
+    if (s.panic <= 0) for (const w of wild) if (w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(s.c) < 14) { s.panic = 3; if (pd < 50) flush(s.c.x, s.c.z, 1 - pd / 50); break; }   // sharks are silent; their prey is not
     s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * 3 : s.base) - s.spread) * Math.min(1, 3 * dt);
     if (s.panic > 0) { steerToSchool(s, 2 * s.c.x - P.pos.x, 2 * s.c.z - P.pos.z); }
     s.turn += (Math.random() - 0.5) * dt * 2; s.turn *= 0.98; s.dir += s.turn * dt; const sv = s.v * (s.panic > 0 ? 4 : 1); s.c.x += -Math.sin(s.dir) * sv * dt; s.c.z += -Math.cos(s.dir) * sv * dt;
@@ -1748,7 +1801,7 @@ function frame() {
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
-  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepFever(dt, t); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
+  stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(dt);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
 
@@ -2018,7 +2071,7 @@ async function boot() {
   // OpenStreetMap bridges arrive in the background and replace the fallback set
   loadBridges().then(() => { try { buildStructures(); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
-  P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); dayClock = CHAPTERS[0].clock ?? dayClock;
+  P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); dayClock = CHAPTERS[0].clock ?? dayClock; if (DEV && new URLSearchParams(location.search).has('clock')) dayClock = +new URLSearchParams(location.search).get('clock');   // ?dev&clock=22 to explore at night
   loadedSave = await loadGame();
   setTitleHint();
   await stage('WAKING THE BAY', () => { becomeSpecies(speciesById.cownose); camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos); rebuildGrass(P.pos.x, P.pos.z); resize(); });
