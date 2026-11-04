@@ -13,8 +13,8 @@ const CHAPTERS = [
     lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'] },
   { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true, clock: 17.5,
     lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
-  { title: 'VI · THE POD', species: 'dolphin', start: [27.6185, -82.66117], goal: () => toXZ(27.6205, -82.6555), radius: 120,
-    lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and the pod is racing the ships to the Skyway.', 'Beat them to the main span. Breathe when you need to.'] },
+  { title: 'VI · THE POD', species: 'dolphin', start: [27.6185, -82.66117], pair: true, goal: () => { const m = wild.find(o => o.partner); return m && m.pos.distanceTo(P.pos) > 25 ? [m.pos.x, m.pos.z] : null; },
+    lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and one of the pod has come to swim beside you.', 'Swim straight at the surface, close beside it. Leap together, three times.'] },
   { title: 'VII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet know you before they see you.', 'Feed. E to lunge. They scatter. Eight will do.'] },
   { title: 'VIII · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
@@ -26,11 +26,12 @@ const CHAPTERS = [
 ];
 const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
-    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = 3; const c = CHAPTERS[i];
+    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter'); if (i > 0) fade.style.opacity = 1;
     setTimeout(() => {
       if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock;
       if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
+      if (c.pair) this.spawnPartner();
       card.textContent = c.title; card.style.opacity = 1; chimeStart();
       setTimeout(() => { fade.style.opacity = 0; }, 900);
       setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); }, 1000);   // each new body is another life the bay has kept
@@ -45,6 +46,8 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
       card.textContent = cards[i++]; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; setTimeout(show, 1400); }, 3600); };
     P.endingCam = true; setTimeout(show, 2500);
   },
+  spawnPartner() { const w = wild.find(o => o.id < WILD_ACTIVE && !o.hunting); if (!w) return; setWild(w, speciesById.dolphin, P.pos.x + Math.cos(P.yaw) * 4, Math.min(P.pos.y, -0.8), P.pos.z - Math.sin(P.yaw) * 4); w.yaw = P.yaw; w.partner = true; },
+  together() { this.syncs = (this.syncs || 0) + 1; if (CHAPTERS[this.ch].pair && this.syncs < 3) say(['together.', 'again.'][this.syncs - 1], 2); },   /* the bond is the leap */
   advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7, c.title); this.lineT = 0; } },
   step(dt) {
     this.lineT = (this.lineT || 0) + dt; if (this.lineT > 8 && sayTimer <= 0) { this.advance(); this.lineT = 0; }
@@ -52,7 +55,8 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     this.goal = c.goal ? c.goal() : null;
     if (c.follow && feverR(P.pos) < 1.2) this.goal = null;   // among them there is nothing to point at; the beam comes back if you fall behind
     let done = false;
-    if (c.goal && !c.follow) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
+    if (c.goal && !c.follow && !c.pair && this.goal) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
+    if (c.pair) done = (this.syncs || 0) >= 3;
     if (c.breaths && !c.goal) done = false;
     if (c.follow && this.followT > 50 && !this.hammer) {   // great hammerheads follow the cownose migrations, taking the ones at the edge
       this.hammer = true; const w = wild.filter(o => !o.hunting && o.id < WILD_ACTIVE).sort((a, b) => b.pos.distanceTo(P.pos) - a.pos.distanceTo(P.pos))[0], back = fwdOf(fever.yaw).multiplyScalar(-75).add(fever.c);
@@ -67,6 +71,6 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
 const TITLE_HINT = 'PRESS ENTER OR CLICK';
 function startGame(save) { if (canFull && !DEV) goFull(); started = true; lockPointer(); document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
-  if (save) { logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3 && !save.fever) fever.moving = true; return; }
+  if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3 && !save.fever) fever.moving = true; return; }
   story.begin(0); }
 function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }

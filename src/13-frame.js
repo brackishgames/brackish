@@ -31,17 +31,17 @@ function stepPlayer(dt) {
   let pitchWant = climb * 0.8;
   if (!climb) {
     if (fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = THREE.MathUtils.clamp((fAhead + sp.alt + 1.0 - P.pos.y) * 0.5, 0, 0.6);
-    else if (P.idleT > 3) { const prefer = THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9); pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
+    else if (P.idleT > 3) { const prefer = sp.id === 'dolphin' ? Math.max(fAhead + sp.alt + 0.4, -0.8) : THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9);   /* a travelling dolphin keeps to the top */ pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
   }
   P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
 
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
   // burst: Space spends stamina for a real sprint, then it has to come back
   P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
-  if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
+  if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 20); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twenty seconds of burst, ten to come back
   const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : throttle === 0 ? 0.12 * sp.cruise : wantBurst ? sp.max : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
-  const thrust = THREE.MathUtils.clamp((wantSpeed - along) * (wantBurst ? 4.0 : 2.2), -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
+  const thrust = THREE.MathUtils.clamp((wantSpeed - along) * (wantBurst ? 8.0 : 6.0), -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
   const inAir = P.pos.y > 0.0;   // out of the water there is nothing to push against
   P.vel.addScaledVector(fwd, (inAir ? 0 : thrust) * dt);
   // drag balances full thrust exactly at the burst top speed, so every body can reach it
@@ -55,6 +55,13 @@ function stepPlayer(dt) {
     if (!AIR.has(sp.id) && climb <= 0 && P.pos.y > -0.9) P.vel.y -= 2.0 * dt;   // let go of rise and a fish or a ray slips back down
   }
   P.speed = Math.max(0, along);
+  if (sp.id === 'dolphin' && !inAir && P.pos.y > -1.4 && throttle > 0 && !climb && Math.abs(P.yawRate) < 0.35 && P.speed > sp.cruise * 0.75) {   /* porpoising: at speed a dolphin travels in leaps, the cheaper way to go */
+    P.porpT = (P.porpT || 0) + dt; P.porpNext ??= 2 + Math.random() * 2.5;
+    if (P.porpT > P.porpNext) { P.porpT = 0; P.porpNext = 2.5 + Math.random() * 2.5; P.vel.y = 3.2 + Math.min(3, P.speed * 0.25); P.leapT = 0.9; P.pitch = Math.max(P.pitch, 0.35);
+      const mate = wild.find(o => o.partner && !o.air);   /* a companion close beside you leaps when you do */
+      if (mate && mate.pos.distanceTo(P.pos) < 12 && mate.pos.y > -2.5) { mate.air = true; mate.vy = P.vel.y * (0.95 + Math.random() * 0.1); mate.pos.y = Math.max(mate.pos.y, -0.4); story.together(); }
+      else if (mate && CHAPTERS[story.ch].pair) say('swim beside it', 1.5); }
+  } else P.porpT = Math.max(0, (P.porpT || 0) - dt * 2);
   if (HOLD[sp.id]) {   // lungs: air drains under, comes back in a few breaths at the top, twice as fast when you burst
     P.air ??= 1; const up = P.pos.y > -0.3;
     if (up) { if (P.air < 0.97 && !P.breathing) { P.breathing = true; blow(sp.id === 'dolphin'); P.surf = { t: 0, len: sp.id === 'dolphin' ? 1.5 : 3.2, puff: false }; } P.air = Math.min(1, P.air + dt / 1.5); P.drownT = 0; if (P.air >= 1) P.breathing = false; }
@@ -157,7 +164,7 @@ function stepAmbient(dt, t) {
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
       const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
-      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
+      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; if (P.fed % 3 === 0 && P.hp < HP_MAX) { P.hp++; say('♥  well fed', 1.2); } s.panic = 3; emitBubble(fx, fy, fz); }
       if (!fish.alive) _m.scale(GONE);
       _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }

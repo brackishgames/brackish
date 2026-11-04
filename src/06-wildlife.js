@@ -27,7 +27,7 @@ function setWild(w, sp, x, y, z) {   // put a wild slot into the water as this s
   if (w.mesh) w.mesh.visible = false;
   w.mesh = w.meshes[sp.id] ??= (() => { const m = creatureMesh(sp, PREDATORS.has(sp.id) ? 0.68 : 0.95); scene.add(m); return m; })();
   w.mesh.visible = true; w.sp = sp; w.pos.set(x, y, z); w.yaw = Math.random() * 6.28; w.pitch = 0; w.turn = 0; w.ph = Math.random() * 6;
-  w.hunting = false; w.interest = 0; w.warned = false; w.feverPass = 0; w.cool = 0;
+  w.hunting = false; w.interest = 0; w.warned = false; w.feverPass = 0; w.cool = 0; w.air = false; w.partner = false;
 }
 function spawnWild(w, first = false) {
   const spot = spotNear(first ? 20 : 70, first ? 110 : 130, 2); if (!spot) return;
@@ -60,7 +60,7 @@ function stepWild(dt, t) {
   for (const w of wild) {
     if (w.id >= WILD_ACTIVE) { if (w.mesh) w.mesh.visible = false; continue; }   // a quiet bay: only so many animals within sight at once
     if (!w.sp) { spawnWild(w, true); continue; }
-    const d = w.pos.distanceTo(P.pos); if (d > 200) { spawnWild(w); continue; }
+    const d = w.pos.distanceTo(P.pos); if (d > 200) { if (w.partner) w.pos.copy(P.pos).add(_f.set(Math.cos(P.yaw) * 4, 0, -Math.sin(P.yaw) * 4)); else { spawnWild(w); continue; } }
     w.cool = Math.max(0, (w.cool || 0) - dt);
     const rel = relation(w); let v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph)); let ty = null;
     const otherHunter = hunters > (w.hunting ? 1 : 0), fr = frP, pFloor = floorP, hammer = w.sp.id === 'hammer';
@@ -99,7 +99,10 @@ function stepWild(dt, t) {
         if (L.t > 1.6) { L.phase = 'stalk'; L.t = 0; L.side = Math.random() < 0.5 ? -1 : 1; } }
     } else { w.hunting = false; }
     if (!(rel === 'curious' && d < 70 && w.cool <= 0)) w.hd = null;   // its sense of your heading starts fresh each time it comes back
-    if (w.feverPass > 0 && !w.hunting) { w.feverPass -= dt; steerTo(w, fever.c.x, fever.c.z, 2); v = w.sp.max * 0.8; ty = fever.c.y; }   // through the fever, scattering it
+    if (w.partner) {   /* a companion from the pod: a body length off your side, matching your pace and depth */
+      const fw = fwdOf(P.yaw, 0), sx = P.pos.x + fw.x * 0.5 + Math.cos(P.yaw) * 4, sz = P.pos.z + fw.z * 0.5 - Math.sin(P.yaw) * 4; steerTo(w, sx, sz, w.sp.turn * 1.5);
+      const ahead = (sx - w.pos.x) * -Math.sin(w.yaw) + (sz - w.pos.z) * -Math.cos(w.yaw); v = THREE.MathUtils.clamp(P.speed + ahead * 0.6, 0.5, w.sp.max); ty = Math.min(P.pos.y, -0.6); }
+    else if (w.feverPass > 0 && !w.hunting) { w.feverPass -= dt; steerTo(w, fever.c.x, fever.c.z, 2); v = w.sp.max * 0.8; ty = fever.c.y; }   // through the fever, scattering it
     else if (rel === 'flee' && d < 30) {
       steerTo(w, 2 * w.pos.x - P.pos.x, 2 * w.pos.z - P.pos.z, 3); v = w.sp.max;
     } else if (rel === 'curious' && d < 70 && w.cool <= 0) {
@@ -124,13 +127,16 @@ function stepWild(dt, t) {
     ty = THREE.MathUtils.clamp(ty, f + w.sp.alt, -0.6);
     const dy = ty - w.pos.y; w.pitch += (THREE.MathUtils.clamp(dy * 0.4, -0.5, 0.5) - w.pitch) * Math.min(1, 2 * dt);
     w.v = (w.v ?? v) + (v - (w.v ?? v)) * Math.min(1, 1.5 * dt); w.roll = (w.roll || 0) + (w.turn * 0.6 - (w.roll || 0)) * Math.min(1, 2 * dt);
-    w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), w.v * dt);
+    if (w.air) {   /* out of the water on a leap: gravity, nose along the arc, back in with a splash of bubbles */
+      w.vy -= 9.8 * dt; w.pos.y += w.vy * dt; w.pitch = Math.atan2(w.vy, Math.max(0.5, w.v)); w.pos.addScaledVector(fwdInto(_f, w.yaw, 0), w.v * dt);
+      if (w.pos.y < -0.3 && w.vy < 0) { w.air = false; for (let i = 0; i < 14; i++) emitBubble(w.pos.x + (Math.random() - .5) * 2, -0.2 - Math.random(), w.pos.z + (Math.random() - .5) * 2); } }
+    else w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), w.v * dt);
     for (const o of wild) { if (o === w || !o.sp) continue;   // nobody swims through anybody
       const need = ((w.sp.span ?? w.sp.len) + (o.sp.span ?? o.sp.len)) * 0.7, dx = w.pos.x - o.pos.x, dy = w.pos.y - o.pos.y, dz = w.pos.z - o.pos.z, dd = Math.hypot(dx, dy, dz);
       if (dd < need && dd > 1e-3) { const k = (need - dd) / dd * Math.min(1, 3 * dt); w.pos.x += dx * k; w.pos.y += dy * k * 0.6; w.pos.z += dz * k; } }
     { const need = ((w.sp.span ?? w.sp.len) + (P.sp.span ?? P.sp.len)) * 0.75, dx = w.pos.x - P.pos.x, dy = w.pos.y - P.pos.y, dz = w.pos.z - P.pos.z, dd = Math.hypot(dx, dy, dz);
       if (dd < need && dd > 1e-3 && !w.hunting) { const k = (need - dd) / dd * Math.min(1, 3 * dt); w.pos.x += dx * k; w.pos.y += dy * k * 0.6; w.pos.z += dz * k; } }
-    w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, -0.5);
+    w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, w.air ? 8 : -0.5);
     w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, w.roll);
     { const u = w.mesh.material.uniforms, work = Math.min(1, w.v / w.sp.max); w.mesh.userData.baseGlow ??= u.uGlow.value; u.uGlow.value = w.mesh.userData.baseGlow * (1 + 0.9 * (P.reveal || 0) * (d < (P.revealRange || 50) ? 1 : 0)); u.uFlap.value += ((w.sp.kind === 'ray' ? 0.35 + 0.65 * work : 0.6 + 0.4 * work) - u.uFlap.value) * Math.min(1, 2 * dt);
       const target = w.sp.kind === 'ray' ? strouhalRad(w.sp, w.v, u.uFlap.value) : w.sp.freq * (0.55 + 0.9 * work); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); }
@@ -179,7 +185,7 @@ function stepFood(dt, t) {
   for (const fd of foodList) {
     if (k >= FOOD_MAX) break;
     const d = Math.hypot(fd.x - P.pos.x, fd.y - P.pos.y, fd.z - P.pos.z);
-    if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(3, P.hp + 1); say('♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
+    if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(HP_MAX, P.hp + 1); say(P.hp > 3 ? '♥  clams · well fed' : '♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
       for (let i = 0; i < 3; i++) setTimeout(() => bloop(0.6), i * 90); rebuildFood(); break; }
     const pulse = 1 + 0.25 * Math.sin(t * 3 + fd.ph);
     if (fd.clam && d < 14 && (ABILITY[P.sp.id] === 'sense' || ABILITY[P.sp.id] === 'echo') && started) tip('sense', () => `${kn('ability')} ${abilityName().toLowerCase()}s the sand. buried clams give a heart back.`);
@@ -268,6 +274,7 @@ function stepFever(dt, t) {
   feverMesh.instanceMatrix.needsUpdate = true;
 }
 
+const HP_MAX = 5;   /* three hearts is healthy; fat reserves carry you to five */
 const AIR = new Set(['dolphin', 'manatee']);   // the bodies that come up to breathe
 const HOLD = { dolphin: 75, manatee: 120 };   // seconds of air, in proportion to the real animals
 const ABILITY = { cownose: 'sense', dolphin: 'echo', bull: 'lunge', hammer: 'lunge',
