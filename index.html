@@ -111,14 +111,14 @@
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
-  <p id="titlehint">WASD  swim    MOUSE  aim    SHIFT  burst    SPACE  ability
+  <p id="titlehint">WASD  swim    SPACE · C  rise · dive    SHIFT  burst    E  ability
 M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
     <b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
-    <b>MOUSE</b><span>click to aim: you swim where you point</span><b>ARROWS</b><span>steer without a mouse</span>
-    <b>SHIFT</b><span>burst, while the dots last</span><b>SPACE</b><span>your animal's ability: sense, echo, strike, settle, breathe or leap</span><b>TAB</b><span>become a creature you have been</span>
+    <b>SPACE C</b><span>rise · dive</span><b>ARROWS</b><span>also steer, rise and dive</span>
+    <b>SHIFT</b><span>burst, while the dots last</span><b>E</b><span>your animal's ability: sense, echo, strike, settle, breathe or leap</span><b>TAB</b><span>become a creature you have been</span>
     <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
@@ -617,7 +617,7 @@ function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(
 const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight);
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
 let wasdSeen = false; const usingWASD = () => wasdSeen;
-const mouse = { dx: 0, dy: 0, locked: false };
+
 const fwdInto = (out, yaw, pitch = 0) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
 const fwdOf = (yaw, pitch = 0) => fwdInto(new THREE.Vector3(), yaw, pitch);
 const _s = new THREE.Vector3(), _f = new THREE.Vector3(), _M = new THREE.Matrix4(), _E = new THREE.Euler();
@@ -1059,14 +1059,14 @@ const keys = {};
 let mapOpen = false, mapSel = 0, helpOpen = false, started = false;
 addEventListener('keydown', e => {
   keys[e.code] = true; if (e.code === 'KeyW' || e.code === 'KeyS') wasdSeen = true; startAudio(); pressedAny();
-  if (['Space', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.code)) e.preventDefault();
+  if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', 'KeyC'].includes(e.code)) e.preventDefault();
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); if (e.code === 'KeyR' && loadedSave) { wipeSave(); loadedSave = null; setTitleHint(); } return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
   if (e.code === 'KeyM') toggleMap();
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
     if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
   if (e.code === 'Tab') cycleCreature(e.shiftKey ? -1 : 1);
-  if (e.code === 'Space' && !e.repeat) act();
+  if (e.code === 'KeyE' && !e.repeat) act();
 });
 addEventListener('keyup', e => keys[e.code] = false);
 
@@ -1223,7 +1223,7 @@ const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('s
 const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
 let sayTimer = 0;
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
-bl.textContent = 'WASD swim   CLICK + MOUSE aim   SHIFT burst   SPACE ability   M map   H help';
+bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help';
 
 function demImage(S) {
   const t = TILES.outer, img = new ImageData(S, S);
@@ -1317,7 +1317,7 @@ const CHAPTERS = [
   { title: 'VII · THE PILINGS', species: 'goliath', start: [27.604, -82.651], goal: () => toXZ(27.598, -82.652), radius: 50,
     lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
   { title: 'VIII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
-    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. SPACE to strike into a school. Eight will do.'] },
+    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. E to strike into a school. Eight will do.'] },
   { title: 'IX · SLOW WATER', species: 'manatee', start: [27.802, -82.428], goal: () => toXZ(27.8005, -82.4145), radius: 90,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
   { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.535, -82.769), radius: 120,
@@ -1363,7 +1363,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-const TITLE_HINT = 'WASD  swim    MOUSE  aim    SHIFT  burst    SPACE  ability\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
+const TITLE_HINT = 'WASD  swim    SPACE · C  rise · dive    SHIFT  burst    E  ability\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
 function startGame(save) { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
@@ -1395,9 +1395,9 @@ function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
   const turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn, -1, 1);
-  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp ? 1 : 0) - (keys.ArrowDown ? 1 : 0) + touch.climb, -1, 1);
+  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.Space ? 1 : 0) - (keys.ArrowDown || keys.KeyC ? 1 : 0) + touch.climb, -1, 1);
   const throttle = stunned ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + (touch.id !== null || !usingWASD() ? 1 : 0);   // touch and arrow players cruise on their own
-  if (mouse.dx || mouse.dy) { if (!stunned) { P.yaw -= mouse.dx * 0.0022; P.aim = THREE.MathUtils.clamp((P.aim ?? P.pitch) - mouse.dy * 0.0022, -1.1, 1.1); } mouse.dx = mouse.dy = 0; P.idleT = 0; }
+
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
   if (P.hidden && (turn || climb > 0 || sprinting())) P.hidden = false;
   P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
@@ -1408,14 +1408,12 @@ function stepPlayer(dt) {
   const yawWant = turn * sp.turn * (0.55 + 0.6 * Math.min(1, P.speed / sp.cruise)) / (1 + speedFrac * 1.4);
   P.yawRate += (yawWant - P.yawRate) * Math.min(1, 4 * dt); P.yaw += P.yawRate * dt;
   P.roll += (P.yawRate * 0.9 * (0.4 + speedFrac) - P.roll) * Math.min(1, 2.5 * dt);   // bank into the turn
-  if (climb) P.aim = null;   // arrows take the nose back from the mouse
-  let pitchWant = P.aim ?? climb * 0.8;
-  if (!climb && P.aim == null) {
+  let pitchWant = climb * 0.8;
+  if (!climb) {
     if (fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = THREE.MathUtils.clamp((fAhead + sp.alt + 1.0 - P.pos.y) * 0.5, 0, 0.6);
     else if (P.idleT > 3) { const prefer = THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9); pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
   }
-  if (P.aim != null && fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = Math.max(pitchWant, 0.3);   // never nose into the bottom
-  P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb || P.aim != null ? 6 : 3) * dt);
+  P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
 
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
   // burst: Space spends stamina for a real sprint, then it has to come back
@@ -1714,7 +1712,7 @@ function drawPanel() {
   if (document.body.classList.contains('playing') && !mapOpen) {   // HUD
     pText(tl.textContent, 3, 2, 230, 'left', 1, true); pText(tr.textContent, W - 3, 2, 180, 'right', 1, true);
     const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(3 + i * 4 + x, 9, on ? 220 : 60); }
-    { const ready = (P.actReady || 0) <= t; pText('SPACE ' + abilityName(), 3, 12, ready ? 170 : 70, 'left', 1, true); }
+    { const ready = (P.actReady || 0) <= t; pText('E ' + abilityName(), 3, 12, ready ? 170 : 70, 'left', 1, true); }
     _v.copy(P.pos).project(camera); const px = (_v.x * 0.5 + 0.5) * W, py = (0.5 - _v.y * 0.5) * H;
     for (let i = pulses.length - 1; i >= 0; i--) { const age = t - pulses[i].t0, life = pulses[i].kind === 'echo' ? 1.8 : 1.4; if (age > life) { pulses.splice(i, 1); continue; }
       const rings = pulses[i].kind === 'echo' ? 3 : 1; for (let k = 0; k < rings; k++) { const a = age - k * 0.18; if (a > 0) pRing(px, py, a / life * W * 0.55, 210 * (1 - a / life)); } }
@@ -1773,12 +1771,12 @@ function cycleCreature(dir = 1) {
 function setTitleHint() {
   const ch = loadedSave ? CHAPTERS[loadedSave.ch].title : null;
   $('titlehint').textContent = MOBILE ? (ch ? `TAP  continue · ${ch}` : 'TAP  begin') + '\nDRAG ANYWHERE  swim\nHOLD ►►  burst    TAP ◆  ability'
-    : ch ? `ENTER  continue · ${ch}\nR  start over\n\nWASD swim · MOUSE aim · SHIFT burst · SPACE ability` : TITLE_HINT;
+    : ch ? `ENTER  continue · ${ch}\nR  start over\n\nWASD swim · SPACE rise · C dive · SHIFT burst · E ability` : TITLE_HINT;
   $('restart').style.display = ch && MOBILE ? '' : 'none';
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
 addEventListener('pointerdown', e => {
-  unlockAudio(); pressedAny(); if (!MOBILE && started) return;   // on desktop a click captures the mouse instead
+  unlockAudio(); pressedAny(); if (!MOBILE && started) return;   // desktop plays on the keyboard
   if (!started) { startGame(loadedSave); return; }
   if (helpOpen) { helpOpen = false; help.classList.add('gone'); return; }
   if (touch.id !== null) return;
@@ -1792,9 +1790,6 @@ addEventListener('pointermove', e => {
   if (Math.abs(touch.turn) < 0.12) touch.turn = 0; if (Math.abs(touch.climb) < 0.12) touch.climb = 0;
   touch.kx = dx * k * STICK_R; touch.ky = dy * k * STICK_R;
 });
-renderer.domElement.addEventListener('click', () => { if (!MOBILE && started && !mapOpen && !helpOpen && !mouse.locked) renderer.domElement.requestPointerLock?.(); });
-document.addEventListener('pointerlockchange', () => { mouse.locked = document.pointerLockElement === renderer.domElement; if (mouse.locked) wasdSeen = true; });
-addEventListener('mousemove', e => { if (mouse.locked) { mouse.dx += e.movementX; mouse.dy += e.movementY; } });
 const endStick = e => { if (e.pointerId !== touch.id) return; touch.id = null; touch.turn = touch.climb = touch.kx = touch.ky = 0; stickEl.style.display = 'none'; };
 addEventListener('pointerup', e => { unlockAudio(); endStick(e); }); addEventListener('pointercancel', endStick);
 function tbtn(id, down, up) {

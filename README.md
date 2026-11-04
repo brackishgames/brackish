@@ -18,11 +18,11 @@ goliath grouper, bull shark, manatee, loggerhead, great hammerhead, manta. After
 swim anywhere as any of them. Sharks hunt you when you're small. Ships shove you aside with their bow wave
 and churn the water for ninety metres behind them. The tide runs through the pass. The sun comes up.
 
-Arrows swim and up means up. Shift is a burst of speed. Space is your animal's ability: a ray senses the
-electric field of living things around it, a dolphin echolocates, a shark strikes, a stingray settles into the
-sand and goes unseen, a turtle or manatee takes a breath. Tab cycles the creatures you have already been,
-M opens the map for fast travel between places you've found, and H shows the help. On a phone, drag anywhere
-to swim and use the round buttons.
+W and S swim forward and back, A and D turn, Space rises and C dives (the arrow keys work too). Shift is a
+burst of speed. E is your animal's ability: a ray senses the electric field of living things around it, a
+dolphin echolocates, a shark strikes, a stingray settles into the sand and goes unseen, a turtle or manatee
+takes a breath. Tab cycles the creatures you have already been, M opens the map for fast travel between places
+you've found, and H shows the help. On a phone, drag anywhere to swim and use the round buttons.
 
 To run it locally, open `index.html` in Chrome. There is no build step. three.js loads from a CDN.
 Every push to `main` deploys the site through the workflow in `.github/workflows`.
