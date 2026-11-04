@@ -107,7 +107,7 @@ function drawPanel() {
       const L = Bay.live; if (L.ok) { const kt = (_cur.length() * 1.944).toFixed(1), tide = L.level != null ? (L.level >= 0 ? '+' : '') + L.level.toFixed(1) + 'M' + (L.rising == null ? '' : L.rising ? '▲' : '▼') : '';
         pText('NOAA LIVE', mx + MS, my - 20, 150, 'right', 1, true); pText([tide, L.temp != null ? L.temp.toFixed(0) + '°C' : ''].filter(Boolean).join(' '), mx + MS, my - 14, 190, 'right', 1, true); pText(kt + 'KT', mx + MS, my - 8, 160, 'right', 1, true); } }
     if (captions.size) { pGain = 1; const nowMs = performance.now(), sides = { l: 0, r: 0, c: 0 };   /* what you'd hear, shown on the side it came from */
-      for (const [k, c] of captions) { const left = c.until - nowMs; if (left <= 0) { captions.delete(k); continue; } const side = panAt(c.x, c.z), s = side < -0.3 ? 'l' : side > 0.3 ? 'r' : 'c', v = 170 * Math.min(1, left / 400);
+      const shown = new Set(); for (const [k, c] of captions) { const left = c.until - nowMs; if (left <= 0) { captions.delete(k); continue; } const side = panAt(c.x, c.z), s = side < -0.3 ? 'l' : side > 0.3 ? 'r' : 'c', v = 170 * Math.min(1, left / 400); if (shown.has(s + c.text)) continue; shown.add(s + c.text);   /* one line per sound per side, however many boats */
         if (s === 'l') pText('◄ ' + c.text, SL, Math.round(H * 0.42) + 10 * sides.l++, v, 'left', 1, true); else if (s === 'r') pText(c.text + ' ►', W - SL, Math.round(H * 0.42) + 10 * sides.r++, v, 'right', 1, true); else pText(c.text, cx, ST + 30 + 8 * sides.c++, v, 'center', 1, true); }
       pGain = hudGain; }
     const ob = opa(bl); if (ob > 0.01 && W > 120) pText(bl.textContent, SL, H - 7 - SB, 120 * ob, 'left', 1, true);
