@@ -1,5 +1,7 @@
 # Brackish
 
+<img src="logo.svg" alt="Brackish" width="520">
+
 You are an animal in Tampa Bay. The whole thing is drawn the way the old Pioneer car stereos drew
 their dolphin screensaver: blue dots on black, amber text for the readouts.
 
