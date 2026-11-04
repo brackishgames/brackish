@@ -1255,7 +1255,7 @@ function stepPlayer(dt) {
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
   // burst: Space spends stamina for a real sprint, then it has to come back
   P.sta ??= 1; const wantBurst = keys.Space && !stunned && P.sta > 0 && !P.spent;
-  if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 3); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 8); if (P.sta > 0.35) P.spent = false; }
+  if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
   const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = wantBurst ? sp.max * 1.45 : (keys.Space && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
   const thrust = THREE.MathUtils.clamp((wantSpeed - along) * 1.6, -0.5 * sp.max, 1.9 * sp.max) * (0.85 + 0.15 * Math.sin(WU.uTime.value * sp.freq * 2.0));
