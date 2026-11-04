@@ -16,7 +16,7 @@ const CHAPTERS = [
   { title: 'VI · THE POD', species: 'dolphin', start: [27.6185, -82.66117], goal: () => toXZ(27.6205, -82.6555), radius: 120,
     lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and the pod is racing the ships to the Skyway.', 'Beat them to the main span. Breathe when you need to.'] },
   { title: 'VII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
-    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. E to strike into a school. Eight will do.'] },
+    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet know you before they see you.', 'Feed. E to lunge. They scatter. Eight will do.'] },
   { title: 'VIII · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
   { title: 'IX · DAWN', species: 'cownose', start: [27.60629, -82.75359], surface: true, clock: 5.6,

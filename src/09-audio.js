@@ -78,7 +78,7 @@ function caption(key, text, x, z, secs = 1.5) { if (captionsOn()) captions.set(k
 function whump(x, z, k = 1) { caption('whump', 'WATER MOVES', x, z);   // a big body moving water right beside you: felt as much as heard
   burst({ buf: 'brown', type: 'lowpass', f0: 160, f1: 110, f2: 40, q: 0.7, attack: 0.05, length: 0.9, g: 0.55 * k, pan: panAt(x, z) });
 }
-function flush(x, z, k = 1) { caption('flush', 'SCHOOL BOLTS', x, z);   // a school bolting: a hundred tails at once
+function flush(x, z, k = 1) { caption('flush', 'FISH SCATTER', x, z);   // a school bolting: a hundred tails at once
   burst({ buf: 'pink', type: 'bandpass', f0: 700, f1: 2200, f2: 500, q: 0.6, attack: 0.04, length: 0.7, g: 0.28 * k, pan: panAt(x, z) });
 }
 function whoosh(k = 1) { burst({ f0: 400, f1: 1600, f2: 300, attack: 0.12, length: 1.0, g: 0.45 * k }); }
