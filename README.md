@@ -32,4 +32,4 @@ To run it locally, open `index.html` in Chrome. There is no build step. three.js
 Every push to `main` deploys the site through the workflow in `.github/workflows`.
 
 
-Depths are NOAA NCEI soundings. Tide, water temperature and tidal currents come live from NOAA CO-OPS (St. Petersburg and 15 current stations). Add `?dev` to the URL to open every place and body for exploring; dev mode never touches your save.
+Depths are NOAA NCEI soundings. Tide, water temperature and tidal currents come live from NOAA CO-OPS (St. Petersburg and 15 current stations). When you run it locally (localhost or the file itself), `?dev` opens every place and body and `?dev&clock=22` sets the hour; the published site ignores both, and dev mode never touches your save.
