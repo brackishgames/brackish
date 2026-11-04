@@ -912,12 +912,12 @@ function stepPlayer(dt) {
   const yawWant = turn * sp.turn * (0.55 + 0.6 * Math.min(1, P.speed / sp.cruise)) / (1 + speedFrac * 1.4);
   P.yawRate += (yawWant - P.yawRate) * Math.min(1, 4 * dt); P.yaw += P.yawRate * dt;
   P.roll += (-P.yawRate * 0.9 * (0.4 + speedFrac) - P.roll) * Math.min(1, 2.5 * dt);
-  let pitchWant = climb * 0.55;
+  let pitchWant = climb * 0.8;
   if (!climb) {
     if (fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = THREE.MathUtils.clamp((fAhead + sp.alt + 1.0 - P.pos.y) * 0.5, 0, 0.6);
     else if (P.idleT > 3) { const prefer = THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9); pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
   }
-  P.pitch += (pitchWant - P.pitch) * Math.min(1, 3 * dt);
+  P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
 
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
   const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = keys.Space && !stunned ? sp.max : sp.cruise;
@@ -926,7 +926,7 @@ function stepPlayer(dt) {
   P.vel.addScaledVector(fwd, thrust * dt);
   const vlen = P.vel.length(); if (vlen > 0.01) P.vel.addScaledVector(P.vel, -0.12 * vlen * dt / Math.max(0.3, sp.len ?? 1));
   P.vel.lerp(fwd.clone().multiplyScalar(along), Math.min(1, 2.5 * dt));           // the body streamlines into its own motion
-  P.vel.y += climb * 0.9 * dt * Math.max(1, sp.max * 0.3) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
+  P.vel.y += climb * 2.2 * dt * Math.max(1, sp.max * 0.35) - P.vel.y * 1.5 * dt;    // fins give some direct lift, water damps it
   P.speed = Math.max(0, along);
 
   currentAt(P.pos.x, P.pos.z, WU.uTime.value, _cur);
