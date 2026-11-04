@@ -7,6 +7,22 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
+<meta name="description" content="You are a cownose ray in Tampa Bay. Real NOAA depths, to scale, drawn on a dot-matrix display like an early-2000s car stereo. Don't swim in it.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brackish">
+<meta property="og:title" content="BRACKISH">
+<meta property="og:description" content="You are a cownose ray in Tampa Bay. Real depths, to scale, on a dot-matrix display. Don't swim in it.">
+<meta property="og:url" content="https://brackishgames.github.io/brackish/">
+<meta property="og:image" content="https://brackishgames.github.io/brackish/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A manta ray and the word BRACKISH lit in blue and white dots on a black display">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BRACKISH">
+<meta name="twitter:description" content="You are a cownose ray in Tampa Bay. Real depths, to scale, on a dot-matrix display. Don't swim in it.">
+<meta name="twitter:image" content="https://brackishgames.github.io/brackish/og.png">
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
     font-family: "Courier New", Courier, monospace; color: #e8f1ff; }
@@ -95,12 +111,13 @@
   <small>bathymetry: NOAA NCEI DEM mosaic · bridges: OpenStreetMap · 1 unit = 1 metre</small></div>
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
-  <p id="titlehint">ARROWS  swim    SHIFT  burst    SPACE  ability
+  <p id="titlehint">WASD  swim    MOUSE  aim    SHIFT  burst    SPACE  ability
 M  map · fast travel      TAB  creatures you have been
 ENTER  begin</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
-    <b>← →</b><span>turn</span><b>↑ ↓</b><span>up · down</span>
+    <b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
+    <b>MOUSE</b><span>click to aim: you swim where you point</span><b>ARROWS</b><span>steer without a mouse</span>
     <b>SHIFT</b><span>burst, while the dots last</span><b>SPACE</b><span>your animal's ability: sense, echo, strike, settle, breathe or leap</span><b>TAB</b><span>become a creature you have been</span>
     <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
@@ -169,7 +186,7 @@ const WRECKS = [
   { ll: [27.70, -82.95], name: 'Shelf wreck', kind: 'ship', s: 0.6 }, { ll: [27.56, -82.97], name: 'Deep reef', kind: 'rubble' },
   { ll: [27.86, -82.49], name: 'Hillsborough hulk', kind: 'cruiser', s: 2.2 }, { ll: [27.93, -82.63], name: 'Old Tampa Bay skiff', kind: 'cruiser', s: 1 },
 ];
-const FEVER_PATH = [[27.604, -82.758], [27.600, -82.800], [27.592, -82.850], [27.580, -82.910], [27.565, -82.980]].map(p => toXZ(...p));   // Egmont hole, out the Egmont Channel, onto the shelf
+const FEVER_PATH = [[27.607, -82.7535], [27.600, -82.800], [27.592, -82.850], [27.580, -82.910], [27.565, -82.980]].map(p => toXZ(...p));   // Egmont hole, out the Egmont Channel, onto the shelf
 const START = toXZ(27.607, -82.751);   // chapter I: the Egmont pass
 
 // ═══════════════════════════════════════════════════════════════════
@@ -598,6 +615,9 @@ function creatureMesh(sp, glow = 1) {
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
 const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight);
+// WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
+let wasdSeen = false; const usingWASD = () => wasdSeen;
+const mouse = { dx: 0, dy: 0, locked: false };
 const fwdInto = (out, yaw, pitch = 0) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
 const fwdOf = (yaw, pitch = 0) => fwdInto(new THREE.Vector3(), yaw, pitch);
 const _s = new THREE.Vector3(), _f = new THREE.Vector3(), _M = new THREE.Matrix4(), _E = new THREE.Euler();
@@ -647,9 +667,9 @@ const logo = (() => {
         float life = (1.0 - rise * 0.8) * (1.0 - leave);
         float go = max(uGo, 0.0), d = go + h(aSeed) * 0.6;   // on start they all let go: rise, wander, fade
         if (uGo >= 0.0) { p.y += d * d * 0.9; p += (vec3(h(aSeed + 1.0), 0.0, h(aSeed + 2.0)) - 0.5) * d * 1.6; p.x += sin(uTime * 4.0 + aSeed) * d * 0.15; }
-        float drip = step(h(aSeed + 7.0), 0.07), dt2 = fract(uTime * 0.035 + h(aSeed + 8.0));   // a few bubbles bleed slowly downward
+        float drip = step(h(aSeed + 7.0), 0.07) * step(aCol.y, 0.5), dt2 = fract(uTime * 0.035 + h(aSeed + 8.0));   // a few bubbles bleed slowly downward
         if (uGo < 0.0) { p -= uUp * drip * dt2 * uSpacing * 9.0; life *= 1.0 - drip * smoothstep(0.4, 1.0, dt2); }
-        float drop = step(0.985, fract(sin(floor(uTime * 6.0) * 12.9 + aSeed * 3.1) * 4375.5));   // rare dropouts, like a failing segment
+        float drop = step(0.996, fract(sin(floor(uTime * 6.0) * 12.9 + aSeed * 3.1) * 4375.5));   // rare dropouts, like a failing segment
         vFade = (uGo < 0.0 ? life * (1.0 - 0.85 * drop) : 1.0 - smoothstep(1.2, 3.4, d)); vCol = aCol;
         vec4 cp = projectionMatrix * viewMatrix * vec4(p, 1.0);
         if (uGo < 0.0 && cp.w > 0.0) { vec2 ndc = cp.xy / cp.w; vec2 px = floor((ndc * 0.5 + 0.5) * uGrid) + 0.5; cp.xy = (px / uGrid * 2.0 - 1.0) * cp.w; }   // snap to the dot matrix
@@ -1038,7 +1058,7 @@ function strike(b) {
 const keys = {};
 let mapOpen = false, mapSel = 0, helpOpen = false, started = false;
 addEventListener('keydown', e => {
-  keys[e.code] = true; startAudio(); pressedAny();
+  keys[e.code] = true; if (e.code === 'KeyW' || e.code === 'KeyS') wasdSeen = true; startAudio(); pressedAny();
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.code)) e.preventDefault();
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); if (e.code === 'KeyR' && loadedSave) { wipeSave(); loadedSave = null; setTitleHint(); } return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
@@ -1203,7 +1223,7 @@ const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('s
 const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
 let sayTimer = 0;
 function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
-bl.textContent = '← → ↑ ↓ swim   SHIFT burst   SPACE ability   TAB creature   M map   H help';
+bl.textContent = 'WASD swim   CLICK + MOUSE aim   SHIFT burst   SPACE ability   M map   H help';
 
 function demImage(S) {
   const t = TILES.outer, img = new ImageData(S, S);
@@ -1286,7 +1306,7 @@ const CHAPTERS = [
     lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'] },
   { title: 'II · THE CHANNEL', start: [27.618, -82.662], goal: () => toXZ(27.6215, -82.6555), radius: 90,
     lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },
-  { title: 'III · THE FEVER', start: [27.602, -82.752], goal: () => [fever.c.x, fever.c.z], radius: 60,
+  { title: 'III · THE FEVER', start: [27.6085, -82.749], goal: () => [fever.c.x, fever.c.z], radius: 60,
     lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'] },
   { title: 'IV · THE GULF', follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 150,
     lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'] },
@@ -1298,7 +1318,7 @@ const CHAPTERS = [
     lines: ['Under the bridge the water is still and the pilings go down into the dark.', 'You are a goliath grouper. You do not hurry.', 'Find the rubble of the old Skyway, south, along the pilings.'] },
   { title: 'VIII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet schools know it before you do.', 'Feed. SPACE to strike into a school. Eight will do.'] },
-  { title: 'IX · SLOW WATER', species: 'manatee', start: [27.798, -82.412], goal: () => toXZ(27.794, -82.404), radius: 120,
+  { title: 'IX · SLOW WATER', species: 'manatee', start: [27.802, -82.428], goal: () => toXZ(27.8005, -82.4145), radius: 90,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
   { title: 'X · THE LONG WAY', species: 'loggerhead', start: [27.53, -82.76], breaths: 3, goal: () => toXZ(27.535, -82.769), radius: 120,
     lines: ['A loggerhead turtle swims the long way, out past Anna Maria into the Gulf.', 'You must breathe. Surface three times on the way.', 'The beam marks open water.'] },
@@ -1343,7 +1363,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-const TITLE_HINT = 'ARROWS  swim    SHIFT  burst    SPACE  ability\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
+const TITLE_HINT = 'WASD  swim    MOUSE  aim    SHIFT  burst    SPACE  ability\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
 function startGame(save) { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
@@ -1353,7 +1373,7 @@ function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.re
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
 // ═══════════════════════════════════════════════════════════════════
-const clock = new THREE.Clock(), _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
+const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = performance.now(), d = (n - this.last) / 1000; this.last = n; this.elapsedTime += d; return d; } }, _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 let dayClock = 6.5, above = false, aboveMix = 0, nearestPoi = '', poiTimer = 0, grassCenter = new THREE.Vector2(1e9, 1e9), lastFloor = -5;
 
@@ -1375,7 +1395,9 @@ function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
   const turn = stunned ? 0 : THREE.MathUtils.clamp((keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0) + touch.turn, -1, 1);
-  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0) + touch.climb, -1, 1);
+  const climb = stunned ? -0.4 : THREE.MathUtils.clamp((keys.ArrowUp ? 1 : 0) - (keys.ArrowDown ? 1 : 0) + touch.climb, -1, 1);
+  const throttle = stunned ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + (touch.id !== null || !usingWASD() ? 1 : 0);   // touch and arrow players cruise on their own
+  if (mouse.dx || mouse.dy) { if (!stunned) { P.yaw -= mouse.dx * 0.0022; P.aim = THREE.MathUtils.clamp((P.aim ?? P.pitch) - mouse.dy * 0.0022, -1.1, 1.1); } mouse.dx = mouse.dy = 0; P.idleT = 0; }
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
   if (P.hidden && (turn || climb > 0 || sprinting())) P.hidden = false;
   P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
@@ -1386,18 +1408,20 @@ function stepPlayer(dt) {
   const yawWant = turn * sp.turn * (0.55 + 0.6 * Math.min(1, P.speed / sp.cruise)) / (1 + speedFrac * 1.4);
   P.yawRate += (yawWant - P.yawRate) * Math.min(1, 4 * dt); P.yaw += P.yawRate * dt;
   P.roll += (P.yawRate * 0.9 * (0.4 + speedFrac) - P.roll) * Math.min(1, 2.5 * dt);   // bank into the turn
-  let pitchWant = climb * 0.8;
-  if (!climb) {
+  if (climb) P.aim = null;   // arrows take the nose back from the mouse
+  let pitchWant = P.aim ?? climb * 0.8;
+  if (!climb && P.aim == null) {
     if (fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = THREE.MathUtils.clamp((fAhead + sp.alt + 1.0 - P.pos.y) * 0.5, 0, 0.6);
     else if (P.idleT > 3) { const prefer = THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9); pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
   }
-  P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
+  if (P.aim != null && fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = Math.max(pitchWant, 0.3);   // never nose into the bottom
+  P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb || P.aim != null ? 6 : 3) * dt);
 
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
   // burst: Space spends stamina for a real sprint, then it has to come back
   P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = P.hidden ? 0 : wantBurst ? sp.max * 1.6 : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = P.hidden ? 0 : throttle < 0 ? -0.35 * sp.cruise : throttle === 0 ? 0.12 * sp.cruise : wantBurst ? sp.max * 1.6 : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
   const thrust = THREE.MathUtils.clamp((wantSpeed - along) * (wantBurst ? 4.0 : 2.2), -0.6 * sp.max, 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
   const inAir = P.pos.y > 0.0;   // out of the water there is nothing to push against
@@ -1438,7 +1462,7 @@ function stepCamera(dt) {
   P.idleCam = (keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const drift = started ? Math.sin(WU.uTime.value * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(WU.uTime.value * 0.07) * 0.5;
   const yawT = P.yaw + drift + (P.endingCam ? Math.sin(WU.uTime.value * 0.08) * 1.2 : 0);
-  const back = fwdOf(yawT, 0).multiplyScalar(-dist); back.y = h;
+  const back = fwdOf(yawT, P.pitch * 0.45).multiplyScalar(-dist); back.y += h;
   const want = P.pos.clone().add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
   if (P.pos.y > -0.12) P.camUp = true; else if (P.pos.y < -0.9) P.camUp = false;
@@ -1447,7 +1471,7 @@ function stepCamera(dt) {
   camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 1.6, 0)), Math.min(1, 8 * dt));
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6).add(new THREE.Vector3(0, 0.6 + size * 0.3 + nearTop * 1.6, 0)), Math.min(1, 8 * dt));
   camera.position.copy(camPos); { const k = P.roll * 0.15; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0) camera.position.add(new THREE.Vector3((Math.random() - .5), (Math.random() - .5), (Math.random() - .5)).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
@@ -1646,10 +1670,16 @@ function pText(str, x, y, v = 230, align = 'left', scale = 1, small = false) {  
     sx += adv * scale; }
   return w;
 }
+function greedy(words, max) { const out = []; let line = ''; for (const w of words) { if (line && (line + ' ' + w).length > max) { out.push(line); line = w; } else line = line ? line + ' ' + w : w; } out.push(line); return out; }
+// balanced wrap: same number of lines as greedy, but as even as possible, so no line is left holding one word
 function wrap(str, max) {
-  const out = []; for (const para of String(str).split('\n')) { let line = '';
-    for (const word of para.split(/\s+/).filter(Boolean)) { if ((line + ' ' + word).trim().length > max && line) { out.push(line); line = word; } else line = (line + ' ' + word).trim(); }
-    out.push(line); }
+  const out = [];
+  for (const para of String(str).split('\n')) {
+    const words = para.split(/\s+/).filter(Boolean); if (!words.length) { out.push(''); continue; }
+    const n = greedy(words, max).length; let lo = 1, hi = max;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (greedy(words, mid).length <= n) hi = mid; else lo = mid + 1; }
+    out.push(...greedy(words, Math.max(lo, Math.max(...words.map(w => w.length)))));
+  }
   return out;
 }
 function pRing(cx, cy, r, v) { const n = Math.max(12, Math.round(r * 6)); for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; pDot(cx + Math.cos(a) * r, cy + Math.sin(a) * r, v); } }
@@ -1703,7 +1733,7 @@ function drawPanel() {
       if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
     }
   }
-  const os = opa(storyEl); if (os > 0.01) {   // story line
+  const os = opa(storyEl) * (1 - opa($('chapter'))); if (os > 0.01) {   // story line (hidden while a chapter card is up)
     const b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.min(cols, 64));
     let y = H - 14 - lines.length * 10; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center'); y += 10; } }
   const card = $('chapter'), oc = opa(card); if (oc > 0.01) {   // chapter card
@@ -1743,12 +1773,12 @@ function cycleCreature(dir = 1) {
 function setTitleHint() {
   const ch = loadedSave ? CHAPTERS[loadedSave.ch].title : null;
   $('titlehint').textContent = MOBILE ? (ch ? `TAP  continue · ${ch}` : 'TAP  begin') + '\nDRAG ANYWHERE  swim\nHOLD ►►  burst    TAP ◆  ability'
-    : ch ? `ENTER  continue · ${ch}\nR  start over\n\nARROWS swim · SHIFT burst · SPACE ability · M map` : TITLE_HINT;
+    : ch ? `ENTER  continue · ${ch}\nR  start over\n\nWASD swim · MOUSE aim · SHIFT burst · SPACE ability` : TITLE_HINT;
   $('restart').style.display = ch && MOBILE ? '' : 'none';
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
 addEventListener('pointerdown', e => {
-  unlockAudio(); pressedAny();
+  unlockAudio(); pressedAny(); if (!MOBILE && started) return;   // on desktop a click captures the mouse instead
   if (!started) { startGame(loadedSave); return; }
   if (helpOpen) { helpOpen = false; help.classList.add('gone'); return; }
   if (touch.id !== null) return;
@@ -1762,6 +1792,9 @@ addEventListener('pointermove', e => {
   if (Math.abs(touch.turn) < 0.12) touch.turn = 0; if (Math.abs(touch.climb) < 0.12) touch.climb = 0;
   touch.kx = dx * k * STICK_R; touch.ky = dy * k * STICK_R;
 });
+renderer.domElement.addEventListener('click', () => { if (!MOBILE && started && !mapOpen && !helpOpen && !mouse.locked) renderer.domElement.requestPointerLock?.(); });
+document.addEventListener('pointerlockchange', () => { mouse.locked = document.pointerLockElement === renderer.domElement; if (mouse.locked) wasdSeen = true; });
+addEventListener('mousemove', e => { if (mouse.locked) { mouse.dx += e.movementX; mouse.dy += e.movementY; } });
 const endStick = e => { if (e.pointerId !== touch.id) return; touch.id = null; touch.turn = touch.climb = touch.kx = touch.ky = 0; stickEl.style.display = 'none'; };
 addEventListener('pointerup', e => { unlockAudio(); endStick(e); }); addEventListener('pointercancel', endStick);
 function tbtn(id, down, up) {
@@ -1782,6 +1815,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { for
 //  BOOT
 // ═══════════════════════════════════════════════════════════════════
 async function loadBridges() {
+  try { if (Date.now() - (+localStorage.getItem('brackish.osmTry') || 0) < 864e5 && !localStorage.getItem('brackish.osmOk')) return; localStorage.setItem('brackish.osmTry', Date.now()); } catch {}   // a failing mirror is tried at most once a day
   try {
     const txt = await cached('osm-bridges-v1', async () => { const ac = new AbortController(); setTimeout(() => ac.abort(), 30000);
       const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(OSM_QUERY), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ac.signal });
@@ -1792,8 +1826,8 @@ async function loadBridges() {
       if (len < 150) continue; for (const [x, z] of pts) if (floorAt(x, z) < -0.3) wet++; if (wet / pts.length < 0.4) continue;
       out.push({ name: e.tags?.name || 'bridge', pts }); }
     if (out.length < 3) throw new Error('too few bridges');
-    bridges = out;
-  } catch (e) { console.warn('bridges: keeping fallback set:', e.message); return; }
+    bridges = out; try { localStorage.setItem('brackish.osmOk', '1'); } catch {}
+  } catch (e) { return; }   // OpenStreetMap is optional; the built-in bridges stay
   for (const b of bridges) { if (b.name === 'bridge') continue; const [x, z] = b.pts[Math.floor(b.pts.length / 2)]; if (!POIS.some(p => p[2] === b.name)) { const [lat, lon] = toLL(x, z); POIS.push([lat, lon, b.name]); } }
 }
 let booting = true;
