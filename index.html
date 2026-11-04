@@ -623,7 +623,7 @@ const LOGO_RAY = ['........11.11........', '.....11111111111.....', '..111111111
 const logo = (() => {
   const pts = [];   // [col, row, brightness, amber]
   const word = 'BRACKISH', cols = word.length * 6 - 1, rw = LOGO_RAY[0].length, rh = LOGO_RAY.length, W = Math.max(cols, rw);
-  LOGO_RAY.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '1') { const d = Math.abs(i - (rw >> 1)) / (rw / 2); pts.push([(W - rw) / 2 + i, j, d < 0.15 ? 1.0 : d < 0.55 ? 0.8 : 0.5, 0]); } }));
+  LOGO_RAY.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '1') { const d = Math.abs(i - (rw >> 1)) / (rw / 2); pts.push([(W - rw) / 2 + i, j, d < 0.15 ? 1.0 : d < 0.55 ? 0.85 : 0.65, 0]); } }));
   [...word].forEach((ch, n) => LOGO_FONT[ch].forEach((row, j) => [...row].forEach((c, i) => { if (c === '1') pts.push([(W - cols) / 2 + n * 6 + i, rh + 2 + j, 0, 1]); })));
   const H = rh + 2 + 7, N = pts.length, tgt = new Float32Array(N * 3), col = new Float32Array(N * 2), seed = new Float32Array(N);
   pts.forEach(([c, r, b, a], i) => { tgt[i * 3] = c - W / 2; tgt[i * 3 + 1] = H / 2 - r; tgt[i * 3 + 2] = 0; col[i * 2] = b; col[i * 2 + 1] = a; seed[i] = Math.random() * 100; });
@@ -653,7 +653,7 @@ const logo = (() => {
         if (uGo < 0.0 && cp.w > 0.0) { vec2 ndc = cp.xy / cp.w; vec2 px = floor((ndc * 0.5 + 0.5) * uGrid) + 0.5; cp.xy = (px / uGrid * 2.0 - 1.0) * cp.w; }   // snap to the dot matrix
         gl_PointSize = uSize; gl_Position = cp; }`,
     fragmentShader: GLSL_COMMON + `varying vec2 vCol; varying float vFade;
-      void main() { if (length(gl_PointCoord - 0.5) > 0.5) discard; float f = vFade * (0.8 + 0.2 * sin(uTime * 0.9)); gl_FragColor = vec4(vCol.x * f * 0.72, vCol.y * f, 0.0, 1.0); }` });
+      void main() { if (length(gl_PointCoord - 0.5) > 0.5) discard; float f = vFade * (0.8 + 0.2 * sin(uTime * 0.9)); gl_FragColor = vec4(vCol.x * f, vCol.y * f, 0.0, 1.0); }` });
   const mesh = new THREE.Points(g, m); mesh.frustumCulled = false; mesh.renderOrder = 10; scene.add(mesh);
   return { mesh, m, release: () => { if (m.uniforms.uGo.value < 0) m.uniforms.uGo.value = 0; } };
 })();
@@ -1419,7 +1419,7 @@ function stepCamera(dt) {
   const want = P.pos.clone().add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
   if (P.pos.y > -0.12) P.camUp = true; else if (P.pos.y < -0.9) P.camUp = false;
-  if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -1.0);
+  if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
   want.x += Math.sin(WU.uTime.value * 0.35) * 0.12; want.y += Math.sin(WU.uTime.value * 0.5 + 1.0) * 0.08;
   camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
@@ -1636,8 +1636,7 @@ function fadeTarget(el) {
   if (el.classList.contains('panel')) return el.classList.contains('gone') ? 0 : 1;
   if (el.closest('#title')) return $('title').classList.contains('attract') ? 0 : 1;
   if (el === bl) return document.body.classList.contains('settled') ? 0 : 1;
-  if (el.style.opacity !== '') return +el.style.opacity;
-  return 1;
+  return el.style.opacity !== '' ? +el.style.opacity : 0;   // story, card, warning and fade start hidden
 }
 function opa(el) { if (!el) return 0; const tg = fadeTarget(el); let a = fades.has(el) ? fades.get(el) : tg; a += (tg - a) * Math.min(1, fadeDt * 5); if (Math.abs(tg - a) < 0.01) a = tg; fades.set(el, a); return a; }
 const toCell = px => px * renderer.getPixelRatio() / dotPass.uniforms.uPitch.value;
