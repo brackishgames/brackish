@@ -2,7 +2,7 @@
 
 Play it at https://brackishgames.github.io/brackish/
 
-<img src="screenshots/hole.png" alt="A young cownose ray in the dark water off Egmont Key, something round looming in the dark to the left" width="100%">
+<img src="screenshots/hole.png" alt="A young cownose ray in the dark water off Egmont Key, a large animal looming out of the dark to the left" width="100%">
 
 <img src="screenshots/surface.png" alt="Just under the surface at Egmont Key, seagrass below" width="100%">
 
