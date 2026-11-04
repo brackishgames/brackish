@@ -175,10 +175,11 @@ const START = toXZ(27.607, -82.751);   // chapter I: the Egmont pass
 //  DATA  —  NOAA float TIFFs + OSM bridges, cached in IndexedDB.
 // ═══════════════════════════════════════════════════════════════════
 const bar = document.getElementById('bar'), loadmsg = document.getElementById('loadmsg');
-function idb() { return new Promise((res, rej) => { const r = indexedDB.open('brackish', 1); r.onupgradeneeded = () => r.result.createObjectStore('dem'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+const within = (ms, p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);   // storage must never hang the load
+function idb() { return within(2000, new Promise((res, rej) => { const r = indexedDB.open('brackish', 1); r.onupgradeneeded = () => r.result.createObjectStore('dem'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); })); }
 async function cached(key, fetcher) {
   let db = null; try { db = await idb(); } catch { return fetcher(); }
-  const hit = await new Promise(res => { const rq = db.transaction('dem').objectStore('dem').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined); });
+  const hit = await within(2000, new Promise(res => { const rq = db.transaction('dem').objectStore('dem').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined); })).catch(() => undefined);
   if (hit) return hit;
   const v = await fetcher();
   try { db.transaction('dem', 'readwrite').objectStore('dem').put(v, key); } catch {}
@@ -235,7 +236,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 30000);
 
-let pitchCss = MOBILE ? 3 : 5;
+let pitchCss = MOBILE ? 3 : 4;
 const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
 const DotShader = {
   uniforms: { tScene: { value: null }, tText: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 }, uDim: { value: 0 } },
@@ -263,8 +264,8 @@ const DotShader = {
       if (am > 0.03) { float ra = 0.5 + 0.45 * am, ma = 1.0 - smoothstep(ra - 0.3, ra + 0.05, d); col = mix(col, vec3(0.72, 0.84, 1.0) * (0.42 + 0.38 * am), ma); }
       vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = 1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc));
       vec3 outc = (col * (1.0 - uDim) + unlit) * vig;
-      float tx = texture2D(tText, uv).r;   // the panel layer: every word and symbol is lit dots on the same matrix
-      if (tx > 0.0) { float rt = 0.5 + 0.42 * tx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = mix(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * tx), mt); }
+      float ptx = texture2D(tText, uv).r;   // the panel layer: every word and symbol is lit dots on the same matrix
+      if (ptx > 0.0) { float rt = 0.5 + 0.42 * ptx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = mix(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * ptx), mt); }
       gl_FragColor = vec4(outc, 1.0);
     }`,
 };
@@ -340,8 +341,8 @@ const floorFrag = GLSL_COMMON + /* glsl */`
       float r1 = sin(vW.x * 2.6 + sin(vW.z * 0.5) * 1.5 + uTime * 0.1), r2 = sin(vW.z * 2.1 - vW.x * 0.7);
       float sand = 1.0 + 0.07 * r1 + 0.05 * r2;
       // patchy bottom: broad dark beds of grass and mud, lighter sand between
-      float patch = sin(vW.x * 0.045 + sin(vW.z * 0.031) * 2.0) * sin(vW.z * 0.052 - vW.x * 0.017);
-      sand *= 0.78 + 0.35 * smoothstep(-0.3, 0.5, patch);
+      float beds = sin(vW.x * 0.045 + sin(vW.z * 0.031) * 2.0) * sin(vW.z * 0.052 - vW.x * 0.017);
+      sand *= 0.78 + 0.35 * smoothstep(-0.3, 0.5, beds);
       // speckle: shell and rubble
       float sp = fract(sin(dot(floor(vW.xz * 1.3), vec2(12.9898, 78.233))) * 43758.5453);
       sand += 0.35 * step(0.955, sp);
@@ -423,14 +424,14 @@ function pointsCloud(n, size, bright, ring = false) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
   g.setAttribute('aLife', new THREE.Float32BufferAttribute(new Float32Array(n), 1));
   const p = new THREE.Points(g, mat({ uniforms: { uSize: { value: size }, uB: { value: bright }, uRing: { value: ring ? 1 : 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: GLSL_COMMON + `uniform float uSize, uRing; attribute float aLife; varying float vD, vY, vL;
+    vertexShader: GLSL_COMMON + `uniform float uSize, uRing; attribute float aLife; varying float vD, vY, vL, vPS;
       void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vD = length(mv.xyz); vY = position.y; vL = aLife;
         float grow = uRing > 0.5 ? (1.0 + aLife * 0.6) : 1.0;   // bubbles swell as they rise
-        gl_PointSize = uRing > 0.5 ? clamp(uSize * grow * 14.0 / max(vD, 1.0), 1.5, 14.0) : uSize; gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: GLSL_COMMON + `uniform float uB, uRing; varying float vD, vY, vL;
+        gl_PointSize = uRing > 0.5 ? clamp(uSize * grow * 14.0 / max(vD, 1.0), 1.5, 14.0) : uSize; vPS = gl_PointSize; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: GLSL_COMMON + `uniform float uB, uRing; varying float vD, vY, vL, vPS;
       void main(){ float b = uB * (1.0 - fogF(vD)) * (0.5 + 0.5 * depthLight(vY)) * step(vY, 0.0);
         if (uRing < 0.5) b *= 0.55 + 0.45 * sin(uTime * 2.5 + vD * 7.0);
-        if (uRing > 0.5) { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0) discard; b *= mix(1.0, 0.25 + 0.75 * smoothstep(0.45, 0.8, r), smoothstep(2.0, 5.0, gl_PointSize)); b *= 1.0 - smoothstep(12.0, 14.0, vL); if (vY > -0.3) b *= smoothstep(-0.05, -0.3, vY); }
+        if (uRing > 0.5) { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0) discard; b *= mix(1.0, 0.25 + 0.75 * smoothstep(0.45, 0.8, r), smoothstep(2.0, 5.0, vPS)); b *= 1.0 - smoothstep(12.0, 14.0, vL); if (vY > -0.3) b *= smoothstep(-0.05, -0.3, vY); }
         gl_FragColor = outB(b); }` }));
   p.frustumCulled = false; scene.add(p); return p;
 }
@@ -1627,10 +1628,19 @@ function wrap(str, max) {
   return out;
 }
 function pRing(cx, cy, r, v) { const n = Math.max(12, Math.round(r * 6)); for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; pDot(cx + Math.cos(a) * r, cy + Math.sin(a) * r, v); } }
-function opa(el) { if (!el) return 0; const cs = getComputedStyle(el); return cs.display === 'none' || cs.visibility === 'hidden' ? 0 : +cs.opacity; }
+// fades are driven here from the same state the DOM carries (classes and inline opacity), not read back from CSS
+const fades = new Map(); let fadeT = performance.now(), fadeDt = 0;
+function fadeTarget(el) {
+  if (el.classList.contains('panel')) return el.classList.contains('gone') ? 0 : 1;
+  if (el.closest('#title')) return $('title').classList.contains('attract') ? 0 : 1;
+  if (el === bl) return document.body.classList.contains('settled') ? 0 : 1;
+  if (el.style.opacity !== '') return +el.style.opacity;
+  return 1;
+}
+function opa(el) { if (!el) return 0; const tg = fadeTarget(el); let a = fades.has(el) ? fades.get(el) : tg; a += (tg - a) * Math.min(1, fadeDt * 5); if (Math.abs(tg - a) < 0.01) a = tg; fades.set(el, a); return a; }
 const toCell = px => px * renderer.getPixelRatio() / dotPass.uniforms.uPitch.value;
 function drawPanel() {
-  if (!panel.data) return; panel.data.fill(0);
+  if (!panel.data) return; panel.data.fill(0); { const now = performance.now(); fadeDt = Math.min(0.1, Math.max(1 / 120, (now - fadeT) / 1000)); fadeT = now; }   // always progress, even if the clock stalls
   const W = panel.w, H = panel.h, cx = W >> 1, t = WU.uTime.value, cols = Math.max(12, Math.floor((W - 8) / 6));
   const oLoad = opa($('load')), oTitle = opa($('title')), oHelp = opa(help), oMap = mapOpen ? 1 : 0, oFade = opa($('fade'));
   dotPass.uniforms.uDim.value = Math.max(oFade, oLoad, oHelp * 0.85, oMap * 0.9);
