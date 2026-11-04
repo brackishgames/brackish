@@ -4,6 +4,8 @@
 
 Play it at https://brackishgames.github.io/brackish/
 
+<img src="screenshots/title.png" width="32%"> <img src="screenshots/hole.png" width="32%"> <img src="screenshots/map.png" width="32%">
+
 You are an animal in Tampa Bay. The whole thing is drawn the way the old Pioneer car stereos drew
 their dolphin screensaver: blue dots on black, amber text for the readouts.
 
@@ -18,7 +20,7 @@ goliath grouper, bull shark, manatee, loggerhead, great hammerhead, manta. After
 swim anywhere as any of them. Sharks hunt you when you're small. Ships shove you aside with their bow wave
 and churn the water for ninety metres behind them. The tide runs through the pass. The sun comes up.
 
-W and S swim forward and back, A and D turn, Space rises and C dives (the arrow keys work too). Shift is a
+Press Enter and the game goes full screen. W and S swim forward and back, A and D turn, Space rises and C dives (the arrow keys work too). Shift is a
 burst of speed. E is your animal's ability: a ray senses the electric field of living things around it, a
 dolphin echolocates, a shark strikes, a stingray settles into the sand and goes unseen, a turtle or manatee
 takes a breath. Tab cycles the creatures you have already been, M opens the map for fast travel between places
@@ -26,3 +28,6 @@ you've found, and H shows the help. On a phone, drag anywhere to swim and use th
 
 To run it locally, open `index.html` in Chrome. There is no build step. three.js loads from a CDN.
 Every push to `main` deploys the site through the workflow in `.github/workflows`.
+
+
+Depths are NOAA NCEI soundings. Tide, water temperature and tidal currents come live from NOAA CO-OPS (St. Petersburg and 15 current stations). Add `?dev` to the URL to open every place and body for exploring; dev mode never touches your save.

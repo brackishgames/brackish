@@ -291,9 +291,9 @@ const Bay = {
     for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
       const k = j * S + i, v = d[k], b = band(v);
       if (b < 0) { const coast = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, c]) => { const ii = i + a, jj = j + c; return ii >= 0 && jj >= 0 && ii < S && jj < S && d[jj * S + ii] > 0; });
-        out[k] = coast ? 235 : 62 + ((i * 7 + j * 13) % 5) * 3; continue; }   // land: a solid lit mass, the way a chart prints it
+        out[k] = coast ? 240 : 70; continue; }   // land lit, coast bright   // land: a solid lit mass, the way a chart prints it
       const edge = [[1, 0], [0, 1]].some(([a, c]) => { const ii = i + a, jj = j + c; return ii < S && jj < S && band(d[jj * S + ii]) !== b && band(d[jj * S + ii]) >= 0; });
-      out[k] = edge ? 70 : [34, 26, 20, 15, 11][b];   // water dark, deeper darker, faint contours at 2, 5, 10 and 20 m
+      out[k] = edge ? [0, 40, 34, 28, 22][b] : 0;   // open water dark; only the 2, 5, 10, 20 m contours show   // water dark, deeper darker, faint contours at 2, 5, 10 and 20 m
     }
     return out;
   },
@@ -1194,7 +1194,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true; if (e.code === 'KeyW' || e.code === 'KeyS') wasdSeen = true; startAudio(); pressedAny();
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', 'KeyC'].includes(e.code)) e.preventDefault();
   if (started && needFull()) { if (e.code !== 'Escape') goFull(); return; }
-  if (!started) { if (e.code === 'Enter') startGame(loadedSave); if (e.code === 'KeyR' && loadedSave) { wipeSave(); loadedSave = null; setTitleHint(); } return; }
+  if (!started) { if (e.code === 'Enter') startGame(loadedSave); return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
   if (e.code === 'KeyM') toggleMap();
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
@@ -1894,8 +1894,8 @@ function cycleCreature(dir = 1) {
 function setTitleHint() {
   const ch = loadedSave ? CHAPTERS[loadedSave.ch].title : null;
   $('titlehint').textContent = MOBILE ? (ch ? 'TAP TO CONTINUE' : 'TAP TO BEGIN')
-    : ch ? 'ENTER TO CONTINUE\nR TO START OVER' : TITLE_HINT;
-  $('restart').style.display = ch && MOBILE ? '' : 'none';
+    : TITLE_HINT;
+  $('restart').style.display = 'none';
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
 addEventListener('pointerdown', e => {
@@ -1924,7 +1924,6 @@ tbtn('tBurst', el => { keys.ShiftLeft = true; el.classList.add('on'); }, el => {
 tbtn('tAct', () => { if (started) act(); });
 tbtn('tMap', () => { if (started) toggleMap(); });
 tbtn('tCreature', () => { if (started) cycleCreature(1); });
-$('restart').addEventListener('pointerdown', e => { e.stopPropagation(); wipeSave(); loadedSave = null; setTitleHint(); });
 mapEl.addEventListener('pointerdown', e => { e.stopPropagation(); const li = e.target.closest('li'); if (li) { const i = [...li.parentNode.children].indexOf(li); travelTo(checkpoints[i]); } toggleMap(); });
 help.addEventListener('pointerdown', e => { e.stopPropagation(); helpOpen = false; help.classList.add('gone'); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; touch.turn = touch.climb = 0; } });
