@@ -112,18 +112,20 @@
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
   <p id="noaaline"></p>
-  <p id="titlehint">PRESS ENTER</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
+  <p id="titlehint">PRESS ENTER OR CLICK</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
     <b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
     <b>SPACE C</b><span>rise · dive</span><b>ARROWS</b><span>also steer, rise and dive</span>
-    <b>SHIFT</b><span>burst, while the dots last</span><b>E</b><span>your animal's ability: sense, echo, strike, settle, breathe or leap</span><b>TAB</b><span>become a creature you have been</span>
+    <b>SHIFT</b><span>burst, while the dots last</span><b>E</b><span>your animal's ability. a ray's SENSE and a dolphin's ECHO find clams buried in the sand</span><b>TAB</b><span>become a creature you have been</span>
     <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
 depths are real NOAA soundings. tide, water temperature and currents are live from NOAA.
-clams on the bottom give a heart back. shrimp clouds refill the burst.
-sharks lose interest if you keep away.
+buried clams give a heart back. shrimp clouds refill the burst.
+a shark that has you stays on you until you lose it: get far away, get deep into the fever, or bury yourself.
+at night, keep out of the lights on the flats. burying will not hide you there.
+dolphins, manatees and turtles need air. the bar shows how long you have.
 the surface is not the end of the world.</p><small>H to close</small></div>
 <div id="map"><div><h2>FAST TRAVEL — ↑↓ pick · ENTER go · M close</h2><ul id="cplist"></ul></div><canvas id="bigmap" width="560" height="560"></canvas></div>
 <div class="hud" id="tl"></div>
@@ -573,7 +575,8 @@ function stepSeeps(dt) {
     sp.t -= dt; if (sp.t <= 0) { sp.t = sp.rate * (0.5 + Math.random()); emitBubble(sp.p.x + (Math.random() - .5) * 0.3, sp.p.y, sp.p.z + (Math.random() - .5) * 0.3); }
   }
 }
-function emitBubble(x, y, z) { for (let i = 0; i < 600; i++) if (bubbleLife[i] > 14) { const a = bubbles.geometry.attributes.position.array; bubbleLife[i] = 0; a[i * 3] = x; a[i * 3 + 1] = y; a[i * 3 + 2] = z; return; } }
+let bubbleNext = 0;
+function emitBubble(x, y, z) { const i = bubbleNext; bubbleNext = (bubbleNext + 1) % 600; const a = bubbles.geometry.attributes.position.array; bubbleLife[i] = 0; a[i * 3] = x; a[i * 3 + 1] = y; a[i * 3 + 2] = z; }   // a ring: the oldest bubble is reused
 
 // ═══════════════════════════════════════════════════════════════════
 //  CREATURES  —  species registry, procedural bodies, one animated
@@ -919,7 +922,7 @@ function spawnWild(w, first = false) {
     w.yaw = Math.random() * 6.28; w.pitch = 0; w.turn = 0; w.ph = Math.random() * 6; return;
   }
 }
-for (let i = 0; i < WILD_N; i++) wild.push({ meshes: {}, mesh: null, sp: null, pos: new THREE.Vector3(), yaw: 0, pitch: 0, turn: 0, ph: 0 });
+for (let i = 0; i < WILD_N; i++) wild.push({ id: i, meshes: {}, mesh: null, sp: null, pos: new THREE.Vector3(), yaw: 0, pitch: 0, turn: 0, ph: 0 });
 function targetY(sp, f, t, ph) {
   switch (sp.zone) { case 'surface': return -1.0 - Math.max(0, Math.sin(t * 0.25 + ph)) * Math.min(6, -f - 2);
     case 'bottom': return f + sp.alt + 0.2; case 'structure': return f + 1 + sp.alt; case 'deep': return f * 0.5 - 1; default: return f * 0.45 - 1 + Math.sin(t * 0.2 + ph) * 1.2; }
@@ -938,13 +941,14 @@ function steerTo(w, tx, tz, rate) {
 }
 let huntHeat = 0;   // how hard the hunt is on you, 0..1, for the HUD
 function stepWild(dt, t) {
-  huntHeat = 0;
+  huntHeat = 0; let hunters = 0; for (const o of wild) if (o.hunting) hunters++;
+  const frP = feverR(P.pos), floorP = floorAt(P.pos.x, P.pos.z);
   for (const w of wild) {
     if (!w.sp) { spawnWild(w, true); continue; }
     const d = w.pos.distanceTo(P.pos); if (d > 200) { spawnWild(w); continue; }
     w.cool = Math.max(0, (w.cool || 0) - dt);
     const rel = relation(w); let v = w.sp.cruise * (0.8 + 0.2 * Math.sin(t * 0.3 + w.ph)); let ty = null;
-    const otherHunter = wild.some(o => o !== w && o.hunting), fr = feverR(P.pos), pFloor = floorAt(P.pos.x, P.pos.z), hammer = w.sp.id === 'hammer';
+    const otherHunter = hunters > (w.hunting ? 1 : 0), fr = frP, pFloor = floorP, hammer = w.sp.id === 'hammer';
     // a shark picks the one it can single out: a ray alone, or one at the ragged edge of the fever. inside it, you are one of a thousand.
     if (rel === 'hunt' && !w.hunting && started && !P.hidden && d < 45 && w.cool <= 0 && !otherHunter && !(hammer && pFloor > -3)) {
       const dim = dayClock < 7.5 || dayClock > 18;   // they hunt the low light
@@ -1063,13 +1067,15 @@ function stepFood(dt, t) {
     if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(3, P.hp + 1); say('♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
       for (let i = 0; i < 3; i++) setTimeout(() => bloop(0.6), i * 90); rebuildFood(); break; }
     const pulse = 1 + 0.25 * Math.sin(t * 3 + fd.ph);
-    if (fd.clam) { for (let i = 0; i < 3 && k < FOOD_MAX; i++) placeInstance(foodMesh, k++, fd.x + Math.cos(fd.ph + i * 2.1) * 0.35, fd.y, fd.z + Math.sin(fd.ph + i * 2.1) * 0.35, 0, fd.ph, 0, 0.7 * pulse, 0.45 * pulse, 0.7 * pulse); }
+    if (fd.clam) { const vis = Math.max(THREE.MathUtils.clamp(1 - (d - 2) / 2, 0, 1), d < (P.revealRange || 50) * 0.3 ? (P.reveal || 0) : 0);   // buried: felt through the sand, not seen
+      if (vis > 0.03) for (let i = 0; i < 3 && k < FOOD_MAX; i++) placeInstance(foodMesh, k++, fd.x + Math.cos(fd.ph + i * 2.1) * 0.35, fd.y, fd.z + Math.sin(fd.ph + i * 2.1) * 0.35, 0, fd.ph, 0, 0.7 * pulse * vis, 0.45 * pulse * vis, 0.7 * pulse * vis); }
     else { for (let i = 0; i < 5 && k < FOOD_MAX; i++) { const a = t * 1.5 + fd.ph + i * 1.26; placeInstance(foodMesh, k++, fd.x + Math.cos(a) * 0.5, fd.y + Math.sin(a * 1.7) * 0.3, fd.z + Math.sin(a) * 0.5, 0, 0, 0, 0.35 * pulse); } }
   }
   foodMesh.count = k; foodMesh.instanceMatrix.needsUpdate = true;
 }
 
 // mullet schools
+const GONE = new THREE.Vector3(0.001, 0.001, 0.001);
 function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
 const fishGeo = new THREE.BufferGeometry();
 fishGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.14, 0, 0.045, 0.02, 0, -0.045, 0.02, 0, 0, 0.11, 0, 0.055, 0.17, 0, -0.055, 0.17], 3));
@@ -1128,6 +1134,7 @@ function stepFever(dt, t) {
     fever.c.x = ax + (bx - ax) * fever.t; fever.c.z = az + (bz - az) * fever.t; fever.yaw = Math.atan2(-(bx - ax), -(bz - az));
   }
   const f = floorAt(fever.c.x, fever.c.z); fever.c.y = THREE.MathUtils.clamp(f * 0.5 - 1, f + 1.5, -2);
+  feverMesh.visible = fever.c.distanceTo(camPos) < 400; if (!feverMesh.visible) return;   // beyond the murk: don't move 1200 rays nobody can see
   fever.frame = (fever.frame || 0) + 1; fever.floor ??= new Float32Array(FEVER_N).fill(-30); fever.px ??= new Float32Array(FEVER_N); fever.pz ??= new Float32Array(FEVER_N);
   if (!fever.moving) fever.spin = (fever.spin || 0) + 0.02 * dt;   // a waiting fever mills in a slow wheel
   const cs = Math.cos(fever.spin || 0), sn = Math.sin(fever.spin || 0), sharks = wild.filter(w => w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(fever.c) < 90);
@@ -1441,7 +1448,7 @@ function stepAudio(above) {
   const fd = fever.c.distanceTo(P.pos), fn = THREE.MathUtils.clamp(1 - fd / 90, 0, 1); audio.flutter.g.gain.setTargetAtTime(fn * fn * 0.3, t, 0.4);
   // animals near you
   for (const w of wild) { if (!w.sp) continue; const d = w.pos.distanceTo(P.pos);
-    if (w.sp.id === 'manatee' && d < 22) every('manatee' + w.ph, 2 + Math.random() * 6, () => squeak(d)); }
+    if (w.sp.id === 'manatee' && d < 22) every('manatee' + w.id, 2 + Math.random() * 6, () => squeak(d)); }
   if (above) for (const fl of flocks) { const d = fl.c.distanceTo(P.pos); if (d < 220 && fl.kind === 'wheel') every('gull' + fl.ph, 1.5 + Math.random() * 5, () => gull(d)); }
   for (const bu of world.buoys) { const d = Math.hypot(bu.x - P.pos.x, bu.z - P.pos.z); if (d < 18) every('buoy' + bu.ph, 2 + Math.random() * 4, () => clank(d)); }
   if (!above && depth > 4) every('omen', 30 + Math.random() * 45, () => (lastFloor < -12 || Math.random() < 0.4) ? groan() : creak());
@@ -1519,7 +1526,7 @@ function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch {} }
 // ═══════════════════════════════════════════════════════════════════
 const CHAPTERS = [
   { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.607, -82.751], goal: () => toXZ(27.6055, -82.7565), radius: 60,
-    lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.'] },
+    lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, and the bottom here is 25 metres down.', 'Follow the beam of light.', 'E to sense. Clams hide in the sand, and they give a heart back.'] },
   { title: 'II · THE CHANNEL', start: [27.618, -82.662], goal: () => toXZ(27.6215, -82.6555), radius: 90,
     lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },
   { title: 'III · THE FEVER', start: [27.6085, -82.749], goal: () => [fever.c.x, fever.c.z], radius: 60,
@@ -1570,6 +1577,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     this.lineT = (this.lineT || 0) + dt; if (this.lineT > 8 && sayTimer <= 0) { this.advance(); this.lineT = 0; }
     const c = CHAPTERS[this.ch]; if (c.free) { this.goal = null; return; }
     this.goal = c.goal ? c.goal() : null;
+    if (c.follow && feverR(P.pos) < 1.2) this.goal = null;   // among them there is nothing to point at; the beam comes back if you fall behind
     let done = false;
     if (c.goal && !c.follow) done = Math.hypot(this.goal[0] - P.pos.x, this.goal[1] - P.pos.z) < c.radius;
     if (c.breaths && !c.goal) done = false;
@@ -1579,7 +1587,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-const TITLE_HINT = 'PRESS ENTER';
+const TITLE_HINT = 'PRESS ENTER OR CLICK';
 function startGame(save) { if (canFull && !DEV) goFull(); started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3) fever.moving = true; return; }
@@ -1715,7 +1723,7 @@ function stepAmbient(dt, t) {
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
       const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
       if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' || P.sp.id === 'tarpon') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; s.panic = 3; emitBubble(fx, fy, fz); }
-      if (!fish.alive) _m.scale(new THREE.Vector3(0.001, 0.001, 0.001));
+      if (!fish.alive) _m.scale(GONE);
       _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }
   fishMesh.instanceMatrix.needsUpdate = true;
