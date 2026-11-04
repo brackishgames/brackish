@@ -68,8 +68,7 @@ ENTER  begin</p><small>H for help any time</small></div>
   <div class="keys">
     <b>← →</b><span>turn</span><b>↑ ↓</b><span>up · down</span>
     <b>SPACE</b><span>burst, while the dots last</span><b>TAB</b><span>become a creature you have been</span>
-    <b>M</b><span>map and fast travel</span><b>ENTER</b><span>next line of the story</span>
-    <b>N</b><span>sound on · off</span><b>H</b><span>this screen</span>
+    <b>M</b><span>map and fast travel</span><b>H</b><span>this screen</span>
   </div>
   <p class="lore">boats hum before they arrive. dive.
 sharks lose interest if you keep away.
@@ -899,8 +898,6 @@ addEventListener('keydown', e => {
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
     if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
   if (e.code === 'Tab') { const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) say('you have not yet become anyone else', 2); else { const i = list.indexOf(P.sp); becomeSpecies(list[(i + (e.shiftKey ? list.length - 1 : 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); } }
-  if (e.code === 'Enter') story.advance();
-  if (e.code === 'KeyN') toggleAudio();
 });
 addEventListener('keyup', e => keys[e.code] = false);
 
@@ -1176,8 +1173,9 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
       if (i === 3) fever.moving = true;
     }, i === 0 ? 50 : 700);
   },
-  advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7, c.title); } },
+  advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7, c.title); this.lineT = 0; } },
   step(dt) {
+    this.lineT = (this.lineT || 0) + dt; if (this.lineT > 8 && sayTimer <= 0) { this.advance(); this.lineT = 0; }
     const c = CHAPTERS[this.ch]; if (c.free) { this.goal = null; return; }
     this.goal = c.goal ? c.goal() : null;
     let done = false;
