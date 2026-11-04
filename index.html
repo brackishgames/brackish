@@ -873,7 +873,7 @@ let mapOpen = false, mapSel = 0, helpOpen = false, started = false;
 addEventListener('keydown', e => {
   keys[e.code] = true; startAudio();
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.code)) e.preventDefault();
-  if (!started) { if (e.code === 'Enter') startGame(); return; }
+  if (!started) { if (e.code === 'Enter') startGame(loadedSave); if (e.code === 'KeyR' && loadedSave) { wipeSave(); loadedSave = null; $('titlehint').textContent = TITLE_HINT; } return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
   if (e.code === 'KeyM') toggleMap();
   if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
@@ -1026,7 +1026,7 @@ const bearingTo = (x, z) => ((Math.atan2(x - P.pos.x, -(z - P.pos.z)) * 180 / Ma
 // checkpoints: discovered places you can fast travel to
 const checkpoints = [{ name: 'Skyway north', x: START[0], z: START[1] }];
 let lastCheckpoint = checkpoints[0];
-function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); }
+function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
   P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; if (P.vel) P.vel.set(0, 0, 0); camPos.copy(P.pos).add(new THREE.Vector3(0, 2, 10)); lastCheckpoint = cp;
@@ -1045,6 +1045,32 @@ function stepGoalBeam(t) {
   goalBeam.position.set(x, f, z); goalBeam.rotation.y = Math.atan2(camPos.x - x, camPos.z - z);
   goalBeam.scale.set(2 + d * 0.02, Math.max(12, -f + 30), 1);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+//  SAVE  —  progress in localStorage, signed so an edited save is refused.
+//  (A client-only game can never be fully cheat-proof; this stops casual edits.)
+// ═══════════════════════════════════════════════════════════════════
+const SAVE_KEY = 'brackish.save', SAVE_SALT = 'egmont-25m-' + location.host;
+async function sha(text) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+let saveTimer = 0, loadedSave = null;
+async function saveGame() {
+  if (!started) return;
+  const data = { v: 1, ch: story.ch, unlocked: [...unlocked], cps: checkpoints, fed: P.fed || 0, clock: dayClock, pos: [P.pos.x, P.pos.y, P.pos.z], yaw: P.yaw, sp: P.sp.id, t: Date.now() };
+  const json = JSON.stringify(data);
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ json, sig: await sha(SAVE_SALT + json) })); } catch {}
+}
+async function loadGame() {
+  try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return null; const { json, sig } = JSON.parse(raw);
+    if (sig !== await sha(SAVE_SALT + json)) { console.warn('save rejected: signature mismatch'); localStorage.removeItem(SAVE_KEY); return null; }
+    const d = JSON.parse(json); return d.v === 1 ? d : null; } catch { return null; }
+}
+function applySave(d) {
+  for (const id of d.unlocked) unlocked.add(id);
+  checkpoints.length = 0; checkpoints.push(...d.cps); lastCheckpoint = checkpoints[checkpoints.length - 1] || checkpoints[0];
+  P.fed = d.fed; dayClock = d.clock; P.pos.set(...d.pos); P.yaw = d.yaw; becomeSpecies(speciesById[d.sp] || speciesById.cownose);
+  camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6));
+}
+function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch {} }
 
 // ═══════════════════════════════════════════════════════════════════
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
@@ -1101,9 +1127,13 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.surface) { this.surfaceT = P.pos.y > -0.35 ? this.surfaceT + dt : 0; done = this.surfaceT > 4; }
     if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && Math.random() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
-    if (done) { discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); }
+    if (done) { discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-function startGame() { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000); $('title').classList.add('gone'); story.begin(0); }
+const TITLE_HINT = 'ARROWS  swim        SPACE  burst\nM  map · fast travel      TAB  creatures you have been\nENTER  begin';
+function startGame(save) { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
+  $('title').classList.add('gone');
+  if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; say(c.lines[0], 7, c.title); if (save.ch === 3) fever.moving = true; return; }
+  story.begin(0); }
 
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
@@ -1277,7 +1307,7 @@ function stepHud(dt) {
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t;
-  if (started) dayClock = (dayClock + dt / 60) % 24;
+  if (started) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   if (started && !mapOpen && !helpOpen) { stepPlayer(dt); story.step(dt); }
   stepCamera(dt); stepLogo(dt); stepGoalBeam(t); stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepBoats(dt, t); stepFever(dt, t); stepAudio(above); stepHud(dt);
@@ -1357,6 +1387,8 @@ async function boot() {
   loadBridges().then(() => { try { buildStructures(); say('BRIDGES UPDATED FROM OPENSTREETMAP', 2.5); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
   P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); dayClock = CHAPTERS[0].clock ?? dayClock;
+  loadedSave = await loadGame();
+  if (loadedSave) $('titlehint').textContent = `ENTER  continue · ${CHAPTERS[loadedSave.ch].title}\nR  start over\n\nARROWS swim · SPACE burst · TAB creatures · M map`;
   await stage('WAKING THE BAY', () => { becomeSpecies(speciesById.cownose); camPos.copy(P.pos).add(new THREE.Vector3(0, 1.5, 6)); camLook.copy(P.pos); rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); $('title').classList.remove('gone');
   frame();
