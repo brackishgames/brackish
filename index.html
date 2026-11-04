@@ -1688,59 +1688,7 @@ function stepAmbient(dt, t) {
     for (let i = 0; i < 600; i++) { bubbleLife[i] += dt; la[i] = bubbleLife[i]; if (bubbleLife[i] <= 14) { a[i * 3 + 1] = Math.min(-0.05, a[i * 3 + 1] + (0.3 + Math.min(bubbleLife[i], 6) * 0.14) * dt); a[i * 3] += Math.sin(t * 5 + i) * 0.12 * dt; a[i * 3 + 2] += Math.cos(t * 4 + i) * 0.09 * dt; } else a[i * 3 + 1] = 9999; }
     bubbles.geometry.attributes.position.needsUpdate = true; bubbles.geometry.attributes.aLife.needsUpdate = true; }
   if (world.buoyMesh) { world.buoys.forEach((b, i) => { _m.makeRotationZ(Math.sin(t * 0.8 + b.ph) * 0.08); _m.setPosition(b.x, Math.sin(t * 1.1 + b.ph) * 0.2 - 0.4, b.z); world.buoyMesh.setMatrixAt(i, _m); }); world.buoyMesh.instanceMatrix.needsUpdate = true; }
-  // moon jellies: slow, pulsing, harmless, lovely in the dark
-function jellyGeometry() {
-  const bell = new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.6, 1);
-  const parts = [bell];
-  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; parts.push(new THREE.PlaneGeometry(0.02, 0.5).translate(0, -0.26, 0).rotateY(a).translate(Math.cos(a) * 0.12, 0, Math.sin(a) * 0.12)); }
-  return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
-}
-const JELLIES = 36;
-const jellyMesh = new THREE.InstancedMesh(jellyGeometry(), creatureMat({ mode: 5, freq: 1.4, glow: 0.85 }), JELLIES);
-{ const ph = new Float32Array(JELLIES); for (let i = 0; i < JELLIES; i++) ph[i] = Math.random() * 6.28; jellyMesh.geometry.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1)); }
-jellyMesh.frustumCulled = false; scene.add(jellyMesh);
-const jellies = Array.from({ length: JELLIES }, () => ({ p: new THREE.Vector3(), ph: Math.random() * 6.28, s: 0.6 + Math.random() * 1.2 }));
-function stepJellies(dt, t) {
-  for (let i = 0; i < JELLIES; i++) { const j = jellies[i];
-    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const sp = spotNear(20, 110, 3); if (!sp) { placeInstance(jellyMesh, i, 0, 9999, 0); continue; } j.p.set(sp.x, sp.f * (0.3 + Math.random() * 0.5), sp.z); }
-    const f = floorAt(j.p.x, j.p.z);
-    j.p.y = THREE.MathUtils.clamp(j.p.y + Math.sin(t * 0.3 + j.ph) * 0.08 * dt + 0.02 * dt, f + 1, -1.5); j.p.x += Math.sin(t * 0.1 + j.ph) * 0.05 * dt; j.p.z += Math.cos(t * 0.13 + j.ph) * 0.05 * dt;
-    placeInstance(jellyMesh, i, j.p.x, j.p.y, j.p.z, Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2, j.s); }
-  jellyMesh.instanceMatrix.needsUpdate = true;
-}
-
-// food: clam beds on the bottom give a heart back, shrimp clouds in mid-water refill the burst.
-// they sit in fixed places (hashed by 60 m cell) so you can learn where they are; eaten ones stay eaten.
-const FOOD_MAX = 60, eaten = new Set();
-const foodMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.18, 1), creatureMat({ glow: 1.4 }), FOOD_MAX);
-foodMesh.frustumCulled = false; foodMesh.count = 0; scene.add(foodMesh);
-let foodList = [], foodCenter = new THREE.Vector2(1e9, 1e9);
-function rebuildFood() {
-  foodList = []; const C = 60, R = 240, cx = Math.floor(P.pos.x / C), cz = Math.floor(P.pos.z / C);
-  for (let gz = cz - R / C; gz <= cz + R / C; gz++) for (let gx = cx - R / C; gx <= cx + R / C; gx++) {
-    const h = hash2(gx * 31 + 11, gz * 17 + 5); if (h > 0.5) continue; const key = gx + ',' + gz; if (eaten.has(key)) continue;
-    const x = (gx + 0.2 + hash2(gx, gz) * 0.6) * C, z = (gz + 0.2 + hash2(gz, gx) * 0.6) * C, f = floorAt(x, z); if (f > -1.5) continue;
-    const clam = h < 0.3; foodList.push({ key, x, z, y: clam ? f + 0.25 : Math.max(f + 2, f * 0.5), clam, ph: h * 40 });
-  }
-  foodCenter.set(P.pos.x, P.pos.z);
-}
-function stepFood(dt, t) {
-  if (foodCenter.distanceTo(new THREE.Vector2(P.pos.x, P.pos.z)) > 90) rebuildFood();
-  let k = 0;
-  for (const fd of foodList) {
-    if (k >= FOOD_MAX) break;
-    const d = Math.hypot(fd.x - P.pos.x, fd.y - P.pos.y, fd.z - P.pos.z);
-    if (started && d < 1.4) { eaten.add(fd.key); if (fd.clam) { P.hp = Math.min(3, P.hp + 1); say('♥  clams', 1.5); } else { P.sta = 1; P.spent = false; say('▮▮▮▮▮▮▮▮  shrimp', 1.5); }
-      for (let i = 0; i < 3; i++) setTimeout(() => bloop(0.6), i * 90); rebuildFood(); break; }
-    const pulse = 1 + 0.25 * Math.sin(t * 3 + fd.ph);
-    if (fd.clam) { for (let i = 0; i < 3 && k < FOOD_MAX; i++) placeInstance(foodMesh, k++, fd.x + Math.cos(fd.ph + i * 2.1) * 0.35, fd.y, fd.z + Math.sin(fd.ph + i * 2.1) * 0.35, 0, fd.ph, 0, 0.7 * pulse, 0.45 * pulse, 0.7 * pulse); }
-    else { for (let i = 0; i < 5 && k < FOOD_MAX; i++) { const a = t * 1.5 + fd.ph + i * 1.26; placeInstance(foodMesh, k++, fd.x + Math.cos(a) * 0.5, fd.y + Math.sin(a * 1.7) * 0.3, fd.z + Math.sin(a) * 0.5, 0, 0, 0, 0.35 * pulse); } }
-  }
-  foodMesh.count = k; foodMesh.instanceMatrix.needsUpdate = true;
-}
-
-// mullet schools
-function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
+  // mullet schools
   let k = 0;
   for (const s of schools) {
     if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + Math.random() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
