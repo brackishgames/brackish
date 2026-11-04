@@ -114,7 +114,7 @@
   <p id="noaaline"></p>
   <p id="titlehint">WASD SWIM · SPACE RISE · C DIVE
 SHIFT BURST · E ABILITY · M MAP
-ENTER TO BEGIN</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
+ENTER · FULL SCREEN TO BEGIN</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
     <b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
@@ -146,7 +146,11 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const MOBILE = matchMedia('(pointer: coarse)').matches;
-const DEV = new URLSearchParams(location.search).has('dev');   // ?dev opens every place and body for exploring
+const DEV = new URLSearchParams(location.search).has('dev');
+// full screen is the price of entry on desktop: leave it and the bay waits for you
+const canFull = !MOBILE && !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+const goFull = () => { const el = document.documentElement; try { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); r?.catch?.(() => {}); } catch {} };   // ?dev opens every place and body for exploring
 
 // ═══════════════════════════════════════════════════════════════════
 //  GEOGRAPHY  —  local metric frame centred on Tampa Bay. 1 unit = 1 m.
@@ -720,6 +724,8 @@ function creatureMesh(sp, glow = 1) {
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
+const needFull = () => started && canFull && !DEV && !isFull();
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { for (const k in keys) keys[k] = false; });
 const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight);
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
 let wasdSeen = false; const usingWASD = () => wasdSeen;
@@ -1184,6 +1190,7 @@ let mapOpen = false, mapSel = 0, helpOpen = false, started = false;
 addEventListener('keydown', e => {
   keys[e.code] = true; if (e.code === 'KeyW' || e.code === 'KeyS') wasdSeen = true; startAudio(); pressedAny();
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', 'KeyC'].includes(e.code)) e.preventDefault();
+  if (started && needFull()) { if (e.code !== 'Escape') goFull(); return; }
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); if (e.code === 'KeyR' && loadedSave) { wipeSave(); loadedSave = null; setTitleHint(); } return; }
   if (e.code === 'KeyH') { helpOpen = !helpOpen; help.classList.toggle('gone', !helpOpen); }
   if (e.code === 'KeyM') toggleMap();
@@ -1472,8 +1479,8 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { bell(); discover(c.title.replace(/^[IVX]+ · /, ''), P.pos.x, P.pos.z); if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
   } };
-const TITLE_HINT = 'WASD SWIM · SPACE RISE · C DIVE\nSHIFT BURST · E ABILITY · M MAP\nENTER TO BEGIN';
-function startGame(save) { started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
+const TITLE_HINT = 'WASD SWIM · SPACE RISE · C DIVE\nSHIFT BURST · E ABILITY · M MAP\nENTER · FULL SCREEN TO BEGIN';
+function startGame(save) { if (canFull && !DEV) goFull(); started = true; document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
   $('title').classList.add('gone');
   if (save) { applySave(save); logo.release(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 3000); if (save.ch === 3) fever.moving = true; return; }
   story.begin(0); }
@@ -1692,7 +1699,7 @@ function frame() {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t; stepStrokes(dt);
   if (started) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
-  if (started && !mapOpen && !helpOpen) { stepPlayer(dt); story.step(dt); }
+  if (started && !mapOpen && !helpOpen && !needFull()) { stepPlayer(dt); story.step(dt); }
   if (!started) {   // attract: after a while the ray wanders off on its own and the words fade
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
@@ -1791,7 +1798,8 @@ function drawPanel() {
   if (!panel.data) return; panel.data.fill(0); { const now = performance.now(); fadeDt = Math.min(0.1, Math.max(1 / 120, (now - fadeT) / 1000)); fadeT = now; }   // always progress, even if the clock stalls
   const W = panel.w, H = panel.h, cx = W >> 1, t = WU.uTime.value, cols = Math.max(12, Math.floor((W - 8) / 6));
   const oLoad = opa($('load')), oTitle = opa($('title')), oHelp = opa(help), oMap = mapOpen ? 1 : 0, oFade = opa($('fade'));
-  dotPass.uniforms.uDim.value = Math.max(oFade, oLoad, oHelp * 0.85, oMap * 0.9);
+  const oFull = needFull() ? 1 : 0;
+  dotPass.uniforms.uDim.value = Math.max(oFade, oLoad, oHelp * 0.85, oMap * 0.9, oFull * 0.85);
   if (oLoad > 0.01) {   // loading
     const y = Math.round(H * 0.36), sc = W > 120 ? 2 : 1; pText('BRACKISH', cx, y, 240 * oLoad, 'center', sc);
     const bw = Math.min(60, W - 20), pct = (parseFloat($('bar').style.width) || 0) / 100, by = y + 7 * sc + 8;
@@ -1850,6 +1858,12 @@ function drawPanel() {
     y += 6; for (const l of wrap(help.querySelector('.lore').textContent, cols)) { pText(l, cx, y, 150 * oHelp, 'center'); y += 10; }
     pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, y + 6, 110 * oHelp, 'center');
   }
+  if (oFull && !oHelp && !oMap) {   // the bay waits
+    const sc = W > 160 ? 2 : 1, y = Math.round(H * 0.4);
+    pText('FULL SCREEN TO SWIM', cx, y, 240, 'center', sc);
+    pText('CLICK OR PRESS ANY KEY', cx, y + 7 * sc + 10, 160 + 70 * (0.5 + 0.5 * Math.sin(t * 3)), 'center');
+    panel.tex.needsUpdate = true; return;
+  }
   if (oMap) {   // fast travel: the bay as dots
     pText('FAST TRAVEL', cx, 3, 230, 'center');
     const land = W > H * 1.3, S = Math.max(20, land ? Math.min(H - 20, (W >> 1) - 8) : Math.min(W - 12, Math.floor(H * 0.55))), mx = land ? W - S - 6 : (W - S) >> 1, my = 14;
@@ -1883,7 +1897,7 @@ function setTitleHint() {
 }
 function unlockAudio() { startAudio(); if (audio && audio.ac.state !== 'running') audio.ac.resume(); }   // iOS needs this inside a gesture
 addEventListener('pointerdown', e => {
-  unlockAudio(); pressedAny(); if (!MOBILE && started) return;   // desktop plays on the keyboard
+  unlockAudio(); pressedAny(); if (!MOBILE && started) { if (needFull()) goFull(); return; }   // desktop plays on the keyboard
   if (!started) { startGame(loadedSave); return; }
   if (helpOpen) { helpOpen = false; help.classList.add('gone'); return; }
   if (touch.id !== null) return;
