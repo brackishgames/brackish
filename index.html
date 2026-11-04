@@ -390,10 +390,10 @@ function emitBubble(x, y, z) { for (let i = 0; i < 400; i++) if (bubbleLife[i] >
 // ═══════════════════════════════════════════════════════════════════
 const creatureVert = GLSL_COMMON + /* glsl */`
   attribute float aPhase;
-  uniform float uMode, uHalf, uLen, uFreq, uAmp, uFlap;
+  uniform float uMode, uHalf, uLen, uFreq, uAmp, uFlap, uPhase;
   varying vec3 vW; varying float vD; varying vec2 vUv;
   void main() {
-    vec3 p = position; float ph = uTime * uFreq + aPhase;
+    vec3 p = position; float ph = uPhase + aPhase;
     if (uMode == 1.0) {   // rays: a wave travels out along the wing and back along the chord; the tail trails
       float s = abs(p.x) / uHalf, c = p.z / uLen + 0.3;
       p.y += sin(ph - s * 1.7 - c * 1.3) * pow(s, 1.5) * uAmp * uHalf * uFlap + sin(ph - c * 2.0) * 0.03 * uLen * uFlap;
@@ -426,11 +426,14 @@ const creatureFrag = GLSL_COMMON + /* glsl */`
     if (uMode == 1.0) { float e = smoothstep(0.82, 1.0, vUv.x) + smoothstep(0.80, 0.86, vUv.y) * step(vUv.y, 0.87) + (1.0 - smoothstep(0.0, 0.07, vUv.y)); b = b * (1.0 - 0.35 * vUv.x) + 0.35 * clamp(e, 0.0, 1.0) * uGlow; }
     gl_FragColor = outB(applyFog(min(b, 1.0), vD));
   }`;
+const creatureMats = [];
 function creatureMat(o = {}) {
-  return mat({ side: THREE.DoubleSide, vertexShader: creatureVert, fragmentShader: creatureFrag, uniforms: {
+  const m = mat({ side: THREE.DoubleSide, vertexShader: creatureVert, fragmentShader: creatureFrag, uniforms: {
     uMode: { value: o.mode ?? 0 }, uHalf: { value: o.half ?? 1 }, uLen: { value: o.len ?? 1 }, uFreq: { value: o.freq ?? 2 },
-    uAmp: { value: o.amp ?? 0.3 }, uFlap: { value: 1 }, uGlow: { value: o.glow ?? 1 } } });
+    uAmp: { value: o.amp ?? 0.3 }, uFlap: { value: 1 }, uGlow: { value: o.glow ?? 1 }, uPhase: { value: Math.random() * 6.28 } } });
+  creatureMats.push(m); return m;
 }
+function stepStrokes(dt) { for (const m of creatureMats) m.uniforms.uPhase.value += m.uniforms.uFreq.value * dt; }
 
 // Species of the bay. sizes in metres; cruise/max in m/s; zone picks the wild AI's preferred depth.
 const SPECIES = [
@@ -736,7 +739,8 @@ function stepWild(dt, t) {
       v = d > 8 ? w.sp.max * 0.7 : P.speed + 0.3; ty = P.pos.y + 0.5;
       w.clickT = (w.clickT || 0) - dt; if (w.clickT <= 0 && d < 25) { w.clickT = 0.15 + Math.random() * 0.9; for (let n = 0; n < 2 + Math.random() * 5; n++) setTimeout(() => click(d), n * 35); }
     } else {
-      w.turn += (Math.random() - 0.5) * dt * 1.5; w.turn *= 0.985;
+      w.wT = (w.wT || 0) - dt; if (w.wT <= 0) { w.wT = 1.5 + Math.random() * 3; w.turnGoal = (Math.random() - 0.5) * 0.8; }
+      w.turn += ((w.turnGoal || 0) - w.turn) * Math.min(1, 1.2 * dt);
       const dc = w.pos.distanceTo(camPos); if (dc < 5 + (w.sp.span ?? w.sp.len) * 1.2) { steerTo(w, 2 * w.pos.x - camPos.x, 2 * w.pos.z - camPos.z, 2.5); }   // nothing swims through the lens
       else if (w.sp.zone !== 'surface' && d < 6 && w.sp.len < 2) w.turn += 3 * dt;   // small things shy away
     }
@@ -746,10 +750,11 @@ function stepWild(dt, t) {
     const f = floorAt(w.pos.x, w.pos.z); if (ty === null) ty = targetY(w.sp, f, t, w.ph);
     ty = THREE.MathUtils.clamp(ty, f + w.sp.alt, -0.6);
     const dy = ty - w.pos.y; w.pitch += (THREE.MathUtils.clamp(dy * 0.4, -0.5, 0.5) - w.pitch) * Math.min(1, 2 * dt);
-    w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), v * dt);
+    w.v = (w.v ?? v) + (v - (w.v ?? v)) * Math.min(1, 1.5 * dt); w.roll = (w.roll || 0) + (-w.turn * 0.6 - (w.roll || 0)) * Math.min(1, 2 * dt);
+    w.pos.addScaledVector(fwdInto(_f, w.yaw, w.pitch), w.v * dt);
     w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, -0.5);
-    w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, -w.turn * 0.5);
-    w.mesh.material.uniforms.uFlap.value = 0.6 + 0.4 * Math.min(1, v / w.sp.max); w.mesh.material.uniforms.uFreq.value = w.sp.freq * (0.55 + 0.9 * Math.min(1, v / w.sp.max));
+    w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, w.roll);
+    w.mesh.material.uniforms.uFlap.value = 0.6 + 0.4 * Math.min(1, w.v / w.sp.max); w.mesh.material.uniforms.uFreq.value = w.sp.freq * (0.55 + 0.9 * Math.min(1, w.v / w.sp.max));
   }
 }
 
@@ -1055,7 +1060,7 @@ function stepAudio(above) {
   audio.lap.g.gain.setTargetAtTime(nearSurf * 0.22 * (above ? 1.3 : 1), t, 0.4);
   if (above) every('wave', 3 + Math.random() * 5, () => burst({ buf: 'pink', type: 'lowpass', f0: 300, f1: 1200, f2: 250, attack: 0.5, length: 2.2, g: 0.18 }));
   // your body in the water: rush with speed, thrash on the flap stroke when you work hard near the top
-  const spd = THREE.MathUtils.clamp((P.speed || 0) / (P.sp.max * 1.45), 0, 1), stroke = 0.5 + 0.5 * Math.sin(WU.uTime.value * P.sp.freq * 2.0);
+  const spd = THREE.MathUtils.clamp((P.speed || 0) / (P.sp.max * 1.45), 0, 1), stroke = 0.5 + 0.5 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0);
   audio.rush.g.gain.setTargetAtTime(spd * spd * 0.22, t, k); audio.rush.f.frequency.setTargetAtTime(250 + spd * 500, t, k);
   const effort = spd * (0.4 + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) * 1.5)) * nearSurf;
   audio.thrash.g.gain.setTargetAtTime(effort * effort * 0.35 * (0.4 + 0.6 * stroke), t, 0.05);
@@ -1289,7 +1294,7 @@ function stepPlayer(dt) {
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / 12); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / 10); if (P.sta > 0.25) P.spent = false; }   // twelve seconds of burst, ten to come back
   const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = wantBurst ? sp.max * 1.45 : (keys.Space && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd);
-  const thrust = THREE.MathUtils.clamp((wantSpeed - along) * 1.6, -0.5 * sp.max, 1.9 * sp.max) * (0.85 + 0.15 * Math.sin(WU.uTime.value * sp.freq * 2.0));
+  const thrust = THREE.MathUtils.clamp((wantSpeed - along) * 1.6, -0.5 * sp.max, 1.9 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
   P.vel.addScaledVector(fwd, thrust * dt);
   const vlen = P.vel.length(); if (vlen > 0.01) P.vel.addScaledVector(P.vel, -0.12 * vlen * dt / Math.max(0.3, sp.len ?? 1));
   P.vel.lerp(fwd.clone().multiplyScalar(along), Math.min(1, 2.5 * dt));           // the body streamlines into its own motion
@@ -1305,9 +1310,9 @@ function stepPlayer(dt) {
   lastFloor = fHere; P.current = _cur.length();
   if (P.pos.y > -0.3 && !above && Math.random() < 0.3) emitBubble(P.pos.x, -0.05, P.pos.z);
   const upNow = P.pos.y > -0.25; if (upNow !== !!P.wasUp && Math.abs(P.vel.y) > 0.4) { for (let i = 0; i < 30; i++) emitBubble(P.pos.x + (Math.random() - .5) * 1.5 * (sp.span ?? sp.len), -0.1 - Math.random() * 1.5, P.pos.z + (Math.random() - .5) * 1.5); splash(Math.min(1, Math.abs(P.vel.y) / 3)); P.shake = Math.max(P.shake || 0, 0.25); } P.wasUp = upNow;
-  P.mesh.position.copy(P.pos); P.mesh.position.y += Math.sin(WU.uTime.value * P.mesh.material.uniforms.uFreq.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch, P.roll);
+  P.mesh.position.copy(P.pos); P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch, P.roll);
   P.mesh.material.uniforms.uFlap.value = 0.35 + 0.65 * THREE.MathUtils.clamp(thrust / sp.max + 0.3, 0, 1);
-  P.mesh.material.uniforms.uFreq.value = sp.freq * (0.7 + 0.6 * THREE.MathUtils.clamp(thrust / sp.max, 0, 1.2));
+  { const u = P.mesh.material.uniforms; u.uFreq.value += (sp.freq * (0.7 + 0.6 * THREE.MathUtils.clamp(thrust / sp.max, 0, 1.2)) - u.uFreq.value) * Math.min(1, 3 * dt); }
   if (P.speed > sp.cruise * 1.3 && Math.random() < 0.25) emitBubble(P.pos.x, P.pos.y, P.pos.z);
 }
 function stepCamera(dt) {
@@ -1444,7 +1449,7 @@ function stepHud(dt) {
 }
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t;
+  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime; WU.uTime.value = t; stepStrokes(dt);
   if (started) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } }
   { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   if (started && !mapOpen && !helpOpen) { stepPlayer(dt); story.step(dt); }
@@ -1454,7 +1459,7 @@ function frame() {
 
 // seagrass (instanced blades in the shallows)
 const GRASS_MAX = 14000;
-const grass = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.06, 0.75).translate(0, 0.375, 0), mat({ side: THREE.DoubleSide,
+const grass = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.05, 0.55).translate(0, 0.275, 0), mat({ side: THREE.DoubleSide,
   vertexShader: GLSL_COMMON + `varying float vD, vY, vU;
     void main(){ vec3 p = position; vec3 o = (instanceMatrix * vec4(0,0,0,1)).xyz; p.x += sin(uTime * 1.1 + o.x * 0.7 + o.z * 0.4) * uv.y * uv.y * 0.22; p.z += cos(uTime * 0.9 + o.x * 0.3) * uv.y * uv.y * 0.12;
       vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vY = w.y; vU = uv.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
@@ -1468,7 +1473,7 @@ const hash2 = (x, z) => { let n = Math.imul(x | 0, 374761393) + Math.imul(z | 0,
 function rebuildGrass(px, pz) {
   const m = new THREE.Matrix4(), R = 70, step = 1.4; let k = 0; const cx = Math.round(px / step) * step, cz = Math.round(pz / step) * step;
   for (let z = cz - R; z <= cz + R && k < GRASS_MAX; z += step) for (let x = cx - R; x <= cx + R && k < GRASS_MAX; x += step) {
-    if (hash2(x * 7, z * 13) > 0.26) continue; const f = floorAt(x, z); if (f > -0.4 || f < -5.5) continue;
+    if (hash2(x * 7, z * 13) > 0.2) continue; const f = floorAt(x, z); if (f > -0.4 || f < -5.5) continue;
     const jx = (hash2(x, z) - 0.5) * step, jz = (hash2(z, x) - 0.5) * step, s = 0.6 + hash2(x + 1, z + 1) * 0.9;
     m.makeRotationY(hash2(x + 3, z) * 6.28); m.scale(new THREE.Vector3(1, s, 1)); m.setPosition(x + jx, floorAt(x + jx, z + jz), z + jz); grass.setMatrixAt(k++, m);
   }
