@@ -427,11 +427,11 @@ function pointsCloud(n, size, bright, ring = false) {
     vertexShader: GLSL_COMMON + `uniform float uSize, uRing; attribute float aLife; varying float vD, vY, vL, vPS;
       void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vD = length(mv.xyz); vY = position.y; vL = aLife;
         float grow = uRing > 0.5 ? (1.0 + aLife * 0.6) : 1.0;   // bubbles swell as they rise
-        gl_PointSize = uRing > 0.5 ? clamp(uSize * grow * 14.0 / max(vD, 1.0), 1.5, 14.0) : uSize; vPS = gl_PointSize; gl_Position = projectionMatrix * mv; }`,
+        gl_PointSize = uRing > 0.5 ? clamp(uSize * grow * 14.0 / max(vD, 1.0), 1.5, 6.0) : uSize; vPS = gl_PointSize; gl_Position = projectionMatrix * mv; }`,
     fragmentShader: GLSL_COMMON + `uniform float uB, uRing; varying float vD, vY, vL, vPS;
       void main(){ float b = uB * (1.0 - fogF(vD)) * (0.5 + 0.5 * depthLight(vY)) * step(vY, 0.0);
         if (uRing < 0.5) b *= 0.55 + 0.45 * sin(uTime * 2.5 + vD * 7.0);
-        if (uRing > 0.5) { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0) discard; b *= mix(1.0, 0.25 + 0.75 * smoothstep(0.45, 0.8, r), smoothstep(2.0, 5.0, vPS)); b *= 1.0 - smoothstep(12.0, 14.0, vL); if (vY > -0.3) b *= smoothstep(-0.05, -0.3, vY); }
+        if (uRing > 0.5) { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0) discard; b *= smoothstep(1.5, 4.5, vD);   // nothing blooms in the lens b *= mix(1.0, 0.25 + 0.75 * smoothstep(0.45, 0.8, r), smoothstep(2.0, 5.0, vPS)); b *= 1.0 - smoothstep(12.0, 14.0, vL); if (vY > -0.3) b *= smoothstep(-0.05, -0.3, vY); }
         gl_FragColor = outB(b); }` }));
   p.frustumCulled = false; scene.add(p); return p;
 }
