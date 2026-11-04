@@ -2,7 +2,11 @@
 
 <p align="center">Play it at <a href="https://brackishgames.github.io/brackish/">brackishgames.github.io/brackish</a></p>
 
-<img src="screenshots/title.png" width="32%"> <img src="screenshots/hole.png" width="32%"> <img src="screenshots/map.png" width="32%">
+<img src="screenshots/hole.png" alt="A young cownose ray in the dark water off Egmont Key" width="100%">
+
+<img src="screenshots/title.png" alt="The title: the ray and the word BRACKISH lit in dots" width="100%">
+
+<img src="screenshots/map.png" alt="Fast travel: places down the bay beside a dot-matrix chart" width="100%">
 
 You are an animal in Tampa Bay. The whole thing is drawn the way the old Pioneer car stereos drew
 their dolphin screensaver: blue dots on black, amber text for the readouts.

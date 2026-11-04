@@ -7,7 +7,9 @@ dot shader's palette, its 4x4 ordered dither between seven levels, and round dot
 import math, os, re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONT = dict(re.findall(r'"(.)": "([.#]{35})"', open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read().split('const FONT = ', 1)[1].split('\n', 1)[0]))
+SRC = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
+FONT = dict(re.findall(r'"(.)": "([.#]{35})"', SRC.split('const FONT = ', 1)[1].split('\n', 1)[0]))     # the game's 5x7 panel font
+FONT3 = dict(re.findall(r'"(.)": "([.#]{15})"', SRC.split('const FONT3 = ', 1)[1].split('\n', 1)[0]))   # and its 3x5 one
 
 STOPS = [(0.0, (0.01, 0.07, 0.12)), (0.4, (0.03, 0.47, 0.72)), (0.75, (0.30, 0.88, 0.94)), (1.0, (0.96, 1.0, 1.0))]   # the shader's palette()
 UNLIT, AMBER = '#040a10', '#8a5a00'
@@ -42,15 +44,16 @@ def ray(u, v):
     if a < 0.03 and 0.38 < v < 0.85: return 0.28 * (1 - smoothstep(0.38, 0.8, v))   # the whip tail
     return None
 
-def text_cells(s, x0, y0, scale=1):
+def text_cells(s, x0, y0, scale=1, small=False):
+    F, gw, gh = (FONT3, 3, 5) if small else (FONT, 5, 7)
     out = []
     for n, ch in enumerate(s):
-        g = FONT[ch]
-        for j in range(7):
-            for i in range(5):
-                if g[j * 5 + i] == '#':
+        g = F[ch]
+        for j in range(gh):
+            for i in range(gw):
+                if g[j * gw + i] == '#':
                     for sy in range(scale):
-                        for sx in range(scale): out.append((x0 + (n * 6 + i) * scale + sx, y0 + j * scale + sy))
+                        for sx in range(scale): out.append((x0 + (n * (gw + 1) + i) * scale + sx, y0 + j * scale + sy))
     return out
 
 class Board:
@@ -60,11 +63,11 @@ class Board:
             for x in range(s.cols):
                 b = f(x, y)
                 if b is not None: s.b[x, y] = max(s.b.get((x, y), 0), b)
-    def ray(s, cx, cy, half):
-        s.field(lambda x, y: ray((x + 0.5 - cx) / half, (y + 0.5 - cy) / half))
-    def text(s, string, cy, lvl=0.5, scale=1):
-        w = (len(string) * 6 - 1) * scale
-        for c in text_cells(string, (s.cols - w) // 2, cy, scale): s.txt[c] = lvl
+    def ray(s, cx, cy, half, gain=1.0):
+        s.field(lambda x, y: (lambda b: None if b is None else b * gain)(ray((x + 0.5 - cx) / half, (y + 0.5 - cy) / half)))
+    def text(s, string, cy, lvl=0.5, scale=1, small=False):
+        w = (len(string) * (4 if small else 6) - 1) * scale
+        for c in text_cells(string, (s.cols - w) // 2, cy, scale, small): s.txt[c] = lvl
     def svg(s, blur):
         W, H, p = s.cols * s.p, s.rows * s.p, s.p
         lit, dim = [], []
@@ -95,8 +98,7 @@ def write(name, board, blur):
 b = Board(63, 48, 12); b.ray(31.5, 13.5, 26); b.text('BRACKISH', 36); write('logo.svg', b, 0.45)
 # the share card
 b = Board(200, 105, 6); b.field(water(105, 0.1)); b.ray(100, 26, 42); b.text('BRACKISH', 66, scale=2); b.text("TAMPA BAY · DON'T SWIM IN IT", 88, 0.3); write('og.svg', b, 0.45)
-# the org avatar: a B for brackishgames, faintly lit at the top and sinking into the dark, with the stereo's amber standby light
-b = Board(18, 18, 1024 / 18)
-B = set(text_cells('B', 4, 2, 2)); b.field(lambda x, y: (0.55 - 0.45 * (y - 2) / 13) if (x, y) in B else None); b.amber.add((15, 15)); write('avatar.svg', b, 0.3)
+# the org avatar: square, the ray big enough to read at 40px, the name under it
+b = Board(53, 53, 1024 / 53); b.ray(26.5, 17.5, 22, 1.5); b.text('BRACKISH', 39, 0.66); write('avatar.svg', b, 0.4)
 # the game icon (favicon, home screen): the ray alone
 b = Board(16, 16, 11.25); b.ray(8, 6.2, 9); write('icon.svg', b, 0.35)
