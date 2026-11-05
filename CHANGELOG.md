@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.0-beta.3](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.2...v0.1.0-beta.3) (2026-11-05)
+
+
+### Features
+
+* a model inspector: export what the game built around any point as a .glb with the real seabed, and look at it plainly, with sea level, parts to hide and heights under the pointer ([230c4ed](https://github.com/brackishgames/brackish/commit/230c4eda51f503ef26d05a2effda636be630edb6))
+* the Skyway built to its measured dimensions, and every bridge's supports reach its deck ([230c4ed](https://github.com/brackishgames/brackish/commit/230c4eda51f503ef26d05a2effda636be630edb6))
+
+
+### Bug Fixes
+
+* a large shape that can't cross (too shallow, nobody about) tries again in ten seconds instead of minutes ([f72be02](https://github.com/brackishgames/brackish/commit/f72be0208a6e5a6f3a00687d7e151cdec9c50195))
+* the Skyway's pylons, piers and cables stand on its own deck ([f72be02](https://github.com/brackishgames/brackish/commit/f72be0208a6e5a6f3a00687d7e151cdec9c50195))
+
 ## [0.1.0-beta.2](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.1...v0.1.0-beta.2) (2026-11-05)
 
 
