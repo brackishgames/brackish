@@ -1,16 +1,22 @@
-'use strict';
+import * as THREE from 'three';
+import { rand } from '../core/random.js?v=__BUILD__';
+import { camera, dotPass, scene } from '../render/display.js?v=__BUILD__';
+import { GLSL_COMMON, mat } from '../render/materials.js?v=__BUILD__';
+import { P } from '../actors/player.js?v=__BUILD__';
+import { started } from '../systems/story.js?v=__BUILD__';
+import { camPos } from '../app/frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  BUBBLE LOGO  —  the title hangs in the water as bubbles and scatters
 //  when you start swimming. Amber travels in the G channel.
 // ═══════════════════════════════════════════════════════════════════
-const LOGO_FONT = {
+export const LOGO_FONT = {
   B: ['1111.', '1...1', '1...1', '1111.', '1...1', '1...1', '1111.'], R: ['1111.', '1...1', '1...1', '1111.', '1.1..', '1..1.', '1...1'],
   A: ['.111.', '1...1', '1...1', '11111', '1...1', '1...1', '1...1'], C: ['.1111', '1....', '1....', '1....', '1....', '1....', '.1111'],
   K: ['1...1', '1..1.', '1.1..', '11...', '1.1..', '1..1.', '1...1'], I: ['11111', '..1..', '..1..', '..1..', '..1..', '..1..', '11111'],
   S: ['.1111', '1....', '1....', '.111.', '....1', '....1', '1111.'], H: ['1...1', '1...1', '1...1', '11111', '1...1', '1...1', '1...1'],
 };
-const LOGO_RAY = ['........11.11........', '.....11111111111.....', '..1111111111111111...', '.1111111111111111111.', '111111111111111111111', '.1111111111111111111.', '...111111111111111...', '......111111111......', '.........111.........', '..........1..........', '..........1..........', '..........1..........'];
-const logo = (() => {
+export const LOGO_RAY = ['........11.11........', '.....11111111111.....', '..1111111111111111...', '.1111111111111111111.', '111111111111111111111', '.1111111111111111111.', '...111111111111111...', '......111111111......', '.........111.........', '..........1..........', '..........1..........', '..........1..........'];
+export const logo = (() => {
   const pts = [];   // [col, row, brightness, amber]
   const word = 'BRACKISH', cols = word.length * 6 - 1, rw = LOGO_RAY[0].length, rh = LOGO_RAY.length, W = Math.max(cols, rw);
   LOGO_RAY.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '1') { const d = Math.abs(i - (rw >> 1)) / (rw / 2); pts.push([(W - rw) / 2 + i, j, d < 0.15 ? 1.0 : d < 0.55 ? 0.85 : 0.65, 0]); } }));
@@ -47,7 +53,7 @@ const logo = (() => {
   const mesh = new THREE.Points(g, m); mesh.frustumCulled = false; mesh.renderOrder = 10; scene.add(mesh);
   return { mesh, m, release: () => { if (m.uniforms.uGo.value < 0) m.uniforms.uGo.value = 0; } };
 })();
-function stepLogo(dt) {
+export function stepLogo(dt) {
   const u = logo.m.uniforms; if (u.uGo.value >= 0) { u.uGo.value += dt; if (u.uGo.value > 5) { logo.mesh.visible = false; return; } }
   const dist = 7.5, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
   if (u.uGo.value < 0 && !started) { u.uOrigin.value.copy(camPos).addScaledVector(fwd, dist).addScaledVector(up, 1.1); u.uRight.value.copy(right); u.uUp.value.copy(up);

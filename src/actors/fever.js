@@ -7,6 +7,7 @@ import { creatureMat } from '../render/materials.js?v=__BUILD__';
 import { FEVER_PATH, floorAt } from '../world/geo.js?v=__BUILD__';
 import { rayGeometry, speciesById } from './creatures.js?v=__BUILD__';
 import { PREDATORS, wild } from './wildlife.js?v=__BUILD__';
+import { camPos } from '../app/frame.js?v=__BUILD__';
 // the fever: ~1200 cownose rays, instanced, phase-offset flapping
 export const FEVER_N = MOBILE ? 500 : 1200;
 export const feverMesh = new THREE.InstancedMesh(rayGeometry(speciesById.cownose, 10, 7), creatureMat({ mode: 1, half: 0.45, len: 0.6, freq: 2.6, amp: 0.55, glow: 0.9 }), FEVER_N);

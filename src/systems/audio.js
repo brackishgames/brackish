@@ -12,6 +12,8 @@ import { P } from '../actors/player.js?v=__BUILD__';
 import { dread, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { kn } from './input.js?v=__BUILD__';
 import { started } from './story.js?v=__BUILD__';
+import { tip } from '../ui/hud.js?v=__BUILD__';
+import { _cur, camPos, lastFloor, paused } from '../app/frame.js?v=__BUILD__';
 export let audio = null, audioOn = true, ENGINES = null, ENGINE_SHIP = null;
 // ── SOUND. No music: the bay itself. Everything is synthesized from noise and sines, scheduled on
 //    the audio clock, ramped from silence, and scaled by distance. The world is heard through a

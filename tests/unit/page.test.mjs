@@ -11,9 +11,9 @@ test('the page policy allows exactly the inline import map, and nothing from a C
   assert.ok(!/cdn\.|jsdelivr|unpkg/.test(html), 'no CDN'); assert.equal((html.match(/<script(?![^>]*type="importmap")(?![^>]*src=)/g) || []).length, 0, 'no other inline scripts');
   for (const spec of Object.values(JSON.parse(map).imports)) assert.ok(existsSync(new URL(spec.replace(/^\.\//, ''), root)), `${spec} is in the repo`);
 });
-test('every game script main.js loads exists, and the shipped depths are there', () => {
-  const list = JSON.parse(read('src/main.js').match(/const GAME = (\[[^\]]+\])/s)[1].replace(/'/g, '"'));
-  for (const f of list) assert.ok(existsSync(new URL('src/' + f, root)), f);
+test('every module main.js loads exists, and the shipped depths are there', () => {
+  const list = JSON.parse(read('src/main.js').match(/const MODULES = (\[[^\]]+\])/s)[1].replace(/\/\/[^\n]*/g, '').replace(/'/g, '"'));
+  assert.ok(list.length > 30); for (const m of list) assert.ok(existsSync(new URL(`src/${m}.js`, root)), m);
   for (const n of ['outer', 'inner']) assert.ok(existsSync(new URL(`data/dem-${n}.bdem`, root)), n);
 });
 test('release-please and the deploy agree on the version stamp', () => {

@@ -12,6 +12,10 @@ import { wild } from '../actors/wildlife.js?v=__BUILD__';
 import { startAudio } from './audio.js?v=__BUILD__';
 import { SAVE_KEY, loadedSave } from './save.js?v=__BUILD__';
 import { CHAPTERS, pressedAny, startGame, started, story } from './story.js?v=__BUILD__';
+import { feedbackItems, feedbackKey, openFeedback } from '../ui/feedback.js?v=__BUILD__';
+import { $, LORE, bl, checkpoints, help, mapKey, mapOpen, renderHelpKeys, say, toggleMap, travelTo } from '../ui/hud.js?v=__BUILD__';
+import { cycleCreature, tilt, touch, touchHint } from '../ui/touch.js?v=__BUILD__';
+import { camPos, paused } from '../app/frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  INPUT (arrows + space), AUDIO
 // ═══════════════════════════════════════════════════════════════════

@@ -12,6 +12,8 @@ import { ABILITY, HP_MAX, P, abilityName } from './player.js?v=__BUILD__';
 import { bloop, splash } from '../systems/audio.js?v=__BUILD__';
 import { kn } from '../systems/input.js?v=__BUILD__';
 import { started } from '../systems/story.js?v=__BUILD__';
+import { say, tip } from '../ui/hud.js?v=__BUILD__';
+import { _xz } from '../app/frame.js?v=__BUILD__';
 // The bay's small life: moon jellies, clams and shrimp to eat, mullet schools, pelicans and gulls.
 // moon jellies: slow, pulsing, harmless, lovely in the dark
 export function jellyGeometry() {

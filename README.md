@@ -71,7 +71,7 @@ of that, and dev mode never touches your save. The page's security policy allows
 
 `npm install` once, then `npm test`: lint, unit tests, and the game played by a script.
 
-- `npm run lint` lints the game's scripts joined in load order, the only way to catch a name no file defines.
+- `npm run lint` checks every module's imports and load order, then lints every module on its own: a name it uses without importing is an error.
 - `npm run test:unit` covers the pure logic in `src/lib/` (map frame, depths format, text wrap, tilt, saves, collision,
   feedback reports) and the feedback Worker.
 - `npm run test:game` opens the game in headless Chrome at `?test`, where the world only moves when a test steps it, and
@@ -100,21 +100,27 @@ and drop `"prerelease"` in `release-please-config.json`, then commit with a `Rel
 
 ## Code
 
-`index.html` holds the markup and styles; `src/main.js` loads three.js, the pure-logic modules in `src/lib/` and the core in
-`src/core/` (`env`, `random`, `tune`, `events`, `settings`, `screen`: what everything stands on), `src/render/` (`display`:
-the renderer and the dot-matrix post; `materials`: the shared shading and the animated body material; `effects`: sky,
-water, light shafts and particles) and `src/world/` (`geo`: the real-world frame, the depths, NOAA and the `Bay` API;
-`seafloor`; `structures`; `seabed`; `time`, the hour of the day) and `src/actors/` (`creatures`: species and bodies;
-`player`: the body you are, its abilities, being hurt; `wildlife`: who you meet, sharks that hunt, shapes that pass;
-`fever`; `life`: jellies, food, mullet, birds; `boats`: ships, small craft, giggers) and `src/systems/` (`input`: the input
-snapshot, keys and bindings, mouse, controller, the pause menu and photo mode; `audio`; `save`; `story`). Each module imports what it uses, and `npm run imports` writes those lines from what
-the code actually reads. The rest of the game is still plain scripts in `src/`, run in order and sharing one scope while
-they move to modules a layer at a time: `04-logo`, `10-hud`, `13-frame` (world steps and the frame, the player, the camera), `14-panel` (the dot font and every word on
-screen), `15-touch` (touch and tilt), `16-test` (the test interface and the dev readout), `17-feedback` and `18-boot`.
-The world moves in fixed slices of time and every roll goes through one seeded `rand()`; the numbers that decide how it
-feels, and how long things last, are in `TUNE` in `src/core/tune.js`. Nothing waits on a guess: a step that follows
-another is called when that one has happened (a fade reaching black, a chapter begun, full screen granted). A name declared
-twice across files stops the game at load, which is on purpose.
+`index.html` holds the markup and styles; `src/main.js` imports every module in layer order, lowest first, then boots the
+bay. Each layer only builds on the ones below it:
+
+| Layer | Modules |
+|---|---|
+| `src/lib/` | pure logic with no game state, unit-tested: `rng`, `geo` (the metric frame), `text` (wrapping), `tiff`, `dem` (the shipped depths format), `tilt`, `save` (signing, versions), `collide`, `feedback` (reports) |
+| `src/core/` | what everything stands on: `env` (device, modes, build), `random` (the seed and `rand`), `tune` (every number that decides how it feels and how long things last), `events`, `settings`, `screen` (full screen, orientation), `space` (directions, placement, scratch values) |
+| `src/render/` | `display` (the renderer and the dot-matrix post), `materials` (the shared shading and the animated body material), `effects` (sky, water, light shafts, particles) |
+| `src/world/` | `time` (the hour), `geo` (the depths, NOAA, the places, the `Bay` API), `seafloor`, `structures`, `seabed` |
+| `src/actors/` | `creatures` (species and bodies), `player` (the body you are, its abilities, being hurt), `wildlife` (who you meet, sharks that hunt, shapes that pass), `fever`, `life` (jellies, food, mullet, birds), `boats` |
+| `src/systems/` | `input` (the input snapshot, keys and bindings, mouse, controller, the pause menu, photo mode), `audio`, `save`, `story` |
+| `src/ui/` | `hud` (readouts, the map, the story line), `panel` (the dot font and every word on screen), `logo`, `touch` (touch and tilt), `feedback` |
+| `src/app/` | `frame` (world steps and the frame, the player's step, the camera), `testing` (`window.__game` and the dev readout), `boot` |
+
+Each module imports what it uses: `npm run imports` writes those lines from what the code actually reads, and the check
+in `npm run lint` fails if any import is missing or extra, or if a module uses something while it is loading from a
+module that can import it back (those uses go in an init function that boot calls). Every shared variable has one owner,
+the module that changes it; anything else asks that module. The world moves in fixed slices of time and every roll goes
+through one seeded `rand()`. Nothing waits on a guess: a step that follows another is called when that one has happened
+(a fade reaching black, a chapter begun, full screen granted). On your own machine (`?test`, `?dev`) every module's
+exports are reachable from the console, read-only; the published game puts nothing on `window`.
 
 `tools/fetch-dem.mjs` fetches the depths from NOAA again (only if the tile bounds change), `tools/vendor-three.mjs`
 copies a three.js version into `vendor/`, and `tools/marks.py` redraws the logo, org avatar and share card in `brand/`.

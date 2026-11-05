@@ -13,6 +13,7 @@ import { P, hurt } from './player.js?v=__BUILD__';
 import { stab } from '../systems/audio.js?v=__BUILD__';
 import { rumble } from '../systems/input.js?v=__BUILD__';
 import { started } from '../systems/story.js?v=__BUILD__';
+import { say } from '../ui/hud.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  BOATS  —  ships work the channel, small craft wander the flats.
 //  You hear them before you see them. Near the surface they can hit you.

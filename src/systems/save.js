@@ -7,6 +7,7 @@ import { fever } from '../actors/fever.js?v=__BUILD__';
 import { eaten } from '../actors/life.js?v=__BUILD__';
 import { P, becomeSpecies, unlocked } from '../actors/player.js?v=__BUILD__';
 import { CHAPTERS, started, story } from './story.js?v=__BUILD__';
+import { cameraBehind, checkpoints, restoreCheckpoints } from '../ui/hud.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  SAVE  —  progress in localStorage, signed so an edited save is refused.
 //  (A client-only game can never be fully cheat-proof; this stops casual edits.)

@@ -1,4 +1,18 @@
-'use strict';
+import { toLL, toXZ } from '../lib/geo.js?v=__BUILD__';
+import { DEV, TEST } from '../core/env.js?v=__BUILD__';
+import { once } from '../core/events.js?v=__BUILD__';
+import { SEED } from '../core/random.js?v=__BUILD__';
+import { portrait } from '../core/screen.js?v=__BUILD__';
+import { Q, camera } from '../render/display.js?v=__BUILD__';
+import { floorAt } from '../world/geo.js?v=__BUILD__';
+import { P } from '../actors/player.js?v=__BUILD__';
+import { WILD_ACTIVE, dread, huntHeat, wild } from '../actors/wildlife.js?v=__BUILD__';
+import { closeMenu, endPhoto, helpOpen, input, keys, menu, photo, setHelp, setInputOverride } from '../systems/input.js?v=__BUILD__';
+import { CHAPTERS, startGame, started, story } from '../systems/story.js?v=__BUILD__';
+import { fbEl } from '../ui/feedback.js?v=__BUILD__';
+import { cameraBehind, mapOpen, say, storyEl, toggleMap } from '../ui/hud.js?v=__BUILD__';
+import { lastHudFail, pText } from '../ui/panel.js?v=__BUILD__';
+import { paused, setTimeScale, simStep, simTime, timeScale } from './frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  TEST + DEBUG  —  ?test (your machine only): the world stands still
 //  until a test steps it. window.__game is the whole interface:
@@ -10,9 +24,10 @@
 //    __game.teleport(lat, lon, depth)        put the player somewhere
 //  ?dev adds F3 (a readout of the world) and [ ] (slow the world, speed it up).
 // ═══════════════════════════════════════════════════════════════════
-let bootDone; const booted = new Promise(r => bootDone = r);
-const errorLog = [];   // filled by 17-feedback.js
-function snapshot() {
+export let bootDone;
+export const booted = new Promise(r => bootDone = r);
+export const errorLog = [];   // filled by 17-feedback.js
+export function snapshot() {
   const near = wild.filter(w => w.sp && w.id < WILD_ACTIVE);
   return { seed: SEED, simTime, started, paused, menu: menu?.kind ?? null, binding: menu?.binding ?? null, mapOpen, helpOpen, portrait: portrait(),
     chapter: story.ch, chapterTitle: CHAPTERS[story.ch].title, species: P.sp.id, pos: [P.pos.x, P.pos.y, P.pos.z], latLon: toLL(P.pos.x, P.pos.z),
@@ -20,7 +35,7 @@ function snapshot() {
     current: P.current || 0, bumps: P.bumps || 0, hunted: near.some(w => w.hunting), dread, huntHeat, passing: near.filter(w => w.passing).map(w => w.sp.id),
     wild: near.map(w => w.sp.id), said: storyEl.textContent, hudFail: lastHudFail, fov: camera.fov, input: { ...input }, errors: errorLog.map(e => e.text) };
 }
-const testApi = {
+export const testApi = {
   ready: booted,
   async start() { if (!started) { const begun = once('chapter-begun'); startGame(null); await begun; } return snapshot(); },
   async chapter(i) { const begun = once('chapter-begun'); story.begin(i); await begun; return snapshot(); },
@@ -34,12 +49,12 @@ const testApi = {
 if (TEST || DEV) window.__game = testApi;
 
 // ── ?dev: F3 shows the world's state; [ and ] halve and double the speed of time
-const debug = { on: false };
+export const debug = { on: false };
 if (DEV) addEventListener('keydown', e => {
   if (e.code === 'F3') { debug.on = !debug.on; e.preventDefault(); }
   if (e.code === 'BracketLeft' || e.code === 'BracketRight') { setTimeScale(timeScale * (e.code === 'BracketRight' ? 2 : 0.5)); say(`TIME ×${timeScale}`, 1); }
 });
-function drawDebug(W, H) {
+export function drawDebug(W, H) {
   if (!DEV || !debug.on) return;
   const s = snapshot(), hunter = wild.find(w => w.hunting), lines = [
     `FPS ${(1 / Q.ema).toFixed(0)}  DPR ${Q.dprs[Q.level]}  TIME ×${timeScale}  SEED ${SEED}`,

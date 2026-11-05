@@ -1,15 +1,42 @@
-'use strict';
+import * as THREE from 'three';
+import { pushOut } from '../lib/collide.js?v=__BUILD__';
+import { TEST } from '../core/env.js?v=__BUILD__';
+import { rand } from '../core/random.js?v=__BUILD__';
+import { portrait } from '../core/screen.js?v=__BUILD__';
+import { settings } from '../core/settings.js?v=__BUILD__';
+import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__BUILD__';
+import { TUNE } from '../core/tune.js?v=__BUILD__';
+import { camera, cellCam, cellRT, cellScene, composer, dotPass, lowRT, renderer, scene, stepQuality } from '../render/display.js?v=__BUILD__';
+import { bubbleLife, bubbles, emitBubble, emitSpray, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
+import { WU, stepStrokes, strouhalRad } from '../render/materials.js?v=__BUILD__';
+import { Bay, floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
+import { grassCenter, rebuildGrass } from '../world/seabed.js?v=__BUILD__';
+import { updateClipmap } from '../world/seafloor.js?v=__BUILD__';
+import { world } from '../world/structures.js?v=__BUILD__';
+import { day } from '../world/time.js?v=__BUILD__';
+import { stepBoats, stepGig } from '../actors/boats.js?v=__BUILD__';
+import { stepFever } from '../actors/fever.js?v=__BUILD__';
+import { BIRDS, GONE, birdMesh, dives, fishMesh, flocks, schools, steerToSchool, stepDives, stepFood, stepJellies } from '../actors/life.js?v=__BUILD__';
+import { AIR, HOLD, HP_MAX, P, hurt } from '../actors/player.js?v=__BUILD__';
+import { PREDATORS, stepThing, stepWild, wild } from '../actors/wildlife.js?v=__BUILD__';
+import { blow, flush, splash, stepAudio, stepVolume, thud, whoosh } from '../systems/audio.js?v=__BUILD__';
+import { aim, helpOpen, input, keys, kn, menu, mouseSteering, needFull, openMenu, pad, photo, pollPad, readInput, rumble, sprinting } from '../systems/input.js?v=__BUILD__';
+import { stepAutosave } from '../systems/save.js?v=__BUILD__';
+import { CHAPTERS, started, story } from '../systems/story.js?v=__BUILD__';
+import { $, mapOpen, say, sayTimer, stepGoalBeam, stepHud, stepTips, tip } from '../ui/hud.js?v=__BUILD__';
+import { logo, stepLogo } from '../ui/logo.js?v=__BUILD__';
+import { drawPanel } from '../ui/panel.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
 // ═══════════════════════════════════════════════════════════════════
-const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = performance.now(), d = (n - this.last) / 1000; this.last = n; this.elapsedTime += d; return d; } }, _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
-let above = false, aboveMix = 0, lastFloor = -5;
+export const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = performance.now(), d = (n - this.last) / 1000; this.last = n; this.elapsedTime += d; return d; } }, _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
+export const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+export let above = false, aboveMix = 0, lastFloor = -5;
 
-const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
+export const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
 // ── the player, one step. each stage hands the next what it needs: what you're asking for, the seabed, whether you're
 //    bursting, how hard you're swimming. the body's lasting state is on P.
-function stepPlayer(dt) {
+export function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
   const intent = steerIntent(dt, stunned), ground = terrainAround(sp, dt, intent.climb);
@@ -21,7 +48,7 @@ function stepPlayer(dt) {
   poseBody(sp, thrust, surf, dt);
 }
 // what you're asking the body to do: the input snapshot, with the mouse's aim folded in
-function steerIntent(dt, stunned) {
+export function steerIntent(dt, stunned) {
   let turn = stunned ? 0 : input.turn, climb = stunned ? -0.4 : input.climb; const throttle = stunned ? 0 : input.throttle;   // one snapshot of every device (08-input.js)
   if (mouseSteering() && !stunned && !input.forced) {   // the mouse sets where you mean to go; the body still turns at its own rate and banks into it
     aim.yaw ??= P.yaw;
@@ -33,14 +60,14 @@ function steerIntent(dt, stunned) {
   return { turn, climb, throttle };
 }
 // the bottom under you and ahead of you, and the timers that run down every step
-function terrainAround(sp, dt, climb) {
+export function terrainAround(sp, dt, climb) {
   const fHere = floorAt(P.pos.x, P.pos.z), ahead = fwdOf(P.yaw, 0).multiplyScalar(6 + P.speed * 2).add(P.pos), fAhead = floorAt(ahead.x, ahead.z);
   P.strikeT = Math.max(0, (P.strikeT || 0) - dt); P.leapT = Math.max(0, (P.leapT || 0) - dt); P.reveal = Math.max(0, (P.reveal || 0) - dt / 4);
   P.idleT = climb ? 0 : (P.idleT || 0) + dt;
   return { fHere, fAhead };
 }
   // body attitude: a turn needs speed and banks the body; the turning circle grows with speed
-function steerBody(sp, { turn, climb }, { fAhead }, dt) {
+export function steerBody(sp, { turn, climb }, { fAhead }, dt) {
   const speedFrac = Math.min(1, P.speed / sp.max);
   const yawWant = turn * sp.turn * (settings.turn / 100) * (0.55 + 0.6 * Math.min(1, P.speed / sp.cruise)) / (1 + speedFrac * 1.4);
   P.yawRate += (yawWant - P.yawRate) * Math.min(1, 4 * dt); P.yaw += P.yawRate * dt;
@@ -53,7 +80,7 @@ function steerBody(sp, { turn, climb }, { fAhead }, dt) {
   P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
 }
   // burst: SHIFT spends the dots on a flat-out sprint, with or without W. five seconds of it, six to fill back up, usable again in two
-function stepBurst(stunned, dt) {
+export function stepBurst(stunned, dt) {
   P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / TUNE.burst.secs); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / TUNE.burst.refill); if (P.sta > TUNE.burst.reuseAt) P.spent = false; }
   if (wantBurst && !P.bursting) { whoosh(0.7); rumble(0.35, 0.25, 160); for (let i = 0; i < 16; i++) emitBubble(P.pos.x + (rand() - .5) * 1.2, P.pos.y + (rand() - .5) * 0.6, P.pos.z + (rand() - .5) * 1.2); }   // the kick: heard, felt, seen
@@ -61,7 +88,7 @@ function stepBurst(stunned, dt) {
   return wantBurst;
 }
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
-function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
+export function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
   const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? sp.max * TUNE.burst.boost : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd), dragAt = v => 2.4 * sp.max * v * Math.abs(v) / (sp.max * sp.max);   // the same quadratic drag the water applies below
   // thrust = what holding that speed costs against the drag, plus a push toward it, so every speed is actually reached; a burst pushes hardest
@@ -81,7 +108,7 @@ function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
   P.speed = Math.max(0, along);
   return thrust;
 }
-function porpoise(sp, { climb, throttle }, dt) {
+export function porpoise(sp, { climb, throttle }, dt) {
   const inAir = P.pos.y > 0.0;
   if (sp.id === 'dolphin' && !inAir && P.pos.y > -1.4 && throttle > 0 && !climb && Math.abs(P.yawRate) < 0.35 && P.speed > sp.cruise * 0.75) {   /* porpoising: at speed a dolphin travels in leaps, the cheaper way to go */
     P.porpT = (P.porpT || 0) + dt; P.porpNext ??= 2 + rand() * 2.5;
@@ -91,7 +118,7 @@ function porpoise(sp, { climb, throttle }, dt) {
       else if (mate && CHAPTERS[story.ch].pair) say('swim beside it', 1.5); }
   } else P.porpT = Math.max(0, (P.porpT || 0) - dt * 2);
 }
-function breathe(sp, wantBurst, dt) {
+export function breathe(sp, wantBurst, dt) {
   if (HOLD[sp.id]) {   // lungs: air drains under, comes back in a few breaths at the top, twice as fast when you burst
     P.air ??= 1; const up = P.pos.y > -0.3;
     if (up) { if (P.air < 0.97 && !P.breathing) { P.breathing = true; blow(sp.id === 'dolphin'); P.surf = { t: 0, len: sp.id === 'dolphin' ? 1.5 : 3.2, puff: false }; } P.air = Math.min(1, P.air + dt / 1.5); P.drownT = 0; if (P.air >= 1) P.breathing = false; }
@@ -102,7 +129,7 @@ function breathe(sp, wantBurst, dt) {
   } else P.air = 1;
 }
 // the tide carries you, the bottom stops you, structures turn you aside
-function moveThroughWater(sp, fHere, dt) {
+export function moveThroughWater(sp, fHere, dt) {
   Bay.current(P.pos.x, P.pos.z, _cur); const curReal = _cur.length();
   _cur.multiplyScalar(1 + TUNE.tide.pull * THREE.MathUtils.smoothstep(curReal, TUNE.tide.from, TUNE.tide.to));   // a strong tide is felt, not just measured: in the pass on a big ebb it carries you toward the Gulf
   if (curReal > 0.55 && !P.tideSaid && started && sayTimer <= 0) { P.tideSaid = true; say('the tide has you', 2.5); } else if (curReal < 0.3) P.tideSaid = false;
@@ -121,12 +148,12 @@ function moveThroughWater(sp, fHere, dt) {
   lastFloor = fHere; P.current = curReal;
 }
 // rings on the water at the top, and a splash breaking through it either way
-function rippleAndSplash(sp, dt) {
+export function rippleAndSplash(sp, dt) {
   if (P.pos.y > -0.4) { P.rippleT = (P.rippleT || 0) + dt; if (P.rippleT > 0.45) { P.rippleT = 0; const r = (sp.span ?? sp.len) * 0.7; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; emitBubble(P.pos.x + Math.cos(a) * r, -0.06 - rand() * 0.1, P.pos.z + Math.sin(a) * r); } } }
   const upNow = P.pos.y > -0.25; if (upNow !== !!P.wasUp && Math.abs(P.vel.y) > 0.4) { for (let i = 0; i < 30; i++) emitBubble(P.pos.x + (rand() - .5) * 1.5 * (sp.span ?? sp.len), -0.1 - rand() * 1.5, P.pos.z + (rand() - .5) * 1.5); splash(Math.min(1, Math.abs(P.vel.y) / 3)); P.shake = Math.max(P.shake || 0, 0.25); } P.wasUp = upNow;
 }
   // surfacing, as each body really does it: a dolphin rolls through in an arc and blows; a manatee lifts its snout, breathes, and sinks
-function surfacing(sp, dt) {
+export function surfacing(sp, dt) {
   let surfPitch = 0, surfY = 0;
   if (P.surf) { const S = P.surf; S.t += dt; const u = Math.min(1, S.t / S.len), head = fwdOf(P.yaw, 0).multiplyScalar((sp.len || 1) * 0.35).add(P.pos);
     if (sp.id === 'dolphin') { surfPitch = 0.5 * Math.cos(Math.PI * u); surfY = 0.3 * Math.sin(Math.PI * u); if (!S.puff && u > 0.2) { S.puff = true; for (let i = 0; i < 26; i++) emitSpray(head.x, 0.2, head.z, (rand() - .5) * 0.8, 2.5 + rand() * 2, (rand() - .5) * 0.8); } }
@@ -135,14 +162,14 @@ function surfacing(sp, dt) {
   return { surfPitch, surfY };
 }
   // at the top: a cownose ray's wingtips cut the water; a shark's dorsal leaves a wake
-function wake(sp, dt) {
+export function wake(sp, dt) {
   if (P.pos.y > -0.45 && P.speed > 0.3) { P.cutT = (P.cutT || 0) - dt; if (P.cutT <= 0) { P.cutT = 0.12;
     const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), b = fwdOf(P.yaw, 0);
     if (sp.kind === 'ray') for (const side of [-1, 1]) { const x = P.pos.x + rx * side * (sp.span || 1) * 0.5, z = P.pos.z + rz * side * (sp.span || 1) * 0.5; emitBubble(x, -0.06, z); if (rand() < 0.5) emitSpray(x, 0.02, z, -b.x * P.speed * 0.3 + rx * side * 0.4, 0.6 + rand() * 0.5, -b.z * P.speed * 0.3 + rz * side * 0.4); }
     else if (PREDATORS.has(sp.id) && P.pos.y > -0.6) { emitBubble(P.pos.x - b.x * 0.4, -0.06, P.pos.z - b.z * 0.4); for (const side of [-1, 1]) emitSpray(P.pos.x + rx * side * 0.1, 0.02, P.pos.z + rz * side * 0.1, rx * side * 0.6 - b.x * 0.3, 0.5 + rand() * 0.4, rz * side * 0.6 - b.z * 0.3); } } }
 }
 // the body where it is, how it is turned, how hard its wings or tail are working, and its trail of bubbles
-function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
+export function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
   P.mesh.position.copy(P.pos); P.mesh.position.y += surfY;
   P.mesh.position.y += Math.sin(P.mesh.material.uniforms.uPhase.value) * 0.025 * (sp.span ?? sp.len); orient(P.mesh, P.yaw, P.pitch + surfPitch, P.roll);
   P.mesh.material.uniforms.uGlow.value += ((P.lit ? 2.4 : 1.3) - P.mesh.material.uniforms.uGlow.value) * Math.min(1, 3 * dt);
@@ -155,7 +182,7 @@ function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
   if (P.speed > sp.cruise * 1.3) for (let i = 0; i < 2; i++) if (rand() < 0.5) emitBubble(P.pos.x + (rand() - .5) * (sp.span ?? sp.len) * 0.8, P.pos.y - 0.1, P.pos.z + 0.3);
   else if (rand() < 0.04) emitBubble(P.pos.x, P.pos.y, P.pos.z);
 }
-function stepPhotoCam(dt) {   // photo mode: orbit and zoom around the body; keys, sticks, mouse and wheel all work
+export function stepPhotoCam(dt) {   // photo mode: orbit and zoom around the body; keys, sticks, mouse and wheel all work
   const k = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0), z = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0), u = (keys.Space ? 1 : 0) - (keys.KeyC ? 1 : 0);
   photo.yaw += (k * 1.2 - pad.lookX * 1.6 - pad.turn * 1.2) * dt; photo.pitch = THREE.MathUtils.clamp(photo.pitch + (u * 0.9 + pad.lookY * 1.2) * dt, -1.3, 1.3);
   photo.dist = THREE.MathUtils.clamp(photo.dist * (1 + (z - pad.climb) * dt), 1.2, 60); photo.t += dt;
@@ -165,7 +192,7 @@ function stepPhotoCam(dt) {   // photo mode: orbit and zoom around the body; key
   above = camPos.y > 0; aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
   WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
 }
-function stepCamera(dt) {
+export function stepCamera(dt) {
   if (photo) { stepPhotoCam(dt); return; }
   P.burstMix = (P.burstMix || 0) + ((P.bursting ? 1 : 0) - (P.burstMix || 0)) * Math.min(1, (P.bursting ? 5 : 2) * dt);   // snaps in, eases out
   const size = P.mesh.userData.size, dist = 2.4 + size * 2.5 + P.speed * 0.12 + P.burstMix * (1 + size), h = 1.0 + size * 0.6;
@@ -194,7 +221,7 @@ function stepCamera(dt) {
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
   WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * (1 - 0.55 * (P.reveal || 0)); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
 }
-function stepAmbient(dt, t) {
+export function stepAmbient(dt, t) {
   updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
   if (grassCenter.distanceTo(_xz.set(P.pos.x, P.pos.z)) > 28) rebuildGrass(P.pos.x, P.pos.z);
   shaftSeeds.forEach((s, i) => { const a = s.a + t * 0.01, x = camPos.x + Math.cos(a) * s.r, z = camPos.z + Math.sin(a) * s.r;
@@ -240,19 +267,20 @@ function stepAmbient(dt, t) {
   birdMesh.count = k; birdMesh.instanceMatrix.needsUpdate = true;
 }
 // which way the tide is pushing you, as you look at it: ahead, behind, or off to a side
-const tideArrow = () => { const rel = Math.atan2(_cur.x, -_cur.z) + P.yaw, a = Math.atan2(Math.sin(rel), Math.cos(rel)); return Math.abs(a) < 0.79 ? '↑' : Math.abs(a) > 2.36 ? '↓' : a > 0 ? '→' : '←'; };
+export const tideArrow = () => { const rel = Math.atan2(_cur.x, -_cur.z) + P.yaw, a = Math.atan2(Math.sin(rel), Math.cos(rel)); return Math.abs(a) < 0.79 ? '↑' : Math.abs(a) > 2.36 ? '↓' : a > 0 ? '→' : '←'; };
 // ── time. the world moves in slices of at most 1/50 s, up to three a frame, so it runs at real speed down to ~17 fps and
 //    never depends on the display's rate. the screen (camera, HUD, sound, the render) updates once a frame.
 //    in ?test nothing moves on its own: a test steps the world in exact 1/60 s slices (src/16-test.js).
-const SIM_MAX = 1 / 50, SIM_STEPS = 3;
-let paused = false;   // a menu, the map, help, photo mode, or a window that isn't full screen: the world waits
-let photoUrl = null;
-let simTime = 0, timeScale = 1; const setTimeScale = k => { timeScale = THREE.MathUtils.clamp(k, 0.125, 8); };   // seconds of world time; ?dev can speed the world up or slow it down
+export const SIM_MAX = 1 / 50, SIM_STEPS = 3;
+export let paused = false;   // a menu, the map, help, photo mode, or a window that isn't full screen: the world waits
+export let photoUrl = null;
+export let simTime = 0, timeScale = 1;
+export const setTimeScale = k => { timeScale = THREE.MathUtils.clamp(k, 0.125, 8); };   // seconds of world time; ?dev can speed the world up or slow it down
 // something meant to last a while (TUNE.timing), on the right clock: 'screen' keeps running through a pause (cards, flashes), 'world' stops with it
-const timers = { screen: [], world: [] };
-function later(secs, fn, clock = 'screen') { timers[clock].push({ at: (clock === 'world' ? simTime : WU.uTime.value) + secs, fn }); }
-function runTimers(clock, now) { const q = timers[clock]; if (!q.length || !q.some(t => t.at <= now)) return; timers[clock] = q.filter(t => t.at > now); for (const t of q) if (t.at <= now) t.fn(); }
-function simStep(dt) {
+export const timers = { screen: [], world: [] };
+export function later(secs, fn, clock = 'screen') { timers[clock].push({ at: (clock === 'world' ? simTime : WU.uTime.value) + secs, fn }); }
+export function runTimers(clock, now) { const q = timers[clock]; if (!q.length || !q.some(t => t.at <= now)) return; timers[clock] = q.filter(t => t.at > now); for (const t of q) if (t.at <= now) t.fn(); }
+export function simStep(dt) {
   readInput(); stepStrokes(dt); const t = simTime;
   if (started && !paused) { day.hour = (day.hour + dt / 60) % 24; stepAutosave(dt); stepPlayer(dt); story.step(dt); }
   if (!started) {   // attract: after a while the ray wanders off on its own and the words fade
@@ -261,7 +289,7 @@ function simStep(dt) {
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
   if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt, P.pos); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); stepThing(dt); simTime += dt; runTimers('world', simTime); }
 }
-function frame() {
+export function frame() {
   requestAnimationFrame(frame);
   const real = Math.min(0.25, clock.getDelta()); WU.uTime.value = clock.elapsedTime;
   stepQuality(started && !paused); pollPad(); if (started && needFull() && !menu) openMenu('main');
@@ -273,4 +301,3 @@ function frame() {
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
   if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; renderer.domElement.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `brackish-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */   /* the frame just drawn, before it is cleared */
 }
-

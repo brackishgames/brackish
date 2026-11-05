@@ -15,6 +15,11 @@ import { WILD_ACTIVE, setWild, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { bell, chimeCheckpoint, chimeStart } from './audio.js?v=__BUILD__';
 import { lockPointer, sprinting } from './input.js?v=__BUILD__';
 import { saveGame } from './save.js?v=__BUILD__';
+import { $, checkpoints, discover, say, sayTimer, travelTo } from '../ui/hud.js?v=__BUILD__';
+import { logo } from '../ui/logo.js?v=__BUILD__';
+import { whenFaded } from '../ui/panel.js?v=__BUILD__';
+import { tilt } from '../ui/touch.js?v=__BUILD__';
+import { later } from '../app/frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════

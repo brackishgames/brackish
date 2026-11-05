@@ -1,8 +1,28 @@
-'use strict';
+import * as THREE from 'three';
+import { decodeDem } from '../lib/dem.js?v=__BUILD__';
+import { toLL, toXZ } from '../lib/geo.js?v=__BUILD__';
+import { parseTiffF32 } from '../lib/tiff.js?v=__BUILD__';
+import { BUILD, DEV, LOCAL, TEST } from '../core/env.js?v=__BUILD__';
+import { TUNE } from '../core/tune.js?v=__BUILD__';
+import { composer, lowRT, renderer, resize } from '../render/display.js?v=__BUILD__';
+import { demUniforms } from '../render/materials.js?v=__BUILD__';
+import { BRIDGES_FALLBACK, Bay, DEM_URL, NOAA, OSM_QUERY, POIS, START, TILES, bar, cached, fetchBuf, floorAt, isWater, loadmsg } from '../world/geo.js?v=__BUILD__';
+import { rebuildGrass } from '../world/seabed.js?v=__BUILD__';
+import { bridges, buildStructures, setBridges, world } from '../world/structures.js?v=__BUILD__';
+import { day } from '../world/time.js?v=__BUILD__';
+import { SPECIES, speciesById } from '../actors/creatures.js?v=__BUILD__';
+import { P, becomeSpecies, unlocked } from '../actors/player.js?v=__BUILD__';
+import { applySave, loadSaved, loadedSave } from '../systems/save.js?v=__BUILD__';
+import { CHAPTERS, started } from '../systems/story.js?v=__BUILD__';
+import { $, cameraBehind, checkpoints, initHud } from '../ui/hud.js?v=__BUILD__';
+import { drawPanel, whenFaded } from '../ui/panel.js?v=__BUILD__';
+import { initTouch, setTitleHint } from '../ui/touch.js?v=__BUILD__';
+import { frame } from './frame.js?v=__BUILD__';
+import { bootDone } from './testing.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════════════════════════
-async function loadBridges() {
+export async function loadBridges() {
   try { if (Date.now() - (+localStorage.getItem('brackish.osmTry') || 0) < 864e5 && !localStorage.getItem('brackish.osmOk')) return; localStorage.setItem('brackish.osmTry', Date.now()); } catch {}   // a failing mirror is tried at most once a day
   try {
     const txt = await cached('osm-bridges-v1', async () => { const ac = new AbortController(); setTimeout(() => ac.abort(), TUNE.guards.osmMs);
@@ -18,12 +38,13 @@ async function loadBridges() {
   } catch (e) { return; }   // OpenStreetMap is optional; the built-in bridges stay
   for (const b of bridges) { if (b.name === 'bridge') continue; const [x, z] = b.pts[Math.floor(b.pts.length / 2)]; if (!POIS.some(p => p[2] === b.name)) { const [lat, lon] = toLL(x, z); POIS.push([lat, lon, b.name]); } }
 }
-let booting = true;
-function loadLoop() {   // until the world is ready, the display shows only the panel layer
+export let booting = true;
+export function loadLoop() {   // until the world is ready, the display shows only the panel layer
   if (!booting) return; requestAnimationFrame(loadLoop);
   renderer.setRenderTarget(lowRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.setRenderTarget(null); drawPanel(); composer.render();
 }
-async function boot() {
+export async function boot() {
+  initHud(); initTouch();   // the screen's wiring, now that every module is here
   resize(); loadLoop();
   const prog = [0, 0];
   const load = async (name, i) => {
@@ -58,4 +79,3 @@ async function boot() {
   booting = false; frame(); bootDone();
   if ('serviceWorker' in navigator && !LOCAL) navigator.serviceWorker.register('sw.js').catch(() => {});   // offline play on the published site; never on your machine, where it would only get in the way
 }
-boot().catch(e => { console.error(e); logError('boot: ' + (e?.stack || e)); });

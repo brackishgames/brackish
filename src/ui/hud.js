@@ -1,19 +1,35 @@
-'use strict';
+import * as THREE from 'three';
+import { toLL, toXZ } from '../lib/geo.js?v=__BUILD__';
+import { MOBILE } from '../core/env.js?v=__BUILD__';
+import { saveSettings, settings } from '../core/settings.js?v=__BUILD__';
+import { fwdOf } from '../core/space.js?v=__BUILD__';
+import { scene } from '../render/display.js?v=__BUILD__';
+import { GLSL_COMMON, mat } from '../render/materials.js?v=__BUILD__';
+import { POIS, START, TILES, floorAt, isWater, vex } from '../world/geo.js?v=__BUILD__';
+import { BOAT_TYPES, world } from '../world/structures.js?v=__BUILD__';
+import { nearestBoat } from '../actors/boats.js?v=__BUILD__';
+import { P, unlocked } from '../actors/player.js?v=__BUILD__';
+import { huntHeat, wild } from '../actors/wildlife.js?v=__BUILD__';
+import { chimeCheckpoint } from '../systems/audio.js?v=__BUILD__';
+import { B, keyLabel, keyboardHint, kn } from '../systems/input.js?v=__BUILD__';
+import { saveGame } from '../systems/save.js?v=__BUILD__';
+import { started, story } from '../systems/story.js?v=__BUILD__';
+import { nudgeHud } from './panel.js?v=__BUILD__';
+import { camLook, camPos, lastFloor, paused, tideArrow } from '../app/frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  HUD  —  readouts, compass tape, minimap, fast-travel map, story text
 // ═══════════════════════════════════════════════════════════════════
-const $ = id => document.getElementById(id);
-const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('story'), flash = $('flash'), help = $('help'), mapEl = $('map');
-const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
-let sayTimer = 0, sayEndT = 0;   // how long the line on screen has left; when the last one went
-const tipQueue = [];
-function tip(id, text, label = 'TIP') { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text, label }); }
-function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started || performance.now() - sayEndT < 4000 || huntHeat > 0) return;   /* never on top of another line, never mid-hunt */ const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), q.label === 'TIP' ? 5 : 7, q.label); }
-const sayLog = [];   // the last lines the bay said to you, sent along with feedback
-function say(text, secs = 3, label = '') { sayLog.push((label ? label + ' · ' : '') + text.replace(/\n/g, ' / ')); if (sayLog.length > 10) sayLog.shift(); storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
-bl.textContent = keyboardHint();
+export const $ = id => document.getElementById(id);
+export const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('story'), flash = $('flash'), help = $('help'), mapEl = $('map');
+export const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
+export let sayTimer = 0, sayEndT = 0;   // how long the line on screen has left; when the last one went
+export const tipQueue = [];
+export function tip(id, text, label = 'TIP') { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text, label }); }
+export function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started || performance.now() - sayEndT < 4000 || huntHeat > 0) return;   /* never on top of another line, never mid-hunt */ const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), q.label === 'TIP' ? 5 : 7, q.label); }
+export const sayLog = [];   // the last lines the bay said to you, sent along with feedback
+export function say(text, secs = 3, label = '') { sayLog.push((label ? label + ' · ' : '') + text.replace(/\n/g, ' / ')); if (sayLog.length > 10) sayLog.shift(); storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
 // the help screen lists your keys as they are bound now, or the touch controls on a phone
-function renderHelpKeys() {
+export function renderHelpKeys() {
   const L = a => keyLabel(B(a)), esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
   // each line short enough to fit on one row of a small screen (about 28 characters)
   const rows = MOBILE ? [['TILT', 'lean to turn · tip to dive'], ['HOLD', 'burst, while the dots last'], ['◆', 'sense or echo: finds clams'], ['M', 'map and fast travel'],
@@ -23,19 +39,18 @@ function renderHelpKeys() {
     [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo, at a moment worth it'], [L('feedback'), 'send us a note from here']];
   help.querySelector('.keys').innerHTML = rows.map(([k, d]) => `<b>${esc(k)}</b><span>${esc(d)}</span>`).join('');
 }
-renderHelpKeys();
 
-const mapXY = (x, z, S) => { const t = TILES.outer; return [(x - t.xmin) / (t.xmax - t.xmin) * S, (z - t.zmin) / (t.zmax - t.zmin) * S]; };
-let compassMarks = [];
-function drawCompass(landmarks) { compassMarks = landmarks; }
-const headingDeg = () => ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
-const bearingTo = (x, z) => ((Math.atan2(x - P.pos.x, -(z - P.pos.z)) * 180 / Math.PI) % 360 + 360) % 360;
+export const mapXY = (x, z, S) => { const t = TILES.outer; return [(x - t.xmin) / (t.xmax - t.xmin) * S, (z - t.zmin) / (t.zmax - t.zmin) * S]; };
+export let compassMarks = [];
+export function drawCompass(landmarks) { compassMarks = landmarks; }
+export const headingDeg = () => ((-P.yaw * 180 / Math.PI) % 360 + 360) % 360;
+export const bearingTo = (x, z) => ((Math.atan2(x - P.pos.x, -(z - P.pos.z)) * 180 / Math.PI) % 360 + 360) % 360;
 
 // checkpoints: discovered places you can fast travel to
-const checkpoints = [{ name: 'Skyway north', x: START[0], z: START[1] }];
-let lastCheckpoint = checkpoints[0];
+export const checkpoints = [{ name: 'Skyway north', x: START[0], z: START[1] }];
+export let lastCheckpoint = checkpoints[0];
 // what a place is, once, the first time you reach it. all of it is true.
-const LORE = {
+export const LORE = {
   'Sunshine Skyway': 'In May 1980 a freighter hit the old span in a squall and 1,200 feet of it fell into the bay. Thirty-five people died.',
   'Skyway main span': 'The new span is held up by cables from two towers. The piers are ringed with rock so no ship can reach them again.',
   'USCGC Blackthorn': 'A Coast Guard buoy tender. In January 1980 it collided with a tanker under the Skyway and capsized. Twenty-three men died. It was sunk out here as a reef.',
@@ -50,26 +65,25 @@ const LORE = {
   'Egmont Channel': 'The ship channel is dredged through the pass. Everything that comes into the bay comes through here.',
   'Old Skyway rubble': 'When the old bridge was taken down, some of it was dropped here. Now it is reef.',
 };
-function restoreCheckpoints(list) { checkpoints.length = 0; checkpoints.push(...list); lastCheckpoint = checkpoints[checkpoints.length - 1] || checkpoints[0]; }   // from a save
-function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); nudgeHud(); chimeCheckpoint(); if (LORE[name] && !world.wrecks.some(w => w.name === name)) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
-function cameraBehind() { camPos.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), -6).add(new THREE.Vector3(0, 1.5, 0)); camLook.copy(P.pos); }   /* no swing on arrival */
-function travelTo(cp) {
+export function restoreCheckpoints(list) { checkpoints.length = 0; checkpoints.push(...list); lastCheckpoint = checkpoints[checkpoints.length - 1] || checkpoints[0]; }   // from a save
+export function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); nudgeHud(); chimeCheckpoint(); if (LORE[name] && !world.wrecks.some(w => w.name === name)) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
+export function cameraBehind() { camPos.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), -6).add(new THREE.Vector3(0, 1.5, 0)); camLook.copy(P.pos); }   /* no swing on arrival */
+export function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
   P.pos.set(x, Math.max(floorAt(x, z) + 1.5, -6), z); P.speed = P.sp.cruise; P.stun = 0; P.air = 1; if (P.vel) P.vel.set(0, 0, 0); cameraBehind(); lastCheckpoint = cp;
 }
-let mapOpen = false, mapSel = 0;   // the fast-travel chart, and which place on it is picked
-function mapKey(code) {   // ↑ ↓ pick a place, ENTER goes there
+export let mapOpen = false, mapSel = 0;   // the fast-travel chart, and which place on it is picked
+export function mapKey(code) {   // ↑ ↓ pick a place, ENTER goes there
   if (code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
   if (code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList();
 }
-function toggleMap() { mapOpen = !mapOpen; mapEl.style.display = mapOpen ? 'flex' : 'none'; if (mapOpen) { mapSel = Math.max(0, checkpoints.indexOf(lastCheckpoint)); renderMapList(); } }
-function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join('');  }
+export function toggleMap() { mapOpen = !mapOpen; mapEl.style.display = mapOpen ? 'flex' : 'none'; if (mapOpen) { mapSel = Math.max(0, checkpoints.indexOf(lastCheckpoint)); renderMapList(); } }
+export function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join('');  }
 
-const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: GLSL_COMMON + `varying vec2 vUv; void main(){ float e = sin(vUv.x * 3.14159); float b = 0.55 * e * e * (1.0 - vUv.y * 0.6) * (0.75 + 0.25 * sin(uTime * 3.0 - vUv.y * 12.0)); gl_FragColor = outB(b); }` }));
-goalBeam.frustumCulled = false; goalBeam.visible = false; scene.add(goalBeam);
-function stepGoalBeam(t) {
+  export function stepGoalBeam(t) {
   goalBeam.visible = !!story.goal;
   if (!story.goal) return;
   const [x, z] = story.goal, f = floorAt(x, z), d = Math.hypot(x - camPos.x, z - camPos.z);
@@ -77,8 +91,8 @@ function stepGoalBeam(t) {
   goalBeam.scale.set(2 + d * 0.02, Math.max(12, -f + 30), 1);
 }
 // the readouts, the place you're in, the warning, the compass marks, and the story line's countdown: once a frame
-let nearestPoi = '', poiTimer = 0;
-function stepHud(dt) {
+export let nearestPoi = '', poiTimer = 0;
+export function stepHud(dt) {
   const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
   const tide = (P.current || 0) > 0.15 ? `  TIDE ${P.current.toFixed(1)}${tideArrow()}` : '';
   tl.textContent = `DOWN ${Math.max(0, -P.pos.y).toFixed(1)}M  FLOOR ${(-f).toFixed(0)}M  ${P.speed.toFixed(1)}M/S${tide}  ${'♥'.repeat(P.hp)}${P.fed ? '  +' + P.fed : ''}`;
@@ -97,4 +111,12 @@ function stepHud(dt) {
   for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 8000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
   drawCompass(landmarks);
   if (sayTimer > 0) { sayTimer -= dt; if (sayTimer <= 0) { storyEl.style.opacity = 0; sayEndT = performance.now(); } }
+}
+// the key hints and the help screen's list, from the bindings as they are now; the goal beam into the scene. boot calls this once everything has loaded
+export function initHud() {
+  bl.textContent = keyboardHint();
+  renderHelpKeys();
+  goalBeam.frustumCulled = false;
+  goalBeam.visible = false;
+  scene.add(goalBeam);
 }

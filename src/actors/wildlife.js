@@ -14,6 +14,8 @@ import { P, hurt } from './player.js?v=__BUILD__';
 import { caption, click, thud, whump } from '../systems/audio.js?v=__BUILD__';
 import { kn, rumble, sprinting } from '../systems/input.js?v=__BUILD__';
 import { started, story } from '../systems/story.js?v=__BUILD__';
+import { say, tip } from '../ui/hud.js?v=__BUILD__';
+import { camPos, simTime } from '../app/frame.js?v=__BUILD__';
 // The wild animals: who you meet where, what they make of you, sharks that hunt, shapes that pass, and the echo's thing.
 export const WILD_N = 46, wild = [];
 // how often you meet each animal here, shallow vs deep: rays are everywhere in summer, dolphins come and go, manatees keep to the
