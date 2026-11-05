@@ -10,12 +10,13 @@ const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';   // stam
 const MODULES = ['lib/rng', 'lib/geo', 'lib/text', 'lib/tiff', 'lib/dem', 'lib/tilt', 'lib/save', 'lib/collide', 'lib/feedback',
   'core/env', 'core/random', 'core/tune', 'core/events', 'core/settings', 'core/screen', 'core/space',   // what everything stands on
   'render/display', 'render/materials', 'render/effects',                                 // the dot-matrix display and what draws on it
-  'world/time', 'world/geo', 'world/seafloor', 'world/structures', 'world/seabed'];                     // the bay: its depths and data, its floor, what is built in it, what grows on it
+  'world/time', 'world/geo', 'world/seafloor', 'world/structures', 'world/seabed',                       // the bay: its depths and data, its floor, what is built in it, what grows on it
+  'actors/creatures', 'actors/player', 'actors/wildlife', 'actors/fever', 'actors/life', 'actors/boats'];   // what swims in it, and what floats on it
 const mods = await Promise.all(MODULES.map(m => import(`./${m}.js?v=${BUILD}`)));
 Object.assign(window, { THREE, EffectComposer, ShaderPass, UnrealBloomPass, mergeGeometries, BUILD });
 // the game scripts below still share one scope while they move to modules: each export reaches them as a live, read-only
 // global, so a value the module changes later is the value they see, and a script that tries to assign one fails loudly
 for (const ns of mods) for (const name of Object.keys(ns)) Object.defineProperty(window, name, { get: () => ns[name], configurable: true, enumerable: true });
-const GAME = ['03-creatures.js', '04-logo.js', '06-wildlife.js', '07-boats.js', '08-input.js',
+const GAME = ['04-logo.js', '08-input.js',
   '09-audio.js', '10-hud.js', '11-save.js', '12-story.js', '13-frame.js', '14-panel.js', '15-touch.js', '16-test.js', '17-feedback.js', '18-boot.js'];
 for (const f of GAME) { const el = document.createElement('script'); el.src = `src/${f}?v=${BUILD}`; el.async = false; document.body.append(el); }

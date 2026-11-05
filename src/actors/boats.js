@@ -1,17 +1,28 @@
-'use strict';
+import * as THREE from 'three';
+import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { DEV } from '../core/env.js?v=__BUILD__';
+import { rand } from '../core/random.js?v=__BUILD__';
+import { _f, _s, fwdInto, fwdOf } from '../core/space.js?v=__BUILD__';
+import { scene } from '../render/display.js?v=__BUILD__';
+import { emitBubble } from '../render/effects.js?v=__BUILD__';
+import { GLSL_COMMON, mat } from '../render/materials.js?v=__BUILD__';
+import { CHANNEL, floorAt, isWater, spotNear } from '../world/geo.js?v=__BUILD__';
+import { BOAT_TYPES, boatMat } from '../world/structures.js?v=__BUILD__';
+import { isNight } from '../world/time.js?v=__BUILD__';
+import { P, hurt } from './player.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  BOATS  —  ships work the channel, small craft wander the flats.
 //  You hear them before you see them. Near the surface they can hit you.
 // ═══════════════════════════════════════════════════════════════════
-const UP = new THREE.Vector3(0, 1, 0);
-const boats = [];
-function addBoat(type, route) {
+export const UP = new THREE.Vector3(0, 1, 0);
+export const boats = [];
+export function addBoat(type, route) {
   const t = BOAT_TYPES[type], m = new THREE.Mesh(t.geo, boatMat); m.frustumCulled = false; scene.add(m);
   boats.push({ type: t, mesh: m, pos: new THREE.Vector3(), yaw: 0, route, seg: 0, dir: 1, u: rand(), turn: 0, bob: rand() * 6 });
 }
 addBoat('ship', CHANNEL); addBoat('ship', CHANNEL); boats[1].dir = -1; boats[1].seg = CHANNEL.length - 2;
 for (let i = 0; i < 5; i++) addBoat('skiff', null); for (let i = 0; i < 3; i++) addBoat('cruiser', null);
-function stepBoats(dt, t) {
+export function stepBoats(dt, t) {
   for (const b of boats) {
     if (b.route) {
       const i = b.seg, [ax, az] = b.route[i], [bx, bz] = b.route[i + 1], len = Math.hypot(bx - ax, bz - az);
@@ -50,23 +61,17 @@ function stepBoats(dt, t) {
     }
   }
 }
-function hurt(k, msg) {
-  if (P.stun > 0) return; rumble(0.4 + k * 0.5, 0.6, 320); thud(k); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
-  if (settings.flash) { flash.style.opacity = 0.75; later(TUNE.timing.hitFlash, () => { flash.style.opacity = 0; }); }
-  say(P.hp > 0 ? msg : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
-  if (P.hp === 0) later(TUNE.timing.respawn, () => { travelTo(lastCheckpoint); P.hp = 3; }, 'world');
-}
-function nearestBoat() { let best = null, bd = 1e9; for (const b of boats) { const d = b.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = b; } } return { b: best, d: bd }; }
+export function nearestBoat() { let best = null, bd = 1e9; for (const b of boats) { const d = b.pos.distanceTo(P.pos); if (d < bd) { bd = d; best = b; } } return { b: best, d: bd }; }
 // ── night gigging: a skiff poled over the flats with a light shining on the bottom. what the light finds, the gig takes.
 //    giggers look for exactly a ray's outline. a gig reaches about two metres; deeper water or darkness is safe.
-const gigLight = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+export const gigLight = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   vertexShader: `varying float vY; void main(){ vY = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: GLSL_COMMON + `varying float vY; void main(){ float b = 0.3 * (1.0 + vY) * (0.9 + 0.1 * sin(uTime * 7.0)); gl_FragColor = outB(b); }` }));
 gigLight.frustumCulled = false; gigLight.visible = false; scene.add(gigLight);
-const gig = { on: false, pos: new THREE.Vector3(), bow: new THREE.Vector3(), yaw: 0, turn: 0, inT: 0, strikeT: 0, mesh: new THREE.Mesh(BOAT_TYPES.skiff.geo, boatMat) };
+export const gig = { on: false, pos: new THREE.Vector3(), bow: new THREE.Vector3(), yaw: 0, turn: 0, inT: 0, strikeT: 0, mesh: new THREE.Mesh(BOAT_TYPES.skiff.geo, boatMat) };
 gig.mesh.visible = false; gig.mesh.frustumCulled = false; scene.add(gig.mesh);
 if (DEV) window.__bay = { floorAt: (lat, lon) => floorAt(...toXZ(lat, lon)) };   // local dev only: lets tools check depths
-function stepGig(dt, t) {
+export function stepGig(dt, t) {
   if (!gig.on) { if (isNight() && started && rand() < dt / 25) { const sp = spotNear(P.pos, 70, 170, 0.5, 24); if (sp && sp.f > -2.2) { if (DEV) console.log('[gig] a light out on the flats'); gig.on = true; gig.pos.set(sp.x, 0, sp.z); gig.yaw = rand() * 6.28; gig.inT = 0; } } }
   else if (!isNight() || gig.pos.distanceTo(P.pos) > 300) gig.on = false;
   gig.mesh.visible = gigLight.visible = gig.on; P.lit = false; if (!gig.on) return;
@@ -86,7 +91,7 @@ function stepGig(dt, t) {
     if (r < 0.8 + (P.sp.span ?? P.sp.len) * 0.35 && P.stun <= 0) hurt(0.6, 'GIGGED\nthey look for your outline in the light. stay out of it.'); else say('it missed', 1.2);
   }
 }
-function strike(b) {
+export function strike(b) {
   hurt(b.type === BOAT_TYPES.ship ? 1.2 : 0.7, `STRUCK BY A ${b.type.name.toUpperCase()}\nDIVE WHEN THE WATER HUMS`);
   if (P.vel) { P.vel.addScaledVector(fwdOf(b.yaw), b.type.speed * 0.8); P.vel.y = -(b.type === BOAT_TYPES.ship ? 5 : 2.5); }
 }

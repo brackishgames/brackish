@@ -3,6 +3,11 @@
 //  INPUT (arrows + space), AUDIO
 // ═══════════════════════════════════════════════════════════════════
 const keys = {};
+for (const ev of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(ev, () => { fullscreen.pending = false; });
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { fullscreen.pending = false; for (const k in keys) keys[k] = false; if (isFull() && menu && canFull) closeMenu(); if (MOBILE && isFull()) lockLandscape(); });
+const sprinting = () => input.burst;
+// WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
+let wasdSeen = false; const usingWASD = () => wasdSeen;
 // ── controllers: any pad the browser sees (USB or Bluetooth: Xbox, PlayStation, Switch Pro...) on the standard layout.
 //    left stick steers, RT swims, LT eases off, A / ✕ bursts, X / □ is the ability, right stick looks around,
 //    Y / △ the map, LB the creature you have been, START pause, BACK help. Buttons go through the keyboard handler.

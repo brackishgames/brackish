@@ -104,10 +104,11 @@ and drop `"prerelease"` in `release-please-config.json`, then commit with a `Rel
 `src/core/` (`env`, `random`, `tune`, `events`, `settings`, `screen`: what everything stands on), `src/render/` (`display`:
 the renderer and the dot-matrix post; `materials`: the shared shading and the animated body material; `effects`: sky,
 water, light shafts and particles) and `src/world/` (`geo`: the real-world frame, the depths, NOAA and the `Bay` API;
-`seafloor`; `structures`; `seabed`). Each module imports what it uses, and `npm run imports` writes those lines from what
+`seafloor`; `structures`; `seabed`; `time`, the hour of the day) and `src/actors/` (`creatures`: species and bodies;
+`player`: the body you are, its abilities, being hurt; `wildlife`: who you meet, sharks that hunt, shapes that pass;
+`fever`; `life`: jellies, food, mullet, birds; `boats`: ships, small craft, giggers). Each module imports what it uses, and `npm run imports` writes those lines from what
 the code actually reads. The rest of the game is still plain scripts in `src/`, run in order and sharing one scope while
-they move to modules a layer at a time: `03-creatures` (species and bodies), `04-logo`,
-`06-wildlife` (wild animals, the fever, food, mullet shoals), `07-boats` (boats and giggers), `08-input`
+they move to modules a layer at a time: `04-logo`, `08-input`
 (the input snapshot, keys and bindings, mouse, controller, pause menu, photo mode), `09-audio`, `10-hud`, `11-save`,
 `12-story`, `13-frame` (world steps and the frame, the player, the camera), `14-panel` (the dot font and every word on
 screen), `15-touch` (touch and tilt), `16-test` (the test interface and the dev readout), `17-feedback` and `18-boot`.

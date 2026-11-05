@@ -1,4 +1,6 @@
-'use strict';
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { creatureMat } from '../render/materials.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  CREATURES  —  species registry, procedural bodies, one animated
 //  brightness material (rim-lit silhouettes; flat normals from derivatives).
@@ -6,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // Species of the bay. sizes in metres; cruise/max in m/s; zone picks the wild AI's preferred depth.
 // speeds are the real animals' (m/s): cruise at the top of each one's measured cruising range, max its published sprint
-const SPECIES = [
+export const SPECIES = [
   { id: 'cownose', name: 'Cownose Ray', kind: 'ray', span: 0.9, len: 0.6, pointy: 1.0, tail: 0.9, cruise: 1.5, max: 3.6, turn: 1.8, alt: 0.4, zone: 'shallow', freq: 2.6, amp: 0.55 },
   { id: 'dolphin', name: 'Bottlenose Dolphin', kind: 'fish', len: 2.6, fat: 0.23, dorsal: 1, pect: 1, fluke: 'h', cruise: 3.0, max: 8.3, turn: 1.5, alt: 0.8, zone: 'surface', freq: 3, amp: 0.08 },
   { id: 'manatee', name: 'West Indian Manatee', kind: 'fish', len: 3.0, fat: 0.42, round: 0.45, dorsal: 0, pect: 0.6, fluke: 'paddle', cruise: 2.0, max: 6.7, turn: 0.8, alt: 0.6, zone: 'shallow', freq: 1.2, amp: 0.06 },
@@ -14,9 +16,9 @@ const SPECIES = [
   { id: 'hammer', name: 'Great Hammerhead', kind: 'fish', len: 3.4, fat: 0.13, dorsal: 1.7, pect: 1, fluke: 'shark', hammer: true, cruise: 1.2, max: 6.0, turn: 1.0, alt: 0.9, zone: 'deep', freq: 2, amp: 0.1 },
   { id: 'mullet', name: 'Striped Mullet', kind: 'fish', len: 0.45, fat: 0.14, dorsal: 0.4, pect: 0.3, fluke: 'v', cruise: 1.0, max: 3.5, turn: 2.5, alt: 0.2, zone: 'shallow', freq: 6, amp: 0.1 },
 ];
-const speciesById = Object.fromEntries(SPECIES.map(s => [s.id, s]));
+export const speciesById = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 
-function rayGeometry(sp, nu = 40, nv = 24) {
+export function rayGeometry(sp, nu = 40, nv = 24) {
   const pos = [], uv = [], idx = [], half = sp.span / 2;
   const width = t => t < 0.86 ? half * Math.pow(Math.sin(Math.PI * Math.min(1, t / 0.86)), sp.pointy) : 0.0001;
   for (const sideSign of [1, -1]) {
@@ -36,14 +38,14 @@ function rayGeometry(sp, nu = 40, nv = 24) {
   if (sp.lobes) for (const sx of [-1, 1]) parts.push(new THREE.PlaneGeometry(0.045 * sp.span, 0.2 * sp.len).rotateX(-Math.PI / 2).rotateY(sx * 0.35).translate(sx * 0.085 * sp.span, 0, -0.32 * sp.len - 0.07 * sp.len));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false) ?? g;
 }
-function tri(a, b, c) {   // a thin fin: one triangle, both sides lit by the double-sided material
+export function tri(a, b, c) {   // a thin fin: one triangle, both sides lit by the double-sided material
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...b, ...c], 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0], 3));   // zero normal = fin: shaded as a thin edge
   g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
   return g;
 }
-function fishGeometry(sp) {
+export function fishGeometry(sp) {
   const L = sp.len, R = sp.fat * L, round = sp.round ?? 0.7, shark = sp.fluke === 'shark', dolphin = sp.fluke === 'h';
   const flat = sp.flat ?? (dolphin ? 0.9 : shark ? 0.78 : sp.fluke === 'paddle' ? 1.0 : 0.55);   // most fish are taller than they are wide
   const prof = s => R * Math.pow(Math.sin(Math.PI * Math.pow(s, 0.8)), round) * (0.55 + 0.45 * s) * (0.3 + 0.7 * THREE.MathUtils.smoothstep(s, 0, 0.22)) * (1.0 - 0.45 * Math.pow(THREE.MathUtils.smoothstep(s, 0.78, 1.0), 1.5));
@@ -67,21 +69,15 @@ function fishGeometry(sp) {
   for (const sx of [-1, 1]) parts.push(new THREE.SphereGeometry(0.012 * L + 0.012, 6, 4).translate(sx * (sp.hammer ? 0.15 * L : x(0.88) * 0.9), rh * 0.25, (sp.hammer ? -0.47 : -0.38) * L));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
 }
-function birdGeometry(span = 2.0) {
+export function birdGeometry(span = 2.0) {
   const parts = []; for (const sx of [-1, 1]) parts.push(new THREE.PlaneGeometry(span / 2, span * 0.12).translate(sx * span / 4, 0, 0).rotateX(-Math.PI / 2));
   parts.push(new THREE.PlaneGeometry(span * 0.06, span * 0.35).rotateX(-Math.PI / 2));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
 }
-const geoCache = {};
-function creatureGeometry(sp) { return geoCache[sp.id] ??= sp.kind === 'ray' ? rayGeometry(sp) : fishGeometry(sp); }
-function creatureMesh(sp, glow = 1) {
+export const geoCache = {};
+export function creatureGeometry(sp) { return geoCache[sp.id] ??= sp.kind === 'ray' ? rayGeometry(sp) : fishGeometry(sp); }
+export function creatureMesh(sp, glow = 1) {
   const size = sp.span ?? sp.len;
   const m = new THREE.Mesh(creatureGeometry(sp), creatureMat({ mode: sp.kind === 'ray' ? 1 : (sp.fluke === 'h' || sp.fluke === 'paddle') ? 6 : 2, half: (sp.span ?? sp.len) / 2, len: sp.len, freq: sp.freq, amp: sp.amp, glow }));
   m.userData.sp = sp; m.userData.size = size; m.frustumCulled = false; return m;
 }
-for (const ev of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(ev, () => { fullscreen.pending = false; });
-for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { fullscreen.pending = false; for (const k in keys) keys[k] = false; if (isFull() && menu && canFull) closeMenu(); if (MOBILE && isFull()) lockLandscape(); });
-const sprinting = () => input.burst;
-// WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
-let wasdSeen = false; const usingWASD = () => wasdSeen;
-

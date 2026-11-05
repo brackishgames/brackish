@@ -99,7 +99,7 @@ await scenario('rebinding: pick BURST, press B, and B bursts; a key already in u
   await page.eval(`settings.binds = { ...DEFAULT_BINDS }; closeMenu(); 1`);
 });
 await scenario('a shape crosses in the murk and never hunts', async () => {
-  await page.eval(`__game.teleport(${HOLE}, 8); shadowT = 0; 1`); let seen = false;
+  await page.eval(`__game.teleport(${HOLE}, 8); shadow.t = 0; 1`); let seen = false;
   for (let i = 0; i < 40; i++) { const s = await S(page, 45, {}); seen ||= s.passing.length > 0; assert.equal(s.hunted, false, 'nothing hunts you'); }
   assert.ok(seen, 'something passed');
 });
