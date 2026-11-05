@@ -15,21 +15,25 @@ export async function launch() {
     async page() {
       const t = await (await fetch(`${http}/json/new?about:blank`, { method: 'PUT' })).json();
       const ws = new WebSocket(t.webSocketDebuggerUrl); await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-      let id = 0; const pend = {}, errors = [];
+      let id = 0, heard = 0; const pend = {}, errors = [];
       ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id && pend[m.id]) { pend[m.id](m); delete pend[m.id]; }
         if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
         if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && !/favicon/.test(m.params.entry.url || '')) errors.push(m.params.entry.text);
         if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description).join(' ')); };
       const cmd = (method, params = {}) => new Promise((r, j) => { pend[++id] = m => m.error ? j(new Error(`${method}: ${m.error.message}`)) : r(m.result); ws.send(JSON.stringify({ id, method, params })); });
       await cmd('Runtime.enable'); await cmd('Log.enable'); await cmd('Page.enable');
+      if (process.env.SLOW) await cmd('Emulation.setCPUThrottlingRate', { rate: +process.env.SLOW });   // SLOW=4: play on a machine four times slower, to flush out races
       const page = {
         cmd, errors,
         async eval(expr, what = expr.slice(0, 80)) { let guard; const hung = new Promise((_, no) => { guard = setTimeout(() => no(new Error('hung: ' + what)), FAIL_AFTER_MS); });
           const r = await Promise.race([cmd('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }), hung]).finally(() => clearTimeout(guard)); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; },
         // resolves on the first animation frame where `expr` is true (and returns its value)
         until(expr, what = expr) { return page.eval(`new Promise((ok, no) => { let n = 0; const f = () => { let v; try { v = (${expr}); } catch (e) { v = false; } if (v) ok(v); else if (++n > ${FAIL_AFTER_FRAMES}) no(new Error(${JSON.stringify('never happened: ' + what)})); else requestAnimationFrame(f); }; f(); })`); },
-        // resolves when the game emits this event (see `events` in src/00-config.js); start listening before causing it
-        event(type) { return page.eval(`once(${JSON.stringify(type)})`); },
+        // listen for something, *then* cause it: input reaches the page by a different road than evaluate does, so a key can
+        // arrive before a listener installed in the same breath. this installs it, waits until the page says so, and hands back the wait
+        async listen(installExpr) { const slot = `__heard${++heard}`; await page.eval(`window.${slot} = (${installExpr}); 1`); return () => page.eval(`window.${slot}`, `waiting on ${installExpr}`); },
+        event(type) { return page.listen(`once(${JSON.stringify(type)})`); },   // a game event (src/core/events.js)
+        domEvent(type) { return page.listen(`new Promise(r => addEventListener(${JSON.stringify(type)}, r, { once: true }))`); },
         async open(url, { mobile = false, w = 1280, h = 720, angle = 0 } = {}) {
           await page.metrics({ mobile, w, h, angle });
           if (mobile) await cmd('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
