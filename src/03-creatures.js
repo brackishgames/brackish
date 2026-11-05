@@ -53,7 +53,7 @@ function strouhalRad(sp, U, flap) { const A = Math.max(0.05, 2 * (sp.amp ?? 0.5)
 function creatureMat(o = {}) {
   const m = mat({ side: THREE.DoubleSide, vertexShader: creatureVert, fragmentShader: creatureFrag, uniforms: {
     uMode: { value: o.mode ?? 0 }, uHalf: { value: o.half ?? 1 }, uLen: { value: o.len ?? 1 }, uFreq: { value: o.freq ?? 2 },
-    uAmp: { value: o.amp ?? 0.3 }, uFlap: { value: 1 }, uGlow: { value: o.glow ?? 1 }, uPhase: { value: Math.random() * 6.28 } } });
+    uAmp: { value: o.amp ?? 0.3 }, uFlap: { value: 1 }, uGlow: { value: o.glow ?? 1 }, uPhase: { value: rand() * 6.28 } } });
   creatureMats.push(m); return m;
 }
 function stepStrokes(dt) { for (const m of creatureMats) m.uniforms.uPhase.value += m.uniforms.uFreq.value * dt; }
@@ -135,13 +135,15 @@ function creatureMesh(sp, glow = 1) {
 }
 // Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
 function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
-for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { for (const k in keys) keys[k] = false; if (isFull() && menu) closeMenu(); });
-const sprinting = () => !!(keys.ShiftLeft || keys.ShiftRight || pad.burst);
+for (const ev of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(ev, () => { fullscreen.pending = false; });
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { fullscreen.pending = false; for (const k in keys) keys[k] = false; if (isFull() && menu && canFull) closeMenu(); if (MOBILE && isFull()) lockLandscape(); });
+const sprinting = () => input.burst;
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
 let wasdSeen = false; const usingWASD = () => wasdSeen;
 
 const fwdInto = (out, yaw, pitch = 0) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
-const fwdOf = (yaw, pitch = 0) => fwdInto(new THREE.Vector3(), yaw, pitch);
+const FWD_POOL = Array.from({ length: 64 }, () => new THREE.Vector3()); let fwdNext = 0;
+const fwdOf = (yaw, pitch = 0) => fwdInto(FWD_POOL[fwdNext = (fwdNext + 1) & 63], yaw, pitch);   // a pooled vector: use it now, .clone() it to keep it
 const _s = new THREE.Vector3(), _f = new THREE.Vector3(), _M = new THREE.Matrix4(), _E = new THREE.Euler();
 // place one instance: position, euler rotation, scale
 function placeInstance(mesh, i, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
@@ -149,6 +151,6 @@ function placeInstance(mesh, i, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx
 }
 // a random point in water around the player, or null
 function spotNear(rMin, rMax, minDepth = 2, tries = 12) {
-  for (let k = 0; k < tries; k++) { const a = Math.random() * Math.PI * 2, r = rMin + Math.random() * (rMax - rMin), x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r, f = floorAt(x, z); if (f < -minDepth) return { x, z, f }; }
+  for (let k = 0; k < tries; k++) { const a = rand() * Math.PI * 2, r = rMin + rand() * (rMax - rMin), x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r, f = floorAt(x, z); if (f < -minDepth) return { x, z, f }; }
   return null;
 }

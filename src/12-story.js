@@ -27,28 +27,29 @@ const CHAPTERS = [
 const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
     this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
-    const fade = $('fade'), card = $('chapter'); if (i > 0) fade.style.opacity = 1;
-    setTimeout(() => {
+    const fade = $('fade'), card = $('chapter');
+    const arrive = () => {
       if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock;
       if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
       if (c.pair) this.spawnPartner();
       card.textContent = c.title; card.style.opacity = 1; chimeStart();
-      setTimeout(() => { fade.style.opacity = 0; }, 900);
-      setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); }, 1000);   // each new body is another life the bay has kept
+      later(TUNE.timing.cardHold, () => { fade.style.opacity = 0; card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); });   // each new body is another life the bay has kept
       if (i === 3) fever.moving = true;
       if (i === CHAPTERS.length - 2) { fever.seg = 0; fever.t = 0; fever.moving = false; fever.c.set(FEVER_PATH[0][0], fever.c.y, FEVER_PATH[0][1]); }   // spring: the fever is back in the hole
-    }, i === 0 ? 50 : 700);
+      emit('chapter-begun', i);
+    };
+    if (i > 0) { fade.style.opacity = 1; whenFaded(fade, 1, arrive); } else arrive();   // a new chapter happens behind the black, once it is black
   },
   ending() {
     const card = $('chapter'), bodies = SPECIES.filter(sp => unlocked.has(sp.id)).map(sp => sp.name), places = checkpoints.map(c => c.name).filter(n => !/^[IVX]+ · /.test(n));
     const cards = ['the bodies you have been', bodies.slice(0, 4).join('  ·  '), bodies.slice(4).join('  ·  '), 'the places', places.slice(0, 4).join('  ·  '), places.slice(4, 8).join('  ·  '), 'the bay remembers you', 'BRACKISH'].filter(Boolean);
-    let i = 0; const show = () => { if (i >= cards.length) { card.style.opacity = 0; setTimeout(() => this.begin(this.ch + 1), 1500); return; }
-      card.textContent = cards[i++]; card.style.opacity = 1; bell(); setTimeout(() => { card.style.opacity = 0; setTimeout(show, 1400); }, 3600); };
-    P.endingCam = true; setTimeout(show, 2500);
+    let i = 0; const show = () => { if (i >= cards.length) { card.style.opacity = 0; whenFaded(card, 0, () => this.begin(this.ch + 1)); return; }
+      card.textContent = cards[i++]; card.style.opacity = 1; bell(); later(TUNE.timing.endingCard, () => { card.style.opacity = 0; whenFaded(card, 0, show); }); };   // each card goes, then the next comes
+    P.endingCam = true; later(TUNE.timing.endingFirst, show);
   },
   spawnPartner() { const w = wild.find(o => o.id < WILD_ACTIVE && !o.hunting); if (!w) return; setWild(w, speciesById.dolphin, P.pos.x + Math.cos(P.yaw) * 4, Math.min(P.pos.y, -0.8), P.pos.z - Math.sin(P.yaw) * 4); w.yaw = P.yaw; w.partner = true; },
   together() { this.syncs = (this.syncs || 0) + 1; if (CHAPTERS[this.ch].pair && this.syncs < 3) say(['together.', 'again.'][this.syncs - 1], 2); },   /* the bond is the leap */
-  advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7, c.title); this.lineT = 0; } },
+  advance() { const c = CHAPTERS[this.ch]; if (this.line + 1 < c.lines.length) { this.line++; say(c.lines[this.line], 7); this.lineT = 0; } },   // the chapter's name heads its first line only
   step(dt) {
     this.lineT = (this.lineT || 0) + dt; if (this.lineT > 8 && sayTimer <= 0) { this.advance(); this.lineT = 0; }
     const c = CHAPTERS[this.ch]; if (c.free) { this.goal = null; return; }
@@ -64,13 +65,14 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     }
     if (c.follow) { const d = Math.hypot(fever.c.x - P.pos.x, fever.c.z - P.pos.z); fever.speed = d > 80 ? 0.4 : 1.0; if (d < 90) { const q = Math.floor(this.followT / 30); this.followT += dt; if (Math.floor(this.followT / 30) > q && q < 3) say(['the fever carries you west', 'the bottom falls away under you', 'the bay is behind you now'][q], 3); } if (d < 90 && !sprinting()) P.speed = Math.max(P.speed, fever.speed + 0.2); if (d > 140 && sayTimer <= 0) say('the fever is pulling away', 2); done = c.done(); }
     if (c.surface) { this.surfaceT = P.pos.y > -0.35 ? this.surfaceT + dt : 0; done = this.surfaceT > 4; }
-    if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && Math.random() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
+    if (c.feed) { done = (P.fed || 0) - this.fed0 >= c.feed; if (sayTimer <= 0 && rand() < 0.002) say(`FED ${(P.fed || 0) - this.fed0} / ${c.feed}`, 1.5); }
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
-    if (done) { const place = c.title.replace(/^[IVX]+ · /, ''); if (checkpoints.some(k => k.name === place)) chimeCheckpoint(); discover(place, P.pos.x, P.pos.z);   /* a replayed chapter still rings */ if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); setTimeout(saveGame, 1500); }
+    if (done) { const place = c.title.replace(/^[IVX]+ · /, ''); if (checkpoints.some(k => k.name === place)) chimeCheckpoint(); discover(place, P.pos.x, P.pos.z);   /* a replayed chapter still rings */ if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); once('chapter-begun').then(() => saveGame()); }   /* saved once the next chapter is really under way */
   } };
 const TITLE_HINT = 'PRESS ENTER OR CLICK';
-function startGame(save) { if (canFull && !DEV) goFull(); started = true; lockPointer(); document.body.classList.add('playing'); setTimeout(() => document.body.classList.add('settled'), 25000);
+let startedAt = -1e9;   // screen time the swim began: the HUD eases in from here
+function startGame(save) { if (canFull && !DEV && !TEST) goFull(); tilt.zero = null; started = true; lockPointer(); document.body.classList.add('playing'); startedAt = WU.uTime.value; later(TUNE.timing.hintFor, () => document.body.classList.add('settled'));
   $('title').classList.add('gone');
-  if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); setTimeout(() => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }, 600); if (save.ch === 3 && !save.fever) fever.moving = true; return; }
+  if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); later(TUNE.timing.resumeCard, () => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }); if (save.ch === 3 && !save.fever) fever.moving = true; emit('chapter-begun', save.ch); return; }
   story.begin(0); }
 function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }

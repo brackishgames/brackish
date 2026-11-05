@@ -3,7 +3,29 @@
 //  TOUCH  —  drag anywhere to swim (an analog stick that appears under
 //  your thumb), hold BURST, tap MAP or ⇄. Works with a mouse as well.
 // ═══════════════════════════════════════════════════════════════════
-const touch = { turn: 0, climb: 0, id: null, ox: 0, oy: 0 };
+const touch = { turn: 0, climb: 0, id: null, ox: 0, oy: 0, hold: false, holdId: null };
+// ── tilt: on a phone the phone is the fin. lean it like a wheel to turn, tip the top away to dive or toward you to rise.
+//    you swim on your own, so the only thing left for your thumbs is to hold the screen to burst.
+const tilt = { turn: 0, climb: 0, ok: false, asked: false, zero: null, lean: 0, pitch: 0, angle: null, last: null };
+const tiltOn = () => MOBILE && settings.tilt && tilt.ok;
+const touchHint = () => tiltOn() ? 'tilt to steer · hold to burst · tap ◆' : 'drag to swim · hold burst · tap ◆';
+(screen.orientation || window).addEventListener(screen.orientation ? 'change' : 'orientationchange', () => tilt.last && onTilt(tilt.last));   // the screen turned: its frame changed even if the sensor didn't
+function enableTilt() {   // iOS asks once, and only from inside a tap
+  if (!MOBILE || !settings.tilt || tilt.asked || !window.DeviceOrientationEvent) return; tilt.asked = true;
+  const listen = () => addEventListener('deviceorientation', onTilt);
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') DeviceOrientationEvent.requestPermission().then(s => { if (s === 'granted') listen(); else say('motion access refused: drag to swim', 2.5); }).catch(() => {});
+  else listen();
+}
+function onTilt(e) {
+  if (e.beta == null || e.gamma == null) return; tilt.last = e;
+  const a = (screen.orientation?.angle ?? window.orientation ?? 0), { lean, pitch } = tiltAngles(e.beta, e.gamma, a);   // src/lib/tilt.js
+  if (a !== tilt.angle) { tilt.angle = a; tilt.lean = lean; tilt.pitch = pitch; tilt.zero = null; }   // the phone turned over: start level again, no smoothing across it
+  if (!tilt.ok) { tilt.ok = true; bl.textContent = touchHint(); tip('tilt', () => 'lean the phone to turn. tip the top away to dive, toward you to rise. hold the screen to burst.'); }
+  tilt.lean += (lean - tilt.lean) * 0.3; tilt.pitch += (pitch - tilt.pitch) * 0.3;   // sensors jitter
+  tilt.zero ??= tilt.pitch;   // however you hold it when you start, or resume, is level
+  tilt.turn = settings.tilt ? ramp(tilt.lean, 0.06, 0.45) : 0;
+  tilt.climb = settings.tilt ? -ramp(tilt.pitch - tilt.zero, 0.1, 0.5) : 0;
+}
 const stickEl = $('stick'), knobEl = stickEl.querySelector('i'), STICK_R = 56;
 if (MOBILE) { document.body.classList.add('touch'); bl.textContent = 'drag to swim · hold burst · tap ◆'; }
 function cycleCreature(dir = 1) {
@@ -21,8 +43,9 @@ addEventListener('pointerdown', e => {
   unlockAudio(); pressedAny();
   if (started && menu) { const cy = toCell(e.clientY), i = menu.rows.findIndex(([a, b]) => cy >= a && cy <= b); if (i >= 0) { menu.sel = i; menuKey('Enter'); } return; }
   if (!MOBILE && started) { if (needFull()) openMenu('main'); return; }   // desktop plays on the keyboard
-  if (!started) { startGame(loadedSave); return; }
-  if (helpOpen) { helpOpen = false; help.classList.add('gone'); return; }
+  if (!started) { if (!portrait()) startGame(loadedSave); return; }
+  if (helpOpen) { setHelp(false); return; }
+  if (tiltOn()) { if (touch.holdId === null) { touch.holdId = e.pointerId; touch.hold = true; } return; }   // tilt steers; a thumb anywhere bursts
   if (touch.id !== null) return;
   touch.id = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY;
   stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.style.display = 'block';
@@ -35,8 +58,8 @@ addEventListener('pointermove', e => {
   if (Math.abs(touch.turn) < 0.12) touch.turn = 0; if (Math.abs(touch.climb) < 0.12) touch.climb = 0;
   touch.kx = dx * k * STICK_R; touch.ky = dy * k * STICK_R;
 });
-const endStick = e => { if (e.pointerId !== touch.id) return; touch.id = null; touch.turn = touch.climb = touch.kx = touch.ky = 0; stickEl.style.display = 'none'; };
-addEventListener('pointerup', e => { unlockAudio(); endStick(e); }); addEventListener('pointercancel', endStick);
+const endStick = e => { if (e.pointerId === touch.holdId) { touch.holdId = null; touch.hold = false; } if (e.pointerId !== touch.id) return; touch.id = null; touch.turn = touch.climb = touch.kx = touch.ky = 0; stickEl.style.display = 'none'; };
+addEventListener('pointerup', e => { unlockAudio(); if (menu?.kind === 'feedback') fbEl().focus({ preventScroll: true }); if (MOBILE) { goLandscape(); enableTilt(); } endStick(e); });   // a tap counts as a gesture on the way up: that is when phones allow full screen and motion addEventListener('pointercancel', endStick);
 function tbtn(id, down, up) {
   const el = $(id), stop = e => { e.stopPropagation(); e.preventDefault(); };
   el.addEventListener('pointerdown', e => { stop(e); unlockAudio(); down(el); });
@@ -48,5 +71,7 @@ tbtn('tMap', () => { if (started) toggleMap(); });
 tbtn('tCreature', () => { if (started) cycleCreature(1); });
 tbtn('tPause', () => { if (started && !menu) openMenu('main'); });
 mapEl.addEventListener('pointerdown', e => { e.stopPropagation(); const li = e.target.closest('li'); if (li) { const i = [...li.parentNode.children].indexOf(li); travelTo(checkpoints[i]); } toggleMap(); });
-help.addEventListener('pointerdown', e => { e.stopPropagation(); helpOpen = false; help.classList.add('gone'); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; touch.turn = touch.climb = 0; } });
+help.addEventListener('pointerdown', e => { e.stopPropagation(); setHelp(false); });
+const letGo = () => { for (const k in keys) keys[k] = false; touch.turn = touch.climb = 0; touch.hold = false; touch.holdId = null; };
+addEventListener('blur', letGo);   // a SHIFT held while switching away would otherwise burst forever
+document.addEventListener('visibilitychange', () => { if (document.hidden) { for (const k in keys) keys[k] = false; touch.turn = touch.climb = 0; touch.hold = false; touch.holdId = null; tilt.zero = null; } });

@@ -1,0 +1,15 @@
+{
+  "name": "Brackish",
+  "short_name": "Brackish",
+  "description": "You are a cownose ray in Tampa Bay. Real NOAA depths, to scale, on a dot-matrix display.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "brand/avatar.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -2,15 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- the import map is the only inline script: its hash is in script-src, so editing it means updating the hash (tests/csp.test.mjs checks) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dkbwup3fc4qZtE2mhGxuDg2W9n9jSYXT2ga3eHEEcj0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.tidesandcurrents.noaa.gov https://gis.ngdc.noaa.gov https://overpass-api.de https://*.workers.dev; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>BRACKISH</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#000000">
+<meta name="version" content="0.1.0-beta.0"> <!-- x-release-please-version -->
 <meta name="description" content="You are a cownose ray in Tampa Bay. Real NOAA depths, to scale, drawn on a dot-matrix display like an early-2000s car stereo. Don't swim in it.">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Brackish">
 <meta property="og:title" content="BRACKISH">
@@ -95,6 +99,10 @@
     .keys { grid-template-columns: auto 1fr; font-size: 10px; gap: 8px 14px; }
     #map { flex-direction: column; gap: 14px; } #map canvas { width: min(80vw, 46vh); height: auto; } #map ul { font-size: 12px; min-width: 0; }
   }
+  #fbtext { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; font-size: 16px; /* under 16px, iPhones zoom the page to type */ border: 0; padding: 0; resize: none; -webkit-user-select: text; user-select: text; touch-action: auto; }
+  #nogl { display: none; position: fixed; inset: 0; z-index: 20; align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 24px; text-align: center;
+    background: #000; color: #e8f1ff; letter-spacing: 3px; text-transform: uppercase; font-size: 13px; line-height: 2; }
+  #nogl.on { display: flex; } #nogl small { opacity: .6; font-size: 11px; text-transform: none; letter-spacing: 1px; }
   /* every visible word is drawn by the dot matrix; the DOM only carries text and fade timing */
   .hud, #story, #chapter, .panel, .panel *, #map, #map *, .tbtn, .restart { color: transparent !important; text-shadow: none !important; }
   .panel, #map, #fade { background: transparent !important; }
@@ -102,10 +110,7 @@
   .keys b, .restart, .tbtn { border-color: transparent !important; box-shadow: none !important; background: transparent !important; }
 </style>
 <script type="importmap">
-{ "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
-} }
+{ "imports": { "three": "./vendor/three/build/three.module.js", "three/addons/": "./vendor/three/examples/jsm/" } }
 </script>
 </head>
 <body>
@@ -114,11 +119,11 @@
 <div id="title" class="panel title gone"><div style="height:56vh"></div>
   <p>TAMPA BAY · THE GULF · DON'T SWIM IN IT</p>
   <p id="noaaline"></p>
-  <p id="titlehint">PRESS ENTER OR CLICK</p><small>H for help any time</small><small id="restart" class="restart" style="display:none">START OVER</small></div>
+  <p id="titlehint">PRESS ENTER OR CLICK</p><small>H for help any time</small><small id="ver"></small><small id="restart" class="restart" style="display:none">START OVER</small></div>
 <div id="help" class="panel gone"><h1>HOW TO SWIM</h1>
   <div class="keys">
-    <b>MOUSE</b><span>steer · hold right button to look</span><b>W S</b><span>swim forward · back</span><b>A D</b><span>turn</span>
-    <b>SPACE C</b><span>rise · dive · arrows too</span>
+    <b>MOUSE</b><span>steer · hold right button to look</span><b>W S</b><span>swim forward · back · ↑ ↓ too</span><b>A D</b><span>turn · ← → too</span>
+    <b>SPACE C</b><span>rise · dive</span>
     <b>SHIFT</b><span>burst, while the dots last</span><b>E</b><span>sense or echo: finds buried clams</span><b>TAB</b><span>become a creature you have been</span>
     <b>M P H</b><span>map · pause · this screen</span><b>O</b><span>photo, where there is a moment worth it</span>
   </div>
@@ -128,26 +133,20 @@ a shark on you stays until you lose it: go far, or into the fever.
 at night, keep out of the lights on the flats.
 dolphins and manatees need air.</p><small>H to close</small></div>
 <div id="map"><div><h2>FAST TRAVEL — ↑↓ pick · ENTER go · M close</h2><ul id="cplist"></ul></div><canvas id="bigmap" width="560" height="560"></canvas></div>
-<div class="hud" id="tl"></div>
-<div class="hud" id="tr"></div>
-<div class="hud" id="bl"></div>
-<div class="hud" id="warn"></div>
-<canvas id="compass" width="720" height="52"></canvas>
-<div id="story"></div>
-<canvas id="mini" width="180" height="180"></canvas>
+<div class="hud" id="tl" aria-hidden="true"></div>
+<div class="hud" id="tr" aria-hidden="true"></div>
+<div class="hud" id="bl" aria-hidden="true"></div>
+<div class="hud" id="warn" role="alert"></div>
+<canvas id="compass" width="720" height="52" aria-hidden="true"></canvas>
+<div id="story" role="status" aria-live="polite"></div>
+<canvas id="mini" width="180" height="180" aria-hidden="true"></canvas>
 <div id="flash"></div>
 <div id="touch"><div id="stick"><i></i></div><div class="tbtn" id="tBurst">BURST</div><div class="tbtn" id="tAct">ACT</div><div class="tbtn" id="tMap">MAP</div><div class="tbtn" id="tCreature">⇄</div><div class="tbtn" id="tPause">II</div></div>
 <div id="fade"></div>
-<div id="chapter"></div>
-<script type="module">
-// three.js arrives as modules; the game itself is ordered plain scripts in src/, sharing one scope, run in this order
-import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-Object.assign(window, { THREE, EffectComposer, ShaderPass, UnrealBloomPass, mergeGeometries });
-for (const f of ["00-config.js", "01-geo.js", "02-render.js", "03-creatures.js", "04-logo.js", "05-structures.js", "06-wildlife.js", "07-boats.js", "08-input.js", "09-audio.js", "10-hud.js", "11-save.js", "12-story.js", "13-frame.js", "14-panel.js", "15-touch.js", "16-boot.js"]) { const el = document.createElement('script'); el.src = `src/${f}?v=__BUILD__`; el.async = false; document.body.append(el); }
-</script>
+<div id="chapter" aria-live="polite"></div>
+<textarea id="fbtext" maxlength="2000" aria-label="Your feedback" autocomplete="off" spellcheck="true"></textarea>
+<div id="nogl" role="alert"><div>BRACKISH NEEDS WEBGL</div><div id="noglwhy">this browser could not start the 3D display</div><small>try another browser, turn on hardware acceleration, or update your graphics drivers</small></div>
+<noscript><div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#e8f1ff;background:#000;letter-spacing:3px">BRACKISH NEEDS JAVASCRIPT</div></noscript>
+<script type="module" src="src/main.js?v=__BUILD__"></script>
 </body>
 </html>

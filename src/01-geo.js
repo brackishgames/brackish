@@ -3,10 +3,6 @@
 //  GEOGRAPHY  —  local metric frame centred on Tampa Bay. 1 unit = 1 m.
 //  +x east, −z north, y up, sea level y = 0. Depths are real NOAA values.
 // ═══════════════════════════════════════════════════════════════════
-const LAT0 = 27.75, LON0 = -82.55;
-const KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KZ = 110574;
-const toXZ = (lat, lon) => [(lon - LON0) * KX, -(lat - LAT0) * KZ];
-const toLL = (x, z) => [LAT0 - z / KZ, LON0 + x / KX];
 const TILES = {
   outer: { lon0: -83.6, lat0: 27.0, lon1: -82.2, lat1: 28.3, n: 1024 },
   inner: { lon0: -82.9, lat0: 27.45, lon1: -82.3, lat1: 28.1, n: 1024 },
@@ -53,36 +49,21 @@ const START = toXZ(27.607, -82.751);   // chapter I: the Egmont pass
 // ═══════════════════════════════════════════════════════════════════
 const bar = document.getElementById('bar'), loadmsg = document.getElementById('loadmsg');
 const within = (ms, p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);   // storage must never hang the load
-function idb() { return within(2000, new Promise((res, rej) => { const r = indexedDB.open('brackish', 1); r.onupgradeneeded = () => r.result.createObjectStore('dem'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); })); }
+function idb() { return within(TUNE.guards.storageMs, new Promise((res, rej) => { const r = indexedDB.open('brackish', 1); r.onupgradeneeded = () => r.result.createObjectStore('dem'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked')); })); }
 async function cached(key, fetcher) {
   let db = null; try { db = await idb(); } catch { return fetcher(); }
-  const hit = await within(2000, new Promise(res => { const rq = db.transaction('dem').objectStore('dem').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined); })).catch(() => undefined);
+  const hit = await within(TUNE.guards.storageMs, new Promise(res => { const rq = db.transaction('dem').objectStore('dem').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined); })).catch(() => undefined);
   if (hit) return hit;
   const v = await fetcher();
   try { db.transaction('dem', 'readwrite').objectStore('dem').put(v, key); } catch {}
   return v;
 }
 async function fetchBuf(url, onProgress) {
-  const r = await fetch(url); if (!r.ok) throw new Error('NOAA ' + r.status);
+  const r = await fetch(url); if (!r.ok) throw new Error(new URL(url, location.href).pathname.split('/').pop() + ' ' + r.status);
   const total = +r.headers.get('content-length') || 0, reader = r.body.getReader(), chunks = []; let got = 0;
   for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onProgress(total ? got / total : 0); }
   const out = new Uint8Array(got); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
   return out.buffer;
-}
-function parseTiffF32(buf) {
-  const dv = new DataView(buf), le = dv.getUint16(0, false) === 0x4949;
-  const u16 = o => dv.getUint16(o, le), u32 = o => dv.getUint32(o, le);
-  const ifd = u32(4), n = u16(ifd), tags = {}, SZ = { 1: 1, 2: 1, 3: 2, 4: 4, 12: 8 };
-  for (let i = 0; i < n; i++) { const o = ifd + 2 + i * 12, tag = u16(o), type = u16(o + 2), count = u32(o + 4); tags[tag] = { type, count, off: SZ[type] * count <= 4 ? o + 8 : u32(o + 8) }; }
-  const vals = t => { const g = tags[t]; if (!g) return null; const a = []; for (let i = 0; i < g.count; i++) a.push(g.type === 3 ? u16(g.off + i * 2) : u32(g.off + i * 4)); return a; };
-  const w = vals(256)[0], h = vals(257)[0];
-  if (vals(258)[0] !== 32 || (vals(259) || [1])[0] !== 1) throw new Error('unexpected TIFF layout');
-  const out = new Float32Array(w * h);
-  const copy = (src, dx, dy, bw, bh) => { for (let y = 0; y < bh && dy + y < h; y++) for (let x = 0; x < bw && dx + x < w; x++) out[(dy + y) * w + dx + x] = dv.getFloat32(src + (y * bw + x) * 4, le); };
-  if (tags[324]) { const tw = vals(322)[0], th = vals(323)[0], tilesX = Math.ceil(w / tw); vals(324).forEach((off, i) => copy(off, (i % tilesX) * tw, Math.floor(i / tilesX) * th, tw, th)); }
-  else { const rps = (vals(278) || [h])[0]; vals(273).forEach((off, i) => copy(off, 0, i * rps, w, rps)); }
-  for (let i = 0; i < out.length; i++) if (!Number.isFinite(out[i]) || Math.abs(out[i]) > 12000) out[i] = 0;
-  return { w, h, data: out };
 }
 function tileSample(t, x, z) {
   const u = (x - t.xmin) / (t.xmax - t.xmin) * (t.w - 1), v = (z - t.zmin) / (t.zmax - t.zmin) * (t.h - 1);
@@ -153,7 +134,7 @@ const Bay = {
     let data = null;
     try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && Date.now() - c.t < hour) data = c.d; } catch {}
     if (!data) {
-      const get = async q => { const r = await within(15000, fetch(NOAA.url(q))); if (!r.ok) throw new Error('noaa ' + r.status); return r.json(); };
+      const get = async q => { const r = await within(TUNE.guards.liveMs, fetch(NOAA.url(q))); if (!r.ok) throw new Error('noaa ' + r.status); return r.json(); };
       const day = new Date(), ymd = d => d.toISOString().slice(0, 10).replace(/-/g, ''), y = new Date(day - 864e5), t2 = new Date(+day + 864e5);
       const range = `begin_date=${ymd(y)}&end_date=${ymd(t2)}`, st = NOAA.tideStation.id;
       const queries = [`product=water_level&datum=MLLW&date=latest&station=${st}`, `product=predictions&datum=MLLW&interval=hilo&${range}&station=${st}`,

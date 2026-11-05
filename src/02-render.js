@@ -2,12 +2,16 @@
 // ═══════════════════════════════════════════════════════════════════
 //  RENDERER + DOT-MATRIX POST
 // ═══════════════════════════════════════════════════════════════════
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+// no WebGL, or the GPU drops the display: say so in plain text instead of leaving a black screen
+function noGL(why) { const el = document.getElementById('nogl'); el.classList.add('on'); if (why) document.getElementById('noglwhy').textContent = why; }
+const renderer = (() => { try { return new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch (e) { noGL('this browser could not start the 3D display'); throw e; } })();
+renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); noGL('the graphics card dropped the display. it will come back on its own, or reload the page'); });
+renderer.domElement.addEventListener('webglcontextrestored', () => location.reload());   // simpler and surer than rebuilding every texture
 renderer.setPixelRatio(Math.min(MOBILE ? 1.5 : 2, devicePixelRatio));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
-renderer.domElement.className = 'gl';
+renderer.domElement.className = 'gl'; renderer.domElement.setAttribute('aria-hidden', 'true');
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -36,10 +40,10 @@ const cellMat = new THREE.ShaderMaterial({ uniforms: { tScene: { value: lowRT.te
     }` });
 const cellScene = new THREE.Scene(), cellCam = new THREE.Camera(); { const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), cellMat); q.frustumCulled = false; cellScene.add(q); }
 const DotShader = {
-  uniforms: { tScene: { value: null }, tText: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 }, uDim: { value: 0 } },
+  uniforms: { tScene: { value: null }, tText: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 }, uDim: { value: 0 }, uTunnel: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D tScene, tText; uniform vec2 uGrid; uniform float uPitch, uDim;
+    uniform sampler2D tScene, tText; uniform vec2 uGrid; uniform float uPitch, uDim, uTunnel;
     vec3 palette(float b) {
       b = clamp(b, 0.0, 1.0);
       vec3 c0 = vec3(0.01, 0.07, 0.12), c1 = vec3(0.03, 0.47, 0.72), c2 = vec3(0.30, 0.88, 0.94), c3 = vec3(0.96, 1.0, 1.0);   // leaning to the OEL's cyan
@@ -54,7 +58,7 @@ const DotShader = {
       vec3 unlit = vec3(0.003, 0.008, 0.012) * (1.0 - smoothstep(0.7, 0.95, d));
       vec3 col = palette(b) * mask;
       if (am > 0.03) { float ra = 0.5 + 0.45 * am, ma = 1.0 - smoothstep(ra - 0.3, ra + 0.05, d); col = mix(col, vec3(0.72, 0.84, 1.0) * (0.42 + 0.38 * am), ma); }
-      vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = 1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc));
+      vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = (1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc))) * (1.0 - uTunnel * smoothstep(0.18, 0.5, length(vc)));
       vec3 outc = (col * (1.0 - uDim) + unlit) * vig;
       float ptx = texture2D(tText, uv).r;   // the panel layer: every word and symbol is lit dots on the same matrix
       if (ptx > 0.0) { float rt = 0.5 + 0.42 * ptx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = mix(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * ptx), mt); }
@@ -80,7 +84,7 @@ function resize() {
   const pitch = Math.max(2, Math.round(pitchCss * dpr)), gw = Math.ceil(W / pitch), gh = Math.ceil(H / pitch);
   lowRT.setSize(gw, gh); cellRT.setSize(gw, gh); cellMat.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uPitch.value = pitch; panelResize(gw, gh);
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
-  camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 78 : 60; camera.updateProjectionMatrix();
+  camera.aspect = innerWidth / innerHeight; camera.fov = camera.userData.baseFov = settings.fov + (camera.aspect < 1 ? 18 : 0); camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
 
@@ -218,7 +222,7 @@ const shafts = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).translate(0
       float b = 0.10 * e * e * vUv.y * vUv.y * depthLight(vY) * (0.7 + 0.3 * sin(uTime * 0.8 + vUv.x * 6.0)) * (1.0 - fogF(vD)) * step(uFogB, 0.001);
       gl_FragColor = outB(b); }` }), SHAFTS);
 shafts.frustumCulled = false; scene.add(shafts);
-const shaftSeeds = Array.from({ length: SHAFTS }, (_, i) => ({ a: i / SHAFTS * Math.PI * 2 + Math.random(), r: 15 + Math.random() * 70, w: 2 + Math.random() * 4, s: Math.random() * 6 }));
+const shaftSeeds = Array.from({ length: SHAFTS }, (_, i) => ({ a: i / SHAFTS * Math.PI * 2 + rand(), r: 15 + rand() * 70, w: 2 + rand() * 4, s: rand() * 6 }));
 
 function pointsCloud(n, size, bright, ring = false) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
@@ -236,13 +240,13 @@ function pointsCloud(n, size, bright, ring = false) {
   p.frustumCulled = false; scene.add(p); return p;
 }
 const snow = pointsCloud(MOBILE ? 1000 : 2500, 1, 0.28), snowBox = 110;
-{ const a = snow.geometry.attributes.position.array; for (let i = 0; i < a.length; i++) a[i] = (Math.random() - 0.5) * snowBox; }
+{ const a = snow.geometry.attributes.position.array; for (let i = 0; i < a.length; i++) a[i] = (rand() - 0.5) * snowBox; }
 const bubbles = pointsCloud(600, 2.2, 0.9, true), bubbleLife = new Float32Array(600).fill(99);
-const seeps = Array.from({ length: 6 }, () => ({ p: new THREE.Vector3(), t: Math.random() * 3, rate: 0.4 + Math.random() * 0.6 }));
+const seeps = Array.from({ length: 6 }, () => ({ p: new THREE.Vector3(), t: rand() * 3, rate: 0.4 + rand() * 0.6 }));
 function stepSeeps(dt) {
   for (const sp of seeps) {
     if (sp.p.lengthSq() === 0 || sp.p.distanceTo(P.pos) > 110) { const spot = spotNear(15, 90, 2.5); if (!spot) continue; sp.p.set(spot.x, spot.f + 0.1, spot.z); }
-    sp.t -= dt; if (sp.t <= 0) { sp.t = sp.rate * (0.5 + Math.random()); emitBubble(sp.p.x + (Math.random() - .5) * 0.3, sp.p.y, sp.p.z + (Math.random() - .5) * 0.3); }
+    sp.t -= dt; if (sp.t <= 0) { sp.t = sp.rate * (0.5 + rand()); emitBubble(sp.p.x + (rand() - .5) * 0.3, sp.p.y, sp.p.z + (rand() - .5) * 0.3); }
   }
 }
 // spray: droplets thrown into the air by a blow, a fin or a wingtip; they arc and fall back
