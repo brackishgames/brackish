@@ -61,9 +61,9 @@ await scenario('the current is drift, not thrust: it carries you while your own 
   await page.until(`tl.textContent.includes('TIDE 1.0→')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
 });
 await scenario('structures are solid: a burst into a Skyway pier stops at its face, and you feel it', async () => {
-  const pier = await page.eval(`world.solids.find(c => c.kind === 'b' && c.y1 === 60)`); assert.ok(pier, 'the Skyway piers are colliders');
+  const pier = await page.eval(`world.solids.find(c => c.tag === 'skyway pier')`); assert.ok(pier, 'the Skyway piers are colliders');
   await page.eval(`P.pos.set(${pier.x} + 20, -5, ${pier.z}); P.yaw = Math.PI / 2; P.vel.set(0, 0, 0); P.bumps = 0; 1`);
-  for (let i = 0; i < 30; i++) { await S(page, 10, { burst: true }); assert.equal(await page.eval(`pushOut(world.solids.find(c => c.kind === 'b' && c.y1 === 60), P.pos.x, P.pos.y, P.pos.z, 0.1)`), null, 'never inside the pier'); }
+  for (let i = 0; i < 30; i++) { await S(page, 10, { burst: true }); assert.equal(await page.eval(`pushOut(world.solids.find(c => c.tag === 'skyway pier'), P.pos.x, P.pos.y, P.pos.z, 0.1)`), null, 'never inside the pier'); }
   const s = await page.eval('__game.state()'); assert.ok(s.bumps >= 1, 'a hard hit is felt'); assert.ok(Math.hypot(s.pos[0] - pier.x, s.pos[2] - pier.z) > 4.4, 'stopped outside it');
 });
 await scenario('pause stops the world; the card fits on screen; ESC resumes', async () => {

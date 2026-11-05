@@ -6,6 +6,7 @@ import { rand } from '../core/random.js?v=__BUILD__';
 import { _E, _M, _s, fwdOf } from '../core/space.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
 import { creatureMat } from '../render/materials.js?v=__BUILD__';
+import { SKYWAY_SPEC, TRESTLE, clearanceOf, isSkyway, skywayStations, skywayUnderside } from './bridges.js?v=__BUILD__';
 import { ANCHORAGE, CHANNEL, SKYWAY, WRECKS, floorAt } from './geo.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  STRUCTURES  —  bridges (OSM geometry: pilings to the bottom, decks
@@ -33,28 +34,51 @@ export function buildStructures() {
   world.meshes = []; world.buoys = []; world.wrecks = []; world.colliders = makeGrid(40); world.solids = [];
   const add = (m, own = true) => { m.frustumCulled = false; m.userData.own = own; scene.add(m); world.meshes.push(m); return m; };
   const solid = c => { world.colliders.add(c); world.solids.push(c); };   // what you can't swim through: src/lib/collide.js
-  const M = new THREE.Matrix4(), piles = [], decks = [];
+  const M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), at = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const place = (mesh, i, x, y, z, yaw, pitch, sx, sy, sz) => { e.set(-pitch, yaw, 0); q.setFromEuler(e); M.compose(at.set(x, y, z), q, _s.set(sx, sy, sz)); mesh.setMatrixAt(i, M); };
+  // the Skyway's own frame: distance along it from the middle of the main span
+  const S = SKYWAY_SPEC, [scx, scz] = toXZ(...SKYWAY.center), [sax, saz] = toXZ(...SKYWAY.axis[0]), [sbx, sbz] = toXZ(...SKYWAY.axis[1]);
+  const sL = Math.hypot(sbx - sax, sbz - saz), sux = (sbx - sax) / sL, suz = (sbz - saz) / sL, syaw = Math.atan2(sux, suz), along = (x, z) => (x - scx) * sux + (z - scz) * suz;
+  const stations = skywayStations(), mainBridge = stations[stations.length - 1];
+  const decks = [], piles = [], columns = [];
   for (const br of bridges) {
+    const sky = isSkyway(br.name), clear = clearanceOf(br.name), width = sky ? S.deckWidth : TRESTLE.deckWidth, depth = sky ? S.deckDepth : TRESTLE.deckDepth;
+    // the path, every 20 m or so, with how far along it each point is and which way it runs
+    const pts = []; let run = 0;
     for (let i = 0; i + 1 < br.pts.length; i++) {
       const [ax, az] = br.pts[i], [bx, bz] = br.pts[i + 1], len = Math.hypot(bx - ax, bz - az); if (len < 1) continue;
-      const nx = (bz - az) / len, nz = -(bx - ax) / len;
-      for (let d = 0; d < len; d += 40) {
-        const x = ax + (bx - ax) * d / len, z = az + (bz - az) * d / len;
-        for (const o of [-5, 5]) { const px = x + nx * o, pz = z + nz * o, f = floorAt(px, pz);
-          if (f > -0.4 || f < -11.5) continue;   // no piers on land, none in the navigation span
-          piles.push({ x: px, z: pz, f }); }
-      }
-      // deck: a slab 7 m over the water (14 m at the Skyway main span), seen from the surface
-      const mid = Math.max(0, -floorAt((ax + bx) / 2, (az + bz) / 2)), h = 6 + Math.min(40, mid * 3.5);
-      decks.push({ x: (ax + bx) / 2, z: (az + bz) / 2, len, yaw: Math.atan2(bx - ax, bz - az), h });
+      const n = Math.max(1, Math.ceil(len / 20)), yaw = Math.atan2(bx - ax, bz - az), nx = (bz - az) / len, nz = -(bx - ax) / len;
+      for (let k = pts.length ? 1 : 0; k <= n; k++) pts.push({ x: ax + (bx - ax) * k / n, z: az + (bz - az) * k / n, d: run + len * k / n, yaw, nx, nz });
+      run += len;
+    }
+    if (pts.length < 2) continue;
+    // a trestle rises to its clearance over the channel, where it crosses deepest; the Skyway follows its measured profile
+    let deep = pts[0]; for (const p of pts) if (floorAt(p.x, p.z) < floorAt(deep.x, deep.z)) deep = p;
+    for (const p of pts) p.u = sky ? skywayUnderside(along(p.x, p.z)) : Math.max(TRESTLE.underside, clear - TRESTLE.grade * Math.abs(p.d - deep.d));   // the deck's underside here
+    for (let i = 0; i + 1 < pts.length; i++) { const a = pts[i], b = pts[i + 1], len = Math.hypot(b.x - a.x, b.z - a.z);
+      decks.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, y: (a.u + b.u) / 2 + depth / 2, len: len + 0.2, yaw: Math.atan2(b.x - a.x, b.z - a.z), pitch: Math.atan2(b.u - a.u, len), width, depth, lo: Math.min(a.u, b.u), hi: Math.max(a.u, b.u) + depth }); }
+    // what holds it up, all the way to the deck: a column where the deck is high, a bent of piles where it's low, nothing in a navigation span
+    let next = 0;
+    for (const p of pts) {
+      if (p.d < next) continue; const f = floorAt(p.x, p.z);
+      if (f > -0.4) { next = p.d + 10; continue; }                                   // on land: the causeway carries it
+      if (sky && Math.abs(along(p.x, p.z)) < mainBridge + 1) continue;               // the main bridge stands on its own measured piers (below)
+      if (!sky && Math.abs(p.d - deep.d) < TRESTLE.navHalf) continue;               // the channel span
+      if (p.u > TRESTLE.underside + 3) { columns.push({ x: p.x, z: p.z, f, top: p.u, yaw: p.yaw }); next = p.d + S.approachPier; }
+      else { for (const o of [-1, 1]) piles.push({ x: p.x + p.nx * o * width * 0.3, z: p.z + p.nz * o * width * 0.3, f, top: p.u }); next = p.d + TRESTLE.bent; }
     }
   }
-  const pileMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.1, 1.3, 1, 8).translate(0, 0.5, 0), structMat, Math.max(1, piles.length));
-  piles.forEach((p, i) => { M.makeScale(1, -p.f + 2.5, 1); M.setPosition(p.x, p.f - 1, p.z); pileMesh.setMatrixAt(i, M); solid({ kind: 'c', x: p.x, z: p.z, r: 1.3, y0: p.f - 1, y1: 1.5 }); });
-  pileMesh.count = piles.length; add(pileMesh);
-  const deckMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(14, 1.6, 1), structMat, Math.max(1, decks.length));
-  decks.forEach((d, i) => { M.makeRotationY(d.yaw); M.scale(_s.set(1, 1, d.len)); M.setPosition(d.x, d.h, d.z); deckMesh.setMatrixAt(i, M); solid({ kind: 'b', x: d.x, z: d.z, hx: 7, hz: d.len / 2, yaw: d.yaw, y0: d.h - 0.8, y1: d.h + 0.8 }); });   // only a leap reaches a deck
-  deckMesh.count = decks.length; add(deckMesh);
+  // the Skyway's main bridge: the back-span piers at their measured stations (the pylons, at the first, come after)
+  for (const st of stations.slice(1)) for (const sgn of [-1, 1]) { const x = scx + sux * sgn * st, z = scz + suz * sgn * st, f = floorAt(x, z); if (f < -0.4) columns.push({ x, z, f, top: skywayUnderside(st), yaw: syaw }); }
+  const pileMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(TRESTLE.pileR, TRESTLE.pileR * 1.15, 1, 8).translate(0, 0.5, 0), structMat, Math.max(1, piles.length));
+  piles.forEach((p, i) => { place(pileMesh, i, p.x, p.f - 1, p.z, 0, 0, 1, p.top - p.f + 1, 1); solid({ kind: 'c', x: p.x, z: p.z, r: TRESTLE.pileR + 0.2, y0: p.f - 1, y1: p.top }); });
+  pileMesh.count = piles.length; pileMesh.name = 'bridge pilings'; add(pileMesh);
+  const [colAlong, colAcross] = S.column, colMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), structMat, Math.max(1, columns.length));
+  columns.forEach((c, i) => { place(colMesh, i, c.x, c.f - 1, c.z, c.yaw, 0, colAcross, c.top - c.f + 1, colAlong); solid({ kind: 'b', x: c.x, z: c.z, hx: colAcross / 2, hz: colAlong / 2, yaw: c.yaw, y0: c.f - 1, y1: c.top }); });
+  colMesh.count = columns.length; colMesh.name = 'bridge piers'; add(colMesh);
+  const deckMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), structMat, Math.max(1, decks.length));
+  decks.forEach((d, i) => { place(deckMesh, i, d.x, d.y, d.z, d.yaw, d.pitch, d.width, d.depth, d.len); solid({ kind: 'b', x: d.x, z: d.z, hx: d.width / 2, hz: d.len / 2, yaw: d.yaw, y0: d.lo, y1: d.hi }); });
+  deckMesh.count = decks.length; deckMesh.name = 'bridge decks'; add(deckMesh);
 
   // channel markers: buoy at the surface, chain to a sinker on the bottom
   const buoys = [];
@@ -68,19 +92,32 @@ export function buildStructures() {
   buoys.forEach((b, i) => { M.makeRotationZ(0.06); M.scale(_s.set(1, -b.f, 1)); M.setPosition(b.x, b.f, b.z); chainMesh.setMatrixAt(i, M);
     M.makeTranslation(b.x, b.f + 0.6, b.z); sinkerMesh.setMatrixAt(i, M);
     solid({ kind: 'c', x: b.x, z: b.z, r: 1.4, y0: b.f, y1: b.f + 1.2 }); solid({ kind: 'c', x: b.x, z: b.z, r: 1.1, y0: -1.2, y1: 2.5 }); });   // the sinker on the bottom, the buoy at the top
-  buoyMesh.count = chainMesh.count = sinkerMesh.count = buoys.length;
+  buoyMesh.count = chainMesh.count = sinkerMesh.count = buoys.length; buoyMesh.name = 'channel buoys'; chainMesh.name = 'buoy chains'; sinkerMesh.name = 'buoy sinkers';
   for (const m of [buoyMesh, chainMesh, sinkerMesh]) add(m);
   world.buoys = buoys; world.buoyMesh = buoyMesh;
 
-  // the Skyway main piers and their dolphins
-  { const [ax, az] = toXZ(...SKYWAY.axis[0]), [bx, bz] = toXZ(...SKYWAY.axis[1]), L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L, [cx, cz] = toXZ(...SKYWAY.center);
-    const pier = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), structMat, 2), ring = new THREE.InstancedMesh(new THREE.CylinderGeometry(6, 7, 1, 16).translate(0, 0.5, 0), structMat, SKYWAY.dolphins * 2);
-    let k = 0;
-    [-1, 1].forEach((sgn, i) => { const px = cx + ux * sgn * SKYWAY.span / 2, pz = cz + uz * sgn * SKYWAY.span / 2, f = floorAt(px, pz);
-      _M.makeRotationY(Math.atan2(ux, uz)); _M.scale(_s.set(14, -f + 60, 9)); _M.setPosition(px, (f + 60) / 2, pz); pier.setMatrixAt(i, _M); solid({ kind: 'b', x: px, z: pz, hx: 7, hz: 4.5, yaw: Math.atan2(ux, uz), y0: f, y1: 60 });
+  // the Skyway's two pylons: a pier from the bottom to the deck, then the tower to 131 m, tapering along the bridge, with its fan of
+  // stay cables in one plane down the middle (21 a pylon); and the ring of concrete dolphins round each pier against ships
+  { const deckTop = S.clearance + S.deckDepth, tAlong = S.pylonAlong[1], bAlong = S.pylonAlong[0];
+    const pier = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), structMat, 2);
+    const tower = new THREE.InstancedMesh(new THREE.CylinderGeometry(Math.SQRT1_2 * tAlong / bAlong, Math.SQRT1_2, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0), structMat, 2);   // a square frustum, 1 across at the base
+    const half = S.cables / 2, cable = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.15, 0.15, 1, 4).translate(0, 0.5, 0), structMat, S.cables);
+    const ring = new THREE.InstancedMesh(new THREE.CylinderGeometry(6, 7, 1, 16).translate(0, 0.5, 0), structMat, SKYWAY.dolphins * 2);
+    let k = 0, c = 0;
+    [-1, 1].forEach((sgn, i) => {
+      const px = scx + sux * sgn * S.mainSpan / 2, pz = scz + suz * sgn * S.mainSpan / 2, f = floorAt(px, pz);
+      place(pier, i, px, f - 1, pz, syaw, 0, 14, S.clearance - f + 1, 9); solid({ kind: 'b', x: px, z: pz, hx: 7, hz: 4.5, yaw: syaw, y0: f - 1, y1: S.clearance, tag: 'skyway pier' });
+      place(tower, i, px, deckTop, pz, syaw, 0, S.pylonAcross, S.pylonTop - deckTop, bAlong); solid({ kind: 'b', x: px, z: pz, hx: S.pylonAcross / 2, hz: bAlong / 2, yaw: syaw, y0: deckTop, y1: S.pylonTop });
+      // the semi-fan: anchors spread up the top of the tower, out along the deck to near midspan on one side and the end of the side span on the other
+      for (const [dir, n, reach] of [[-sgn, Math.floor(half / 2), S.mainSpan / 2 - 6], [sgn, Math.ceil(half / 2), S.sideSpan - 6]]) for (let j = 0; j < n; j++) {
+        const u = n > 1 ? j / (n - 1) : 1, top = new THREE.Vector3(px, deckTop + 30 + (S.pylonTop - 4 - deckTop - 30) * u, pz);
+        const out = 20 + (reach - 20) * u, foot = new THREE.Vector3(px + sux * dir * out, deckTop, pz + suz * dir * out), v = top.clone().sub(foot), len = v.length();
+        q.setFromUnitVectors(up, v.normalize()); M.compose(foot, q, _s.set(1, len, 1)); cable.setMatrixAt(c++, M); }
       for (let d = 0; d < SKYWAY.dolphins; d++) { const a = d / SKYWAY.dolphins * Math.PI * 2, r = 32, dx = px + Math.cos(a) * r, dz = pz + Math.sin(a) * r, df = floorAt(dx, dz);
-        _M.makeScale(1, -df + 2.5, 1); _M.setPosition(dx, df, dz); ring.setMatrixAt(k++, _M); solid({ kind: 'c', x: dx, z: dz, r: 7, y0: df, y1: 2.5 }); } });
-    ring.count = k; add(pier); add(ring); world.wrecks.push({ x: cx, z: cz, name: 'Skyway main span' }); }
+        _M.makeScale(1, -df + 2.5, 1); _M.setPosition(dx, df, dz); ring.setMatrixAt(k++, _M); solid({ kind: 'c', x: dx, z: dz, r: 7, y0: df, y1: 2.5 }); }
+    });
+    ring.count = k; cable.count = c; pier.name = 'Skyway pylon piers'; tower.name = 'Skyway pylons'; cable.name = 'Skyway stay cables'; ring.name = 'Skyway fenders';
+    for (const m of [pier, tower, cable, ring]) add(m); world.wrecks.push({ x: scx, z: scz, name: 'Skyway main span' }); }
   // ships riding at anchor, chain down into the dark
   for (const an of ANCHORAGE) { const [x, z] = toXZ(...an.ll), f = floorAt(x, z), t = BOAT_TYPES.ship, hull = new THREE.Mesh(t.geo, boatMat); hull.position.set(x, 0, z); hull.rotation.y = an.yaw; add(hull, false); solid({ kind: 'b', x, z, hx: t.W / 2, hz: t.L / 2, yaw: an.yaw, y0: -t.draft, y1: t.free });
     const bow = fwdOf(an.yaw).multiplyScalar(t.L * 0.45), chain = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1, 6).translate(0, -0.5, 0), structMat);
