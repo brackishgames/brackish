@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { parse } from 'espree'; import { analyze } from 'eslint-scope';
 const root = new URL('..', import.meta.url).pathname, check = process.argv.includes('--check');
-const DIRS = ['lib', 'core', 'render', 'world', 'actors'];   // the module layers so far, lowest first
+const DIRS = ['lib', 'core', 'render', 'world', 'actors', 'systems'];   // the module layers so far, lowest first
 const THREE_NAMES = { THREE: `import * as THREE from 'three';`, EffectComposer: `import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';`,
   ShaderPass: `import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';`, UnrealBloomPass: `import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';`,
   mergeGeometries: `import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';` };

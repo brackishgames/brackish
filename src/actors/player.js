@@ -7,6 +7,8 @@ import { WU } from '../render/materials.js?v=__BUILD__';
 import { START } from '../world/geo.js?v=__BUILD__';
 import { creatureMesh, speciesById } from './creatures.js?v=__BUILD__';
 import { echoThing } from './wildlife.js?v=__BUILD__';
+import { burst, click, splash, thud, whoosh } from '../systems/audio.js?v=__BUILD__';
+import { rumble } from '../systems/input.js?v=__BUILD__';
 // The body you are: where it is, how it moves (13-frame steps it), what it can do, and what happens when it's hurt.
 export const unlocked = new Set();
 export const P = { pos: new THREE.Vector3(START[0], -4, START[1]), yaw: Math.PI, pitch: 0, roll: 0, speed: 1.3, yawRate: 0, sp: speciesById.cownose, mesh: null, hp: 3, stun: 0, air: 0 };

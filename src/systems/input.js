@@ -1,24 +1,38 @@
-'use strict';
+import * as THREE from 'three';
+import { DEV, MOBILE, TEST } from '../core/env.js?v=__BUILD__';
+import { canFull, fullscreen, goFull, isFull, lockLandscape } from '../core/screen.js?v=__BUILD__';
+import { DEFAULT_BINDS, saveSettings, settings } from '../core/settings.js?v=__BUILD__';
+import { resize } from '../render/display.js?v=__BUILD__';
+import { START } from '../world/geo.js?v=__BUILD__';
+import { world } from '../world/structures.js?v=__BUILD__';
+import { day } from '../world/time.js?v=__BUILD__';
+import { feverR } from '../actors/fever.js?v=__BUILD__';
+import { P, act } from '../actors/player.js?v=__BUILD__';
+import { wild } from '../actors/wildlife.js?v=__BUILD__';
+import { startAudio } from './audio.js?v=__BUILD__';
+import { SAVE_KEY, loadedSave } from './save.js?v=__BUILD__';
+import { CHAPTERS, pressedAny, startGame, started, story } from './story.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  INPUT (arrows + space), AUDIO
 // ═══════════════════════════════════════════════════════════════════
-const keys = {};
+export const keys = {};
 for (const ev of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(ev, () => { fullscreen.pending = false; });
 for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { fullscreen.pending = false; for (const k in keys) keys[k] = false; if (isFull() && menu && canFull) closeMenu(); if (MOBILE && isFull()) lockLandscape(); });
-const sprinting = () => input.burst;
+export const sprinting = () => input.burst;
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
-let wasdSeen = false; const usingWASD = () => wasdSeen;
+export let wasdSeen = false;
+export const usingWASD = () => wasdSeen;
 // ── controllers: any pad the browser sees (USB or Bluetooth: Xbox, PlayStation, Switch Pro...) on the standard layout.
 //    left stick steers, RT swims, LT eases off, A / ✕ bursts, X / □ is the ability, right stick looks around,
 //    Y / △ the map, LB the creature you have been, START pause, BACK help. Buttons go through the keyboard handler.
-const pad = { turn: 0, throttle: 0, climb: 0, burst: false, lookX: 0, lookY: 0, active: false, held: {}, sony: false, ref: null };
-const B = action => settings.binds[action];   // the key an action is bound to
-const PAD_KEYS = { 0: () => (menu || mapOpen || !started || photo) ? 'Enter' : null, 1: () => photo ? B('photo') : menu ? 'Escape' : helpOpen ? B('help') : mapOpen ? B('map') : null, 2: () => started && !menu && !mapOpen ? B('ability') : null,
+export const pad = { turn: 0, throttle: 0, climb: 0, burst: false, lookX: 0, lookY: 0, active: false, held: {}, sony: false, ref: null };
+export const B = action => settings.binds[action];   // the key an action is bound to
+export const PAD_KEYS = { 0: () => (menu || mapOpen || !started || photo) ? 'Enter' : null, 1: () => photo ? B('photo') : menu ? 'Escape' : helpOpen ? B('help') : mapOpen ? B('map') : null, 2: () => started && !menu && !mapOpen ? B('ability') : null,
   3: () => B('map'), 4: () => B('creature'), 11: () => started && !menu ? B('photo') : null, 8: () => B('help'), 9: () => B('pause'), 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
-const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst   □ ability   R STICK look   △ map   OPTIONS pause' : 'L STICK steer   RT swim   A burst   X ability   R STICK look   Y map   START pause';
+export const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst   □ ability   R STICK look   △ map   OPTIONS pause' : 'L STICK steer   RT swim   A burst   X ability   R STICK look   Y map   START pause';
 addEventListener('gamepadconnected', e => { pad.sony = /054c|dualsense|dualshock|playstation|wireless controller/i.test(e.gamepad.id); if (started) say('CONTROLLER CONNECTED', 2); });
 addEventListener('gamepaddisconnected', () => { pad.active = false; pad.ref = null; bl.textContent = keyboardHint(); if (started) say('CONTROLLER DISCONNECTED', 2); });
-function pollPad() {
+export function pollPad() {
   const g = navigator.getGamepads ? [...navigator.getGamepads()].find(p => p && p.connected) : null; pad.ref = g;
   if (!g) { pad.turn = pad.throttle = pad.climb = pad.lookX = pad.lookY = 0; pad.burst = false; return; }
   const dz = v => Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85, val = i => g.buttons[i] ? g.buttons[i].value : 0, inv = settings.invertY ? -1 : 1;   // a dead zone that doesn't jump
@@ -29,24 +43,25 @@ function pollPad() {
     if (down && !pad.held[i]) { const code = PAD_KEYS[i](); if (code) { pad.held[i] = code; dispatchEvent(new KeyboardEvent('keydown', { code })); } else pad.held[i] = 'none'; }
     else if (!down && pad.held[i]) { if (pad.held[i] !== 'none') dispatchEvent(new KeyboardEvent('keyup', { code: pad.held[i] })); pad.held[i] = null; } }
 }
-function rumble(strong, weak = strong * 0.6, ms = 220) {   // felt in the hands, where the controller can
+export function rumble(strong, weak = strong * 0.6, ms = 220) {   // felt in the hands, where the controller can
   const v = pad.ref && pad.ref.vibrationActuator; if (!v || !pad.active || !settings.shake) return;
   try { v.playEffect('dual-rumble', { duration: ms, strongMagnitude: Math.min(1, strong), weakMagnitude: Math.min(1, weak) }); } catch {}
 }
-const KEYNAME = { burst: ['SHIFT', 'A', '✕'], rise: ['SPACE', 'L STICK UP', 'L STICK UP'], dive: ['C', 'L STICK DOWN', 'L STICK DOWN'], ability: ['E', 'X', '□'], map: ['M', 'Y', '△'], tab: ['TAB', 'LB', 'L1'] };
-const kn = n => pad.active ? KEYNAME[n][pad.sony ? 2 : 1] : keyLabel(B(n === 'tab' ? 'creature' : n));
-const keyLabel = code => ({ Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'R SHIFT', ControlLeft: 'CTRL', ControlRight: 'R CTRL', AltLeft: 'ALT', AltRight: 'R ALT', Tab: 'TAB', Enter: 'ENTER',
+export const KEYNAME = { burst: ['SHIFT', 'A', '✕'], rise: ['SPACE', 'L STICK UP', 'L STICK UP'], dive: ['C', 'L STICK DOWN', 'L STICK DOWN'], ability: ['E', 'X', '□'], map: ['M', 'Y', '△'], tab: ['TAB', 'LB', 'L1'] };
+export const kn = n => pad.active ? KEYNAME[n][pad.sony ? 2 : 1] : keyLabel(B(n === 'tab' ? 'creature' : n));
+export const keyLabel = code => ({ Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'R SHIFT', ControlLeft: 'CTRL', ControlRight: 'R CTRL', AltLeft: 'ALT', AltRight: 'R ALT', Tab: 'TAB', Enter: 'ENTER',
   Backspace: 'BACKSPACE', CapsLock: 'CAPS', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' })[code] || String(code || '?').replace(/^(Key|Digit|Numpad)/, '').toUpperCase();
-const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${keyLabel(B('back'))}${keyLabel(B('right'))} swim   ${kn('rise')} rise   ${kn('dive')} dive   ${kn('burst')} burst   ${kn('ability')} ability   ${kn('map')} map   ${keyLabel(B('help'))} help`;
+export const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${keyLabel(B('back'))}${keyLabel(B('right'))} swim   ${kn('rise')} rise   ${kn('dive')} dive   ${kn('burst')} burst   ${kn('ability')} ability   ${kn('map')} map   ${keyLabel(B('help'))} help`;
 
 // ── one snapshot of what the player is asking for, read once per step from every device: keyboard, controller, touch, tilt.
 //    nothing else reads the devices for swimming. a test sets it directly through __game.setInput().
-const input = { turn: 0, climb: 0, throttle: 0, burst: false, forced: false };
-let inputOverride = null; const setInputOverride = o => { inputOverride = o; };
-const held = action => !!keys[B(action)] || (action === 'burst' && B('burst') === 'ShiftLeft' && !!keys.ShiftRight);
-const clamp1 = v => Math.max(-1, Math.min(1, v));
-function readInput() {
+export const input = { turn: 0, climb: 0, throttle: 0, burst: false, forced: false };
+export let inputOverride = null;
+export const setInputOverride = o => { inputOverride = o; };
+export const held = action => !!keys[B(action)] || (action === 'burst' && B('burst') === 'ShiftLeft' && !!keys.ShiftRight);
+export const clamp1 = v => Math.max(-1, Math.min(1, v));
+export function readInput() {
   const o = inputOverride; input.forced = !!o;
   if (o) { input.turn = o.turn || 0; input.climb = o.climb || 0; input.throttle = o.throttle ?? 1; input.burst = !!o.burst; return input; }   // throttle 1 is a cruise
   input.turn = clamp1((held('left') || keys.ArrowLeft ? 1 : 0) - (held('right') || keys.ArrowRight ? 1 : 0) + touch.turn + pad.turn + tilt.turn);
@@ -56,21 +71,21 @@ function readInput() {
   return input;
 }
 // ── rebinding: pick an action in settings, press the key you want. a key that was already in use swaps over
-const ACTIONS = [['forward', 'FORWARD'], ['back', 'BACK'], ['left', 'TURN LEFT'], ['right', 'TURN RIGHT'], ['rise', 'RISE'], ['dive', 'DIVE'], ['burst', 'BURST'], ['ability', 'ABILITY'],
+export const ACTIONS = [['forward', 'FORWARD'], ['back', 'BACK'], ['left', 'TURN LEFT'], ['right', 'TURN RIGHT'], ['rise', 'RISE'], ['dive', 'DIVE'], ['burst', 'BURST'], ['ability', 'ABILITY'],
   ['map', 'MAP'], ['creature', 'CHANGE BODY'], ['photo', 'PHOTO'], ['help', 'HELP'], ['pause', 'PAUSE'], ['feedback', 'FEEDBACK']];
-function bindKey(code) {
+export function bindKey(code) {
   const a = menu.binding; if (code === 'Escape') { menu.binding = null; return; }
   if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) return;   // those always do their own thing
   const other = Object.keys(settings.binds).find(k => k !== a && settings.binds[k] === code); if (other) settings.binds[other] = settings.binds[a];
   settings.binds[a] = code; menu.binding = null; saveSettings(); refreshKeyHints();
 }
-function refreshKeyHints() { if (!pad.active && !MOBILE) bl.textContent = keyboardHint(); renderHelpKeys(); }
-const needFull = () => started && canFull && !DEV && !TEST && !isFull() && !pad.active && !fullscreen.pending;   // full screen on its way: no pause card flashing up meanwhile   // a controller player may stay windowed
+export function refreshKeyHints() { if (!pad.active && !MOBILE) bl.textContent = keyboardHint(); renderHelpKeys(); }
+export const needFull = () => started && canFull && !DEV && !TEST && !isFull() && !pad.active && !fullscreen.pending;   // full screen on its way: no pause card flashing up meanwhile   // a controller player may stay windowed
 
 // ── mouse: steer where you point (pointer locked to the game); hold the right button to look around without turning
-const aim = { yaw: null, pitch: 0, pitchT: 0, look: false, lookYaw: 0, lookPitch: 0, lookT: 9 };
-const mouseSteering = () => settings.mouseSteer && !MOBILE && document.pointerLockElement === document.documentElement;
-function lockPointer() { if (!TEST && !MOBILE && settings.mouseSteer && started && !document.pointerLockElement) try { document.documentElement.requestPointerLock()?.catch?.(() => {}); } catch {} }
+export const aim = { yaw: null, pitch: 0, pitchT: 0, look: false, lookYaw: 0, lookPitch: 0, lookT: 9 };
+export const mouseSteering = () => settings.mouseSteer && !MOBILE && document.pointerLockElement === document.documentElement;
+export function lockPointer() { if (!TEST && !MOBILE && settings.mouseSteer && started && !document.pointerLockElement) try { document.documentElement.requestPointerLock()?.catch?.(() => {}); } catch {} }
 addEventListener('mousemove', e => {
   if (!started || (paused && !photo)) return; const s = 0.0022 * settings.mouse, dy = e.movementY * (settings.invertY ? -1 : 1);
   if (photo) { photo.yaw -= e.movementX * s; photo.pitch = Math.max(-1.3, Math.min(1.3, photo.pitch + dy * s)); return; }
@@ -81,13 +96,13 @@ addEventListener('mousedown', e => { if (e.button === 2 && started) aim.look = t
 addEventListener('mouseup', e => { if (e.button === 2) aim.look = false; });
 addEventListener('contextmenu', e => { if (started) e.preventDefault(); });
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && started && !menu && settings.mouseSteer && !MOBILE) { endPhoto(); openMenu('main'); } });   // ESC lets the mouse go: that's a pause
-let helpOpen = false;
-function setHelp(open) { helpOpen = open; help.classList.toggle('gone', !open); }
+export let helpOpen = false;
+export function setHelp(open) { helpOpen = open; help.classList.toggle('gone', !open); }
 // ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
-let menu = null, photo = null;
+export let menu = null, photo = null;
 // photo opportunities: the game picks the moments, not the player. a landmark or wreck close by, inside the fever,
 // a leap together with the pod, the surface at dawn.
-function photoSpot() {
+export function photoSpot() {
   if (!started) return null;
   for (const w of world.wrecks) if (Math.hypot(w.x - P.pos.x, w.z - P.pos.z) < 70) return w.name;
   if (feverR(P.pos) < 1.2) return 'THE FEVER';
@@ -95,16 +110,16 @@ function photoSpot() {
   if (day.hour > 5.4 && day.hour < 7.2 && P.pos.y > -1.2) return 'DAWN';
   return null;
 }
-function startPhoto() { const spot = photoSpot(); if (!spot) return; closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9, spot }; lockPointer(); }
-function endPhoto() { photo = null; }
+export function startPhoto() { const spot = photoSpot(); if (!spot) return; closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9, spot }; lockPointer(); }
+export function endPhoto() { photo = null; }
 addEventListener('wheel', e => { if (photo) photo.dist = THREE.MathUtils.clamp(photo.dist * (e.deltaY > 0 ? 1.1 : 0.9), 1.2, 60); }, { passive: true });
-const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
-const onOff = v => v ? 'ON' : 'OFF';
-function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; aim.look = false; if (document.pointerLockElement) document.exitPointerLock?.(); }
-function closeMenu() { menu = null; }
-function resume() { closeMenu(); tilt.zero = null; if (canFull && !DEV && !TEST && !isFull() && !pad.active) goFull(); lockPointer(); }
-function restartChapter() { closeMenu(); if (story.ch === 0) travelTo({ name: CHAPTERS[0].title, x: START[0], z: START[1] }); story.begin(story.ch); resume(); }
-function menuItems() {
+export const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
+export const onOff = v => v ? 'ON' : 'OFF';
+export function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; aim.look = false; if (document.pointerLockElement) document.exitPointerLock?.(); }
+export function closeMenu() { menu = null; }
+export function resume() { closeMenu(); tilt.zero = null; if (canFull && !DEV && !TEST && !isFull() && !pad.active) goFull(); lockPointer(); }
+export function restartChapter() { closeMenu(); if (story.ch === 0) travelTo({ name: CHAPTERS[0].title, x: START[0], z: START[1] }); story.begin(story.ch); resume(); }
+export function menuItems() {
   if (menu.kind === 'settings') return [
     { label: () => 'VOLUME  ' + '◆'.repeat(settings.volume) + '·'.repeat(10 - settings.volume), adj: d => settings.volume = d === 'cycle' ? (settings.volume + 1) % 11 : clampI(settings.volume + d, 0, 10) },
     { label: () => 'AMBIENCE  ' + '◆'.repeat(settings.amb) + '·'.repeat(10 - settings.amb), adj: d => settings.amb = d === 'cycle' ? (settings.amb + 1) % 11 : clampI(settings.amb + d, 0, 10) },
@@ -151,8 +166,8 @@ function menuItems() {
     { label: () => 'RESTART CHAPTER', act: restartChapter },
     { label: () => 'NEW GAME', act: () => { menu.kind = 'confirm'; menu.sel = 0; } }];
 }
-const menuSettingsIndex = label => { const k = menu.kind; menu.kind = 'settings'; const i = menuItems().findIndex(it => it.label() === label); menu.kind = k; return Math.max(0, i); };
-function menuKey(code) {
+export const menuSettingsIndex = label => { const k = menu.kind; menu.kind = 'settings'; const i = menuItems().findIndex(it => it.label() === label); menu.kind = k; return Math.max(0, i); };
+export function menuKey(code) {
   const items = menuItems(), it = items[menu.sel];
   if (code === 'ArrowUp' || code === 'KeyW') menu.sel = (menu.sel + items.length - 1) % items.length;
   else if (code === 'ArrowDown' || code === 'KeyS') menu.sel = (menu.sel + 1) % items.length;

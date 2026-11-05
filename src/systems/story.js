@@ -1,8 +1,24 @@
-'use strict';
+import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { DEV, TEST } from '../core/env.js?v=__BUILD__';
+import { emit, once } from '../core/events.js?v=__BUILD__';
+import { rand } from '../core/random.js?v=__BUILD__';
+import { canFull, goFull } from '../core/screen.js?v=__BUILD__';
+import { fwdOf } from '../core/space.js?v=__BUILD__';
+import { TUNE } from '../core/tune.js?v=__BUILD__';
+import { WU } from '../render/materials.js?v=__BUILD__';
+import { FEVER_PATH } from '../world/geo.js?v=__BUILD__';
+import { day } from '../world/time.js?v=__BUILD__';
+import { SPECIES, speciesById } from '../actors/creatures.js?v=__BUILD__';
+import { fever, feverR } from '../actors/fever.js?v=__BUILD__';
+import { P, becomeSpecies, unlocked } from '../actors/player.js?v=__BUILD__';
+import { WILD_ACTIVE, setWild, wild } from '../actors/wildlife.js?v=__BUILD__';
+import { bell, chimeCheckpoint, chimeStart } from './audio.js?v=__BUILD__';
+import { lockPointer, sprinting } from './input.js?v=__BUILD__';
+import { saveGame } from './save.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════
-const CHAPTERS = [
+export const CHAPTERS = [
   { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.60629, -82.75359], goal: () => toXZ(27.6055, -82.7565), radius: 60,
     lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, into a hole 25 metres deep.', 'Follow the beam of light.', 'E to sense. Clams hide in the sand, and they give a heart back.'] },
   { title: 'II · THE CHANNEL', start: [27.61982, -82.65863], goal: () => toXZ(27.6215, -82.6555), radius: 90,
@@ -24,7 +40,7 @@ const CHAPTERS = [
   { title: 'FREE SWIM', free: true,
     lines: ['The bay is yours, and every body you have been.', 'TAB to change. M for the map and fast travel.', 'There are things on the bottom nobody talks about.'] },
 ];
-const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
+export const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
     this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter');
@@ -69,11 +85,11 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (c.breaths) { const up = P.pos.y > -0.3; if (up && !this.wasUp) { this.breaths++; say(`BREATH ${this.breaths} / ${c.breaths}`, 1.5); } this.wasUp = up; done = done && this.breaths >= c.breaths; if (done && this.breaths < c.breaths) done = false; }
     if (done) { const place = c.title.replace(/^[IVX]+ · /, ''); if (checkpoints.some(k => k.name === place)) chimeCheckpoint(); discover(place, P.pos.x, P.pos.z);   /* a replayed chapter still rings */ if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); once('chapter-begun').then(() => saveGame()); }   /* saved once the next chapter is really under way */
   } };
-const TITLE_HINT = 'PRESS ENTER OR CLICK';
-let started = false;   // past the title: set once, by startGame
-let startedAt = -1e9;   // screen time the swim began: the HUD eases in from here
-function startGame(save) { if (canFull && !DEV && !TEST) goFull(); tilt.zero = null; started = true; lockPointer(); document.body.classList.add('playing'); startedAt = WU.uTime.value; later(TUNE.timing.hintFor, () => document.body.classList.add('settled'));
+export const TITLE_HINT = 'PRESS ENTER OR CLICK';
+export let started = false;   // past the title: set once, by startGame
+export let startedAt = -1e9;   // screen time the swim began: the HUD eases in from here
+export function startGame(save) { if (canFull && !DEV && !TEST) goFull(); tilt.zero = null; started = true; lockPointer(); document.body.classList.add('playing'); startedAt = WU.uTime.value; later(TUNE.timing.hintFor, () => document.body.classList.add('settled'));
   $('title').classList.add('gone');
   if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); later(TUNE.timing.resumeCard, () => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }); if (save.ch === 3 && !save.fever) fever.moving = true; emit('chapter-begun', save.ch); return; }
   story.begin(0); }
-function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }
+export function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }

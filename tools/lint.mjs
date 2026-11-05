@@ -9,7 +9,7 @@ const ORDER = JSON.parse(main.match(/const GAME = (\[[^\]]+\])/s)[1].replace(/'/
 const { parse } = await import('espree');
 const exported = file => parse(readFileSync(file, 'utf8'), { ecmaVersion: 'latest', sourceType: 'module' }).body.filter(n => n.type === 'ExportNamedDeclaration' && n.declaration)
   .flatMap(n => n.declaration.declarations ? n.declaration.declarations.map(d => d.id.name) : [n.declaration.id.name]);
-const LAYERS = ['lib', 'core', 'render', 'world', 'actors'];
+const LAYERS = ['lib', 'core', 'render', 'world', 'actors', 'systems'];
 const libExports = LAYERS.flatMap(d => readdirSync(root + 'src/' + d).map(f => root + `src/${d}/` + f)).flatMap(exported);
 // and the other way: what the game scripts declare at the top, which a module may still use while the scripts are scripts
 const scriptNames = ORDER.flatMap(f => parse(readFileSync(root + 'src/' + f, 'utf8'), { ecmaVersion: 'latest', sourceType: 'script' }).body.flatMap(n =>
@@ -25,7 +25,7 @@ const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: [
   { files: ['**/*.js'], languageOptions: { ecmaVersion: 'latest', sourceType: 'script', globals: { ...globals.browser, ...handed } }, rules },
   { files: ['**/*.mjs', 'src/lib/*.js', 'src/main.js', 'tests/**', 'tools/**'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } }, rules },
   // the game's modules: anything from another module must be imported (no-undef says when it isn't); the scripts' names are still shared
-  { files: ['src/core/*.js', 'src/render/*.js', 'src/world/*.js', 'src/actors/*.js'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.browser, ...fromScripts } }, rules },
+  { files: ['src/core/*.js', 'src/render/*.js', 'src/world/*.js', 'src/actors/*.js', 'src/systems/*.js'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.browser, ...fromScripts } }, rules },
 ] });
 // the game: one text, a map from its lines back to files
 let text = '', map = [];
@@ -33,6 +33,6 @@ for (const f of ORDER) { const src = readFileSync(root + 'src/' + f, 'utf8').rep
 const [game] = await eslint.lintText("'use strict';\n" + text, { filePath: root + 'game.js' });
 const issues = game.messages.map(m => { const [f, line] = map[m.line - 2] || ['?', m.line]; return `src/${f}:${line}:${m.column}  ${m.message}  (${m.ruleId})`; });
 // modules and tools, as themselves
-for (const r of await eslint.lintFiles(['src/lib/*.js', 'src/core/*.js', 'src/render/*.js', 'src/world/*.js', 'src/actors/*.js', 'src/main.js', 'tools/*.mjs', 'tests/**/*.mjs', 'sw.js'])) for (const m of r.messages) issues.push(`${r.filePath.replace(root, '')}:${m.line}:${m.column}  ${m.message}  (${m.ruleId})`);
+for (const r of await eslint.lintFiles(['src/lib/*.js', 'src/core/*.js', 'src/render/*.js', 'src/world/*.js', 'src/actors/*.js', 'src/systems/*.js', 'src/main.js', 'tools/*.mjs', 'tests/**/*.mjs', 'sw.js'])) for (const m of r.messages) issues.push(`${r.filePath.replace(root, '')}:${m.line}:${m.column}  ${m.message}  (${m.ruleId})`);
 if (issues.length) { console.log(issues.join('\n')); console.log(`\n${issues.length} problem${issues.length > 1 ? 's' : ''}`); process.exit(1); }
 console.log(`lint: ${ORDER.length} game scripts, the modules and the tools are clean`);

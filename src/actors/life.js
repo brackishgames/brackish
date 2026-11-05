@@ -9,6 +9,9 @@ import { creatureMat } from '../render/materials.js?v=__BUILD__';
 import { floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
 import { birdGeometry } from './creatures.js?v=__BUILD__';
 import { ABILITY, HP_MAX, P, abilityName } from './player.js?v=__BUILD__';
+import { bloop, splash } from '../systems/audio.js?v=__BUILD__';
+import { kn } from '../systems/input.js?v=__BUILD__';
+import { started } from '../systems/story.js?v=__BUILD__';
 // The bay's small life: moon jellies, clams and shrimp to eat, mullet schools, pelicans and gulls.
 // moon jellies: slow, pulsing, harmless, lovely in the dark
 export function jellyGeometry() {
