@@ -1,7 +1,7 @@
 // the numbers that decide how the game feels, in one place
 export const TUNE = {
   burst: { secs: 5, refill: 6, boost: 2.2, reuseAt: 0.3 },   // seconds of turbo, seconds to refill from empty, top speed over the real sprint, fill needed to go again
-  shadow: { first: [50, 90], every: [70, 160] },             // seconds until something large crosses your path
+  shadow: { first: [50, 90], every: [70, 160], retry: 10 },  // seconds until something large crosses your path; sooner again if it couldn't
   fail: { from: 12, to: 26 },                                // metres down where the display starts, and finishes, losing segments
   hush: 0.88,                                                // how much of the sea goes quiet when a shark takes an interest
   tide: { pull: 0.9, from: 0.3, to: 1.0 },                   // strong currents push this much harder, ramping in between these m/s
