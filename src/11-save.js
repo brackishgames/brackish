@@ -4,8 +4,9 @@
 //  (A client-only game can never be fully cheat-proof; this stops casual edits.)
 // ═══════════════════════════════════════════════════════════════════
 const SAVE_KEY = 'brackish.save', SAVE_SALT = 'egmont-25m-' + location.host;
-let saveTimer = 0, loadedSave = null;
-let lastSaved = -1e9, hudWakeT = 0, hudGain = 1, sayEndT = 0;
+let saveTimer = 0, loadedSave = null, lastSaved = -1e9;
+function stepAutosave(dt) { saveTimer += dt; if (saveTimer > TUNE.timing.autosave) { saveTimer = 0; saveGame(); } }   // world time: a pause doesn't save
+async function loadSaved() { loadedSave = await loadGame(); if (loadedSave) loadedSave.ch = Math.min(loadedSave.ch, CHAPTERS.length - 2); }   // older saves can point past the last chapter
 async function saveGame() {
   if (!started || DEV || TEST) return;   // dev and test runs never overwrite a real save
   lastSaved = performance.now();
@@ -19,7 +20,7 @@ async function loadGame() {
 }
 function applySave(d) {
   for (const id of d.unlocked) unlocked.add(id); for (const k of d.eaten || []) eaten.add(k);
-  checkpoints.length = 0; checkpoints.push(...d.cps); lastCheckpoint = checkpoints[checkpoints.length - 1] || checkpoints[0];
+  restoreCheckpoints(d.cps);
   P.fed = d.fed; P.hp = d.hp ?? 3; P.sta = d.sta ?? 1; day.hour = d.clock; P.pos.set(...d.pos); P.yaw = d.yaw; becomeSpecies(speciesById[d.sp] || speciesById.cownose);
   if (d.fever) { fever.seg = d.fever.seg; fever.t = d.fever.t; fever.moving = d.fever.moving; fever.c.x = d.fever.x; fever.c.z = d.fever.z; }   /* the fever is where you left it */
   cameraBehind();

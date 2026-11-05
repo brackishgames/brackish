@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = performance.now(), d = (n - this.last) / 1000; this.last = n; this.elapsedTime += d; return d; } }, _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
-let above = false, aboveMix = 0, nearestPoi = '', poiTimer = 0, lastFloor = -5;
+let above = false, aboveMix = 0, lastFloor = -5;
 
 const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
 // ── the player, one step. each stage hands the next what it needs: what you're asking for, the seabed, whether you're
@@ -241,39 +241,20 @@ function stepAmbient(dt, t) {
 }
 // which way the tide is pushing you, as you look at it: ahead, behind, or off to a side
 const tideArrow = () => { const rel = Math.atan2(_cur.x, -_cur.z) + P.yaw, a = Math.atan2(Math.sin(rel), Math.cos(rel)); return Math.abs(a) < 0.79 ? '↑' : Math.abs(a) > 2.36 ? '↓' : a > 0 ? '→' : '←'; };
-function stepHud(dt) {
-  const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
-  const tide = (P.current || 0) > 0.15 ? `  TIDE ${P.current.toFixed(1)}${tideArrow()}` : '';
-  tl.textContent = `DOWN ${Math.max(0, -P.pos.y).toFixed(1)}M  FLOOR ${(-f).toFixed(0)}M  ${P.speed.toFixed(1)}M/S${tide}  ${'♥'.repeat(P.hp)}${P.fed ? '  +' + P.fed : ''}`;
-  poiTimer -= dt;
-  if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
-    for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }
-    for (const w of world.wrecks) { const d = Math.hypot(w.x - P.pos.x, w.z - P.pos.z); if (d < 22 && started && LORE[w.name]) tip('lore:' + w.name, () => LORE[w.name], w.name.toUpperCase()); if (d < 60) { best = w.name; if (started) discover(w.name, w.x, w.z); } }
-    nearestPoi = best; }
-  tr.textContent = nearestPoi;
-  const { b, d } = nearestBoat(); const danger = b && d < (b.type === BOAT_TYPES.ship ? 220 : 60) && P.pos.y > -2.5;
-  const hunter = wild.find(w => w.hunting);
-  const L = hunter && hunter.lunge, tele = L ? (L.phase === 'wind' ? `${L.side < 0 ? '◄' : '►'} ${L.side < 0 ? 'LEFT' : 'RIGHT'} · wait` : L.phase === 'lunge' ? 'TURN' : hunter.sp.name.toUpperCase()) : '';
-  warn.textContent = danger ? `▲ DIVE` : hunter ? `▲ ${tele}` : ''; warn.style.opacity = danger || hunter ? 1 : 0;
-  const landmarks = [];
-  if (story.goal) landmarks.push({ name: 'goal', bearing: bearingTo(...story.goal), dist: Math.hypot(story.goal[0] - P.pos.x, story.goal[1] - P.pos.z), goal: true });
-  for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), dist = Math.hypot(x - P.pos.x, z - P.pos.z); if (dist < 8000 && dist > 150) landmarks.push({ name, bearing: bearingTo(x, z), dist }); }
-  drawCompass(landmarks);
-  if (sayTimer > 0) { sayTimer -= dt; if (sayTimer <= 0) { storyEl.style.opacity = 0; sayEndT = performance.now(); } }
-}
 // ── time. the world moves in slices of at most 1/50 s, up to three a frame, so it runs at real speed down to ~17 fps and
 //    never depends on the display's rate. the screen (camera, HUD, sound, the render) updates once a frame.
 //    in ?test nothing moves on its own: a test steps the world in exact 1/60 s slices (src/16-test.js).
 const SIM_MAX = 1 / 50, SIM_STEPS = 3;
+let paused = false;   // a menu, the map, help, photo mode, or a window that isn't full screen: the world waits
 let photoUrl = null;
-let simTime = 0, timeScale = 1;   // seconds of world time; ?dev can speed the world up or slow it down
+let simTime = 0, timeScale = 1; const setTimeScale = k => { timeScale = THREE.MathUtils.clamp(k, 0.125, 8); };   // seconds of world time; ?dev can speed the world up or slow it down
 // something meant to last a while (TUNE.timing), on the right clock: 'screen' keeps running through a pause (cards, flashes), 'world' stops with it
 const timers = { screen: [], world: [] };
 function later(secs, fn, clock = 'screen') { timers[clock].push({ at: (clock === 'world' ? simTime : WU.uTime.value) + secs, fn }); }
 function runTimers(clock, now) { const q = timers[clock]; if (!q.length || !q.some(t => t.at <= now)) return; timers[clock] = q.filter(t => t.at > now); for (const t of q) if (t.at <= now) t.fn(); }
 function simStep(dt) {
   readInput(); stepStrokes(dt); const t = simTime;
-  if (started && !paused) { day.hour = (day.hour + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } stepPlayer(dt); story.step(dt); }
+  if (started && !paused) { day.hour = (day.hour + dt / 60) % 24; stepAutosave(dt); stepPlayer(dt); story.step(dt); }
   if (!started) {   // attract: after a while the ray wanders off on its own and the words fade
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
@@ -281,7 +262,6 @@ function simStep(dt) {
   if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt, P.pos); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); stepThing(dt); simTime += dt; runTimers('world', simTime); }
 }
 function frame() {
-  booting = false;
   requestAnimationFrame(frame);
   const real = Math.min(0.25, clock.getDelta()); WU.uTime.value = clock.elapsedTime;
   stepQuality(started && !paused); pollPad(); if (started && needFull() && !menu) openMenu('main');

@@ -51,11 +51,11 @@ async function boot() {
   if (!TEST) loadBridges().then(() => { try { buildStructures(); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }
   P.pos.y = Math.max(floorAt(P.pos.x, P.pos.z) * 0.4, -8); day.hour = CHAPTERS[0].clock ?? day.hour; if (DEV && new URLSearchParams(location.search).has('clock')) day.hour = +new URLSearchParams(location.search).get('clock');   // ?dev&clock=22 to explore at night
-  loadedSave = await loadGame(); if (loadedSave) loadedSave.ch = Math.min(loadedSave.ch, CHAPTERS.length - 2);   // older saves can point past the last chapter
+  await loadSaved();
   setTitleHint(); { const [, base, beta] = (document.querySelector('meta[name=version]')?.content || '').match(/^([\d.]+)(?:-beta\.(\d+))?/) || []; $('ver').textContent = base ? base + (beta != null ? ' beta ' + beta : '') : ''; }   // 0.1.0-beta.3 reads as 0.1.0 BETA 3: still being built, and saying so
   await stage('WAKING THE BAY', () => { if (loadedSave) applySave(loadedSave); else { becomeSpecies(speciesById.cownose); cameraBehind(); } rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); whenFaded($('load'), 0, () => { if (!started) $('title').classList.remove('gone'); });   // one card out, then the next in (unless you've already begun)
-  frame(); bootDone();
+  booting = false; frame(); bootDone();
   if ('serviceWorker' in navigator && !LOCAL) navigator.serviceWorker.register('sw.js').catch(() => {});   // offline play on the published site; never on your machine, where it would only get in the way
 }
 boot().catch(e => { console.error(e); logError('boot: ' + (e?.stack || e)); });

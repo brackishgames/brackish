@@ -70,6 +70,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     if (done) { const place = c.title.replace(/^[IVX]+ · /, ''); if (checkpoints.some(k => k.name === place)) chimeCheckpoint(); discover(place, P.pos.x, P.pos.z);   /* a replayed chapter still rings */ if (CHAPTERS[this.ch + 1].free && !this.ended) { this.ended = true; this.ending(); } else this.begin(this.ch + 1); once('chapter-begun').then(() => saveGame()); }   /* saved once the next chapter is really under way */
   } };
 const TITLE_HINT = 'PRESS ENTER OR CLICK';
+let started = false;   // past the title: set once, by startGame
 let startedAt = -1e9;   // screen time the swim began: the HUD eases in from here
 function startGame(save) { if (canFull && !DEV && !TEST) goFull(); tilt.zero = null; started = true; lockPointer(); document.body.classList.add('playing'); startedAt = WU.uTime.value; later(TUNE.timing.hintFor, () => document.body.classList.add('settled'));
   $('title').classList.add('gone');

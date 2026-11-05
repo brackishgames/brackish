@@ -55,15 +55,18 @@ export function steerTo(w, tx, tz, rate) {
   w.turn = THREE.MathUtils.clamp(d * 2.5, -rate, rate);
 }
 export let huntHeat = 0;   // how hard the hunt is on you, 0..1, for the HUD
-export let dread = 0;
+export let dread = 0;   // how close something is to taking an interest in you, 0..1: the sea goes quiet with it
 export const shadow = { t: between(TUNE.shadow.first) };   // until something large crosses your path (an object, so a test can bring it forward)
 // now and then, something big and dim crosses your path at the edge of what you can see, and turns away
 export function spawnShadow() {
   const w = wild.find(o => o.id < WILD_ACTIVE && o.sp && !o.hunting && !o.partner && !o.passing && o.pos.distanceTo(P.pos) > 60); if (!w) return;
-  const side = rand() < 0.5 ? -1 : 1, f = fwdOf(P.yaw, 0), x = P.pos.x + f.x * 30 + Math.cos(P.yaw) * side * 46, z = P.pos.z + f.z * 30 - Math.sin(P.yaw) * side * 46, fl = floorAt(x, z);
-  if (fl > -4) return;
-  setWild(w, speciesById[fl < -9 ? 'hammer' : 'bull'], x, THREE.MathUtils.clamp(P.pos.y - 2.5, fl + 1.5, -1.5), z); w.yaw = P.yaw + side * Math.PI / 2; w.passing = true;   // across your path, from one side to the other
-}   // how close something is to taking an interest in you, 0..1: the sea goes quiet with it
+  const first = rand() < 0.5 ? -1 : 1, f = fwdOf(P.yaw, 0);
+  for (const side of [first, -first]) {   // one side of you, or if that's too shallow for it, the other
+    const x = P.pos.x + f.x * 30 + Math.cos(P.yaw) * side * 46, z = P.pos.z + f.z * 30 - Math.sin(P.yaw) * side * 46, fl = floorAt(x, z); if (fl > -4) continue;
+    setWild(w, speciesById[fl < -9 ? 'hammer' : 'bull'], x, THREE.MathUtils.clamp(P.pos.y - 2.5, fl + 1.5, -1.5), z); w.yaw = P.yaw + side * Math.PI / 2; w.passing = true;   // across your path, from one side to the other
+    return;
+  }
+}
 // ── the wild animals, one step. each animal: is it here at all, what does it make of you, where is it going, then move it
 export function stepWild(dt, t) {
   huntHeat = 0; dread = 0; let hunters = 0; for (const o of wild) if (o.hunting) hunters++;

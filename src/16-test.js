@@ -11,7 +11,6 @@
 //  ?dev adds F3 (a readout of the world) and [ ] (slow the world, speed it up).
 // ═══════════════════════════════════════════════════════════════════
 let bootDone; const booted = new Promise(r => bootDone = r);
-let lastHudFail = 0;   // what the display's segment failure was on the last drawn frame
 const errorLog = [];   // filled by 17-feedback.js
 function snapshot() {
   const near = wild.filter(w => w.sp && w.id < WILD_ACTIVE);
@@ -25,11 +24,11 @@ const testApi = {
   ready: booted,
   async start() { if (!started) { const begun = once('chapter-begun'); startGame(null); await begun; } return snapshot(); },
   async chapter(i) { const begun = once('chapter-begun'); story.begin(i); await begun; return snapshot(); },
-  setInput(o) { inputOverride = { ...o }; return this; },
-  clearInput() { inputOverride = null; return this; },
+  setInput(o) { setInputOverride({ ...o }); return this; },
+  clearInput() { setInputOverride(null); return this; },
   step(n = 1) { for (let i = 0; i < n; i++) simStep(1 / 60); return snapshot(); },
   state: snapshot,
-  calm() { if (menu) { if (menu.kind === 'feedback') fbEl().blur(); closeMenu(); } if (mapOpen) toggleMap(); if (helpOpen) setHelp(false); if (photo) endPhoto(); inputOverride = null; for (const k in keys) keys[k] = false; return snapshot(); },   // every scenario starts from here
+  calm() { if (menu) { if (menu.kind === 'feedback') fbEl().blur(); closeMenu(); } if (mapOpen) toggleMap(); if (helpOpen) setHelp(false); if (photo) endPhoto(); setInputOverride(null); for (const k in keys) keys[k] = false; return snapshot(); },   // every scenario starts from here
   teleport(lat, lon, depth = 3) { const [x, z] = toXZ(lat, lon); P.pos.set(x, Math.max(-depth, floorAt(x, z) + P.sp.alt + 0.2), z); P.vel?.set(0, 0, 0); cameraBehind(); return snapshot(); },
 };
 if (TEST || DEV) window.__game = testApi;
@@ -38,7 +37,7 @@ if (TEST || DEV) window.__game = testApi;
 const debug = { on: false };
 if (DEV) addEventListener('keydown', e => {
   if (e.code === 'F3') { debug.on = !debug.on; e.preventDefault(); }
-  if (e.code === 'BracketLeft' || e.code === 'BracketRight') { timeScale = THREE.MathUtils.clamp(timeScale * (e.code === 'BracketRight' ? 2 : 0.5), 0.125, 8); say(`TIME ×${timeScale}`, 1); }
+  if (e.code === 'BracketLeft' || e.code === 'BracketRight') { setTimeScale(timeScale * (e.code === 'BracketRight' ? 2 : 0.5)); say(`TIME ×${timeScale}`, 1); }
 });
 function drawDebug(W, H) {
   if (!DEV || !debug.on) return;

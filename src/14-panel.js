@@ -15,6 +15,8 @@ function panelResize(w, h) {
   dotPass.uniforms.tText.value = panel.tex; panel.map = null;
 }
 whenResized(panelResize);   // the panel's dots are the display's grid
+let hudWakeT = 0, hudGain = 1, lastHudFail = 0;   // when something last needed you; how bright the HUD is; its segment failure on the last frame
+const nudgeHud = () => { hudWakeT = WU.uTime.value; };
 let pGain = 1;   // the HUD draws through this so it can fade when the water is quiet
 let pFail = 0, pFailK = 0;   // and this, so it can lose segments in deep water, like a stereo going under
 function pDot(x, y, v) { x |= 0; y |= 0; v *= pGain; if (pFail > 0 && hash2(x * 73 + (y >> 2) * 9, pFailK) < pFail) return; if (x < 0 || y < 0 || x >= panel.w || y >= panel.h || v <= 0) return; const i = (panel.h - 1 - y) * panel.w + x; if (v > panel.data[i]) panel.data[i] = Math.min(255, v); }

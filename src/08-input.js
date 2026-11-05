@@ -43,7 +43,7 @@ const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${key
 // ── one snapshot of what the player is asking for, read once per step from every device: keyboard, controller, touch, tilt.
 //    nothing else reads the devices for swimming. a test sets it directly through __game.setInput().
 const input = { turn: 0, climb: 0, throttle: 0, burst: false, forced: false };
-let inputOverride = null;
+let inputOverride = null; const setInputOverride = o => { inputOverride = o; };
 const held = action => !!keys[B(action)] || (action === 'burst' && B('burst') === 'ShiftLeft' && !!keys.ShiftRight);
 const clamp1 = v => Math.max(-1, Math.min(1, v));
 function readInput() {
@@ -81,7 +81,7 @@ addEventListener('mousedown', e => { if (e.button === 2 && started) aim.look = t
 addEventListener('mouseup', e => { if (e.button === 2) aim.look = false; });
 addEventListener('contextmenu', e => { if (started) e.preventDefault(); });
 document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && started && !menu && settings.mouseSteer && !MOBILE) { endPhoto(); openMenu('main'); } });   // ESC lets the mouse go: that's a pause
-let mapOpen = false, mapSel = 0, helpOpen = false, started = false, paused = false;
+let helpOpen = false;
 function setHelp(open) { helpOpen = open; help.classList.toggle('gone', !open); }
 // ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
 let menu = null, photo = null;
@@ -177,8 +177,7 @@ addEventListener('keydown', e => {
   if (!started) { if (e.code === 'Enter') startGame(loadedSave); return; }
   if (is('help')) setHelp(!helpOpen);
   if (is('map')) toggleMap();
-  if (mapOpen) { if (e.code === 'ArrowUp') mapSel = Math.max(0, mapSel - 1); if (e.code === 'ArrowDown') mapSel = Math.min(checkpoints.length - 1, mapSel + 1);
-    if (e.code === 'Enter') { travelTo(checkpoints[mapSel]); toggleMap(); } renderMapList(); return; }
+  if (mapOpen) { mapKey(e.code); return; }
   if (is('creature')) cycleCreature(e.shiftKey ? -1 : 1);
   if (is('ability') && !e.repeat) act();
 });
