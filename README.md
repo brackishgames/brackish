@@ -78,6 +78,7 @@ of that, and dev mode never touches your save. The page's security policy allows
   plays it: cruising, the burst, levelling out, turning, the tide, running into a pier, pausing, comfort settings,
   feedback, rebinding, the shapes in the murk, deep water, the echo, a controller, and a phone held both ways. Nothing in a
   test sleeps: it waits for the game's own events or for a condition to come true. `node tests/game.mjs burst` runs one.
+  `SLOW=4 npm run test:game` plays on a machine four times slower, which is how races show up before CI finds them.
 
 `window.__game` (in `?test` and `?dev`) is the whole interface: `start()`, `setInput({ turn, climb, throttle, burst })`,
 `step(frames)`, `state()`, `teleport(lat, lon, depth)`. Every pull request and every deploy runs all of it
