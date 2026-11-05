@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.2](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.1...v0.1.0-beta.2) (2026-11-05)
+
+
+### Bug Fixes
+
+* feedback opens GitHub's issue form, filled in, instead of a page of raw markdown ([a493445](https://github.com/brackishgames/brackish/commit/a493445c549fd0d2f03d99ea482f7db2cd4cf228))
+
 ## [0.1.0-beta.1](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.0...v0.1.0-beta.1) (2026-11-05)
 
 
