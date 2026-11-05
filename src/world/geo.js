@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { rand } from '../core/random.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
+import { day } from './time.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  GEOGRAPHY  —  local metric frame centred on Tampa Bay. 1 unit = 1 m.
 //  +x east, −z north, y up, sea level y = 0. Depths are real NOAA values.
@@ -176,6 +178,11 @@ export function modelCurrent(x, z, out) {
     const u = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1), px = ax + dx * u, pz = az + dz * u, d = Math.hypot(x - px, z - pz);
     if (d < best) { best = d; const L = Math.sqrt(L2); bx = dx / L; bz = dz / L; }
   }
-  const k = 0.45 * Math.sin(dayClock * 2 * Math.PI / 12.4) * Math.exp(-best / 900);
+  const k = 0.45 * Math.sin(day.hour * 2 * Math.PI / 12.4) * Math.exp(-best / 900);
   return out.set(bx * k, 0, bz * k);
+}
+// a random point in water within rMin..rMax of `c`, at least minDepth deep, or null
+export function spotNear(c, rMin, rMax, minDepth = 2, tries = 12) {
+  for (let k = 0; k < tries; k++) { const a = rand() * Math.PI * 2, r = rMin + rand() * (rMax - rMin), x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r, f = floorAt(x, z); if (f < -minDepth) return { x, z, f }; }
+  return null;
 }

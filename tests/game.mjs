@@ -99,7 +99,7 @@ await scenario('rebinding: pick BURST, press B, and B bursts; a key already in u
   await page.eval(`settings.binds = { ...DEFAULT_BINDS }; closeMenu(); 1`);
 });
 await scenario('a shape crosses in the murk and never hunts', async () => {
-  await page.eval(`__game.teleport(${HOLE}, 8); shadowT = 0; 1`); let seen = false;
+  await page.eval(`__game.teleport(${HOLE}, 8); shadow.t = 0; 1`); let seen = false;
   for (let i = 0; i < 40; i++) { const s = await S(page, 45, {}); seen ||= s.passing.length > 0; assert.equal(s.hunted, false, 'nothing hunts you'); }
   assert.ok(seen, 'something passed');
 });
@@ -171,6 +171,20 @@ await scenario('phone: upright it waits on a card; sideways a tap starts; tilt s
   noErrors(phone);
 });
 await phone.close(); phone.closed = true;
+
+// ── determinism ──────────────────────────────────────────────────
+await scenario('a seed replays the same run, however many screen frames fall between world steps', async () => {
+  const run = async waitForFrames => {
+    const pg = await browser.page(); await pg.open(URL0.replace('seed=1', 'seed=7')); await pg.eval('__game.start()'); await pg.eval(`startAudio(); __game.teleport(${HOLE}, 8)`);   // the sound running, as it is for a player
+    for (let i = 0; i < 10; i++) {
+      await S(pg, SECOND, { turn: (i % 3) - 1, burst: i % 4 === 0 });
+      if (waitForFrames) { const t = await pg.eval('WU.uTime.value'); await pg.until(`WU.uTime.value > ${t + STILL_FOR}`, 'screen frames between steps'); }   // a slower machine: more frames per step
+    }
+    const out = await pg.eval(`JSON.stringify({ you: P.pos.toArray().map(v => v.toFixed(6)), wild: wild.filter(w => w.sp).map(w => w.sp.id + ' ' + w.pos.toArray().map(v => v.toFixed(4)).join(' ')), next: rand() })`);
+    await pg.close(); return out;
+  };
+  assert.equal(await run(true), await run(false), 'the same world, frame for frame');
+});
 
 browser.close(); server.close();
 const failed = results.filter(r => !r[0]);

@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { parse } from 'espree'; import { analyze } from 'eslint-scope';
 const root = new URL('..', import.meta.url).pathname, check = process.argv.includes('--check');
-const DIRS = ['lib', 'core', 'render', 'world'];   // the module layers so far, lowest first
+const DIRS = ['lib', 'core', 'render', 'world', 'actors', 'systems', 'ui', 'app'];   // the module layers so far, lowest first
 const THREE_NAMES = { THREE: `import * as THREE from 'three';`, EffectComposer: `import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';`,
   ShaderPass: `import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';`, UnrealBloomPass: `import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';`,
   mergeGeometries: `import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';` };
@@ -29,5 +29,30 @@ for (const f of files) {
   const next = (lines.length ? lines.join('\n') + '\n' : '') + body;
   if (next !== text) { stale++; if (check) console.log(`${f}: imports out of date`); else { writeFileSync(root + 'src/' + f, next); console.log(`${f}: ${lines.length} imports`); } }
 }
-if (check && stale) process.exit(1);
-if (!stale) console.log('imports: every module imports exactly what it uses');
+// load order: a module may use another's export while it is loading (outside any function) only if that module can't import
+// it back. inside a loop of imports, which one finishes loading first depends on the way in, and the other would find the
+// name not there yet. those uses belong in an init function that boot calls once everything has loaded.
+const graph = {}, loadTime = {};
+for (const f of files) {
+  if (f.startsWith('lib/')) { graph[f] = []; continue; }
+  const text = readFileSync(root + 'src/' + f, 'utf8'), tree = ast(text), deps = {}, used = [];
+  for (const n of tree.body) if (n.type === 'ImportDeclaration' && n.source.value.startsWith('.')) { const dep = (n.source.value.split('?')[0].replace(/^\.\//, f.split('/')[0] + '/').replace(/^\.\.\//, '')); for (const sp of n.specifiers) deps[sp.local.name] = dep; }
+  graph[f] = [...new Set(Object.values(deps))];
+  // the module's own functions, so a call to one while loading counts what it uses too
+  const own = {}; for (const n of tree.body) { const d = n.type === 'ExportNamedDeclaration' ? n.declaration : n;
+    if (d?.type === 'FunctionDeclaration') own[d.id.name] = d;
+    if (d?.type === 'VariableDeclaration') for (const v of d.declarations) if (v.init && /Function/.test(v.init.type)) own[v.id.name] = v.init; }
+  const entered = new Set();
+  const walk = (n, inFn) => { if (!n || typeof n.type !== 'string') return;
+    if (/Function/.test(n.type)) inFn = true;
+    if (!inFn && n.type === 'Identifier' && deps[n.name]) used.push([n.name, deps[n.name], text.slice(0, n.range[0]).split('\n').length]);
+    if (!inFn && n.type === 'CallExpression' && n.callee.type === 'Identifier' && own[n.callee.name] && !entered.has(n.callee.name)) { entered.add(n.callee.name); walk(own[n.callee.name].body, false); }
+    for (const [k, v] of Object.entries(n)) { if (k === 'parent' || k === 'range' || k === 'loc') continue; if (Array.isArray(v)) v.forEach(c => walk(c, inFn)); else if (v && typeof v.type === 'string') walk(v, inFn); } };
+  for (const n of tree.body) if (n.type !== 'ImportDeclaration') walk(n.type === 'ExportNamedDeclaration' ? n.declaration : n, false);
+  loadTime[f] = used;
+}
+const reach = (from, to, seen = new Set()) => from === to || (!seen.has(from) && (seen.add(from), (graph[from] || []).some(d => reach(d, to, seen))));
+let risky = 0;
+for (const [f, uses] of Object.entries(loadTime)) for (const [name, dep, line] of uses) if (reach(dep, f)) { risky++; console.log(`src/${f}:${line}  uses ${name} from ${dep} while loading, and ${dep} can import ${f} back`); }
+if (check && (stale || risky)) process.exit(1);
+if (!stale && !risky) console.log('imports: every module imports exactly what it uses, and loads in any order');

@@ -78,16 +78,17 @@ composer.addPass(dotPass);
 if (hdrOK) composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.4, 0.55));   // half-res bloom: the look is soft anyway
 // adaptive quality: if frames run slow for a few seconds, render at a lower pixel ratio (the dots keep their size); come back up when there is room
 export const Q = { level: 0, ema: 1 / 60, slowT: 0, fastT: 0, last: performance.now(), dprs: [...new Set([Math.min(MOBILE ? 1.5 : 2, devicePixelRatio), 1.5, 1.25, 1].filter(v => v <= Math.min(MOBILE ? 1.5 : 2, devicePixelRatio)))] };
-export function stepQuality() {
-  const t = performance.now(), dt = Math.min(0.25, (t - Q.last) / 1000); Q.last = t; Q.ema += (dt - Q.ema) * 0.05; if (!started || paused || document.hidden) return;
+export function stepQuality(active) {   // active: the game is being played (not on the title, not paused)
+  const t = performance.now(), dt = Math.min(0.25, (t - Q.last) / 1000); Q.last = t; Q.ema += (dt - Q.ema) * 0.05; if (!active || document.hidden) return;
   if (Q.ema > 1 / 40) { Q.slowT += dt; Q.fastT = 0; } else if (Q.ema < 1 / 57) { Q.fastT += dt; Q.slowT = 0; } else Q.slowT = Q.fastT = 0;
   if (Q.slowT > 3 && Q.level < Q.dprs.length - 1) Q.level++; else if (Q.fastT > 20 && Q.level > 0) Q.level--; else return;
   Q.slowT = Q.fastT = 0; renderer.setPixelRatio(Q.dprs[Q.level]); composer.setPixelRatio(Q.dprs[Q.level]); resize(); if (DEV) console.log('[quality] pixel ratio', Q.dprs[Q.level]);
 }
+export const resizeHooks = [], whenResized = fn => resizeHooks.push(fn);   // told the new dot grid when it changes
 export function resize() {
   const dpr = renderer.getPixelRatio(), W = Math.floor(innerWidth * dpr), H = Math.floor(innerHeight * dpr);
   const pitch = Math.max(2, Math.round(pitchCss * dpr)), gw = Math.ceil(W / pitch), gh = Math.ceil(H / pitch);
-  lowRT.setSize(gw, gh); cellRT.setSize(gw, gh); cellMat.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uPitch.value = pitch; panelResize(gw, gh);
+  lowRT.setSize(gw, gh); cellRT.setSize(gw, gh); cellMat.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uGrid.value.set(gw, gh); dotPass.uniforms.uPitch.value = pitch; for (const fn of resizeHooks) fn(gw, gh);
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.fov = camera.userData.baseFov = settings.fov + (camera.aspect < 1 ? 18 : 0); camera.updateProjectionMatrix();
 }

@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeGrid } from '../lib/collide.js?v=__BUILD__';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
+import { _E, _M, _s, fwdOf } from '../core/space.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
 import { creatureMat } from '../render/materials.js?v=__BUILD__';
 import { ANCHORAGE, CHANNEL, SKYWAY, WRECKS, floorAt } from './geo.js?v=__BUILD__';
@@ -19,6 +20,7 @@ export function hullGeometry(L, W, draft, free, cabin = true) {
   if (cabin) parts.push(new THREE.BoxGeometry(W * 0.7, free * 1.6, L * 0.25).translate(0, free + free * 0.8, L * 0.25));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
 }
+export const boatMat = creatureMat({ glow: 0.45 });   // hulls afloat: a little dimmer than the wrecks' steel
 export const BOAT_TYPES = {
   ship: { L: 180, W: 28, draft: 9, free: 8, speed: 6.5, name: 'cargo ship' },
   cruiser: { L: 12, W: 4, draft: 1.1, free: 1.2, speed: 8, name: 'cruiser' },

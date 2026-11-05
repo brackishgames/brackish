@@ -14,6 +14,7 @@ export const TUNE = {
     echoReach: 0.45,                // when the echo's ring reaches the thing in the dark
     hintFor: 25,                    // the key hints at the start of a swim
     hudIn: [0.6, 3.0],              // the HUD eases in between these seconds after you start
+    autosave: 30,                   // world seconds between saves as you swim
   },
   guards: { storageMs: 2000, liveMs: 15000, osmMs: 30000 },   // give up on a slow service after this long: a failure, never a wait
 };

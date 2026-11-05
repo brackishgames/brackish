@@ -1,3 +1,5 @@
+// the deploy stamps every file's address with the commit; this module reads the stamp from its own
+export const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';
 // What we're running on and how: a phone or not, your own machine or not, and the dev and test modes only your machine has.
 export const MOBILE = matchMedia('(pointer: coarse)').matches;
 export const LOCAL = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname), QS = new URLSearchParams(location.search);
