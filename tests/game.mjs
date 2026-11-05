@@ -10,7 +10,7 @@ const results = []; let page, pad, phone;   // the pages, so each scenario can b
 async function scenario(name, fn) {
   if (only && !name.includes(only)) return;
   const t0 = Date.now();
-  try { for (const p of [page, pad, phone]) if (p?.open && !p.closed) await p.eval('__game.calm()').catch(() => {}); await fn(); results.push([true, name]); console.log(`✔ ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`); }
+  try { for (const p of [page, pad, phone]) if (p?.open && !p.closed) { await p.activate(); await p.eval('__game.calm()').catch(() => {}); } await fn(); results.push([true, name]); console.log(`✔ ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`); }
   catch (e) { results.push([false, name]); console.log(`✖ ${name}\n    ${String(e.stack || e).split('\n').slice(0, 4).join('\n    ')}`); }
 }
 const S = (page, n, input) => page.eval(`__game${input ? `.setInput(${JSON.stringify(input)})` : ''}.step(${n})`);
@@ -19,7 +19,7 @@ const noErrors = page => assert.deepEqual(page.errors.filter(e => !/GPU stall|GL
 const HOLE = [27.60636, -82.74974];   // the deepest point of the Egmont hole: 27.9 m to the bottom in the shipped depths
 
 // ── desktop ──────────────────────────────────────────────────────
-page = await browser.page(); await page.open(URL0);
+page = await browser.page(); await page.open(URL0); await page.eval('randGate.watching = true; 1');   // from here on, any roll of the world's dice outside a world step is reported
 await scenario('boots clean; the title waits; the world stands still until stepped', async () => {
   assert.equal((await page.eval('__game.state()')).started, false);
   const b = await page.eval('__game.start()'); assert.equal(b.started, true); assert.equal(b.chapter, 0); assert.match(b.chapterTitle, /EGMONT/);
@@ -87,7 +87,7 @@ await scenario('feedback: F opens a note; Enter sends it as a filled-in GitHub i
   const u = new URL(url), body = u.searchParams.get('body'); assert.equal(u.origin + u.pathname, 'https://github.com/brackishgames/brackish/issues/new');
   assert.ok(body.includes('the shark went through a piling') && body.includes('| chapter |') && body.includes('| seed | 1 |'), 'the note and what the game knew');
   assert.deepEqual(u.searchParams.get('labels').split(','), ['feedback', 'beta']);
-  await browser.closeWhere(u => u.startsWith('https://github.com/'));   // the issue tab would sit in front of the game
+  await browser.closeWhere(u => u.startsWith('https://github.com/')); await page.activate();   // the issue tab would sit in front of the game
   const s = await page.eval('__game.state()'); assert.equal(s.menu, null); assert.match(s.said, /THANK YOU/);
 });
 await scenario('rebinding: pick BURST, press B, and B bursts; a key already in use swaps over', async () => {
@@ -101,7 +101,7 @@ await scenario('rebinding: pick BURST, press B, and B bursts; a key already in u
 await scenario('a shape crosses in the murk and never hunts', async () => {
   await page.eval(`__game.teleport(${HOLE}, 8); shadow.t = 0; 1`); let seen = false;
   for (let i = 0; i < 40; i++) { const s = await S(page, 45, {}); seen ||= s.passing.length > 0; assert.equal(s.hunted, false, 'nothing hunts you'); }
-  assert.ok(seen, 'something passed');
+  assert.ok(seen, 'something passed: ' + await page.eval(`JSON.stringify({ t: shadow.t, y: P.pos.y, started, paused, menu: menu?.kind, hunting: wild.filter(o => o.hunting).map(o => o.sp.id), far: wild.filter(o => o.id < WILD_ACTIVE && o.sp && !o.hunting && !o.partner && !o.passing && o.pos.distanceTo(P.pos) > 60).length, ch: story.ch })`));
 });
 await scenario('deep water: the display loses segments; near the top it is whole again', async () => {
   await page.eval(`__game.teleport(${HOLE}, 30); 1`); await S(page, 2, {});
@@ -131,7 +131,10 @@ await scenario('rebuilding the structures (as when OpenStreetMap\'s bridges arri
   assert.equal(after.meshes, before.meshes, 'the same structures'); assert.equal(after.solids, before.solids, 'just as solid');
   assert.ok(after.geometries <= before.geometries + 2, `GPU geometries ${before.geometries} → ${after.geometries}: the old ones were freed`);
 });
-await scenario('no errors on the desktop run', async () => noErrors(page));
+await scenario('no errors on the desktop run, and the world\'s dice only ever rolled inside a world step', async () => {
+  noErrors(page); const leaks = await page.eval('[...randLeaks]');
+  assert.equal(leaks.length, 0, 'rand() outside simStep (a seed would replay differently on another machine): ' + JSON.stringify(leaks));
+});
 await page.close(); page.closed = true;
 
 // ── a controller ─────────────────────────────────────────────────
@@ -160,8 +163,9 @@ await scenario('phone: upright it waits on a card; sideways a tap starts; tilt s
   await phone.metrics({ mobile: true, w: 844, h: 390, angle: 90 }); await phone.until('!portrait()', 'the phone turned sideways');
   await tap(420, 200); await phone.until('started', 'a sideways tap starting the game');
   const SETTLED = 16;   // the tilt smoothing takes 30% of each reading: after this many, it has all but arrived
-  const orient = async (beta, gamma) => { for (let i = 0; i < SETTLED; i++) { const got = phone.eval(`new Promise(r => addEventListener('deviceorientation', r, { once: true }))`);
-    await phone.cmd('DeviceOrientation.setDeviceOrientationOverride', { alpha: 0, beta: beta + (i % 2) * 0.3, gamma }); await got; } };   // the jitter makes each one a real change, which is all Chrome reports
+  let reading = 0;   // Chrome reports a reading only when it changes: each one is made different from the last, then waited for in the game
+  const orient = async (beta, gamma) => { for (let i = 0; i < SETTLED; i++) { const b = beta + (reading++ % 3) * 0.2;
+    await phone.cmd('DeviceOrientation.setDeviceOrientationOverride', { alpha: 0, beta: b, gamma }); await phone.until(`tilt.last && Math.abs(tilt.last.beta - ${b}) < 1e-6 && Math.abs(tilt.last.gamma - ${gamma}) < 1e-6`, `the reading ${b}, ${gamma}`); } };
   await orient(0, -50); await phone.eval('__game.clearInput(); tilt.zero = null; 1'); await orient(0, -50);
   let s = await S(phone, 1); assert.ok(Math.abs(s.input.turn) < 0.1 && Math.abs(s.input.climb) < 0.1, `level: ${JSON.stringify(s.input)}`);
   await orient(20, -50); s = await S(phone, 1); assert.ok(s.input.turn < -0.4, `leaned right turns right: ${s.input.turn}`);
@@ -180,7 +184,7 @@ await scenario('a seed replays the same run, however many screen frames fall bet
       await S(pg, SECOND, { turn: (i % 3) - 1, burst: i % 4 === 0 });
       if (waitForFrames) { const t = await pg.eval('WU.uTime.value'); await pg.until(`WU.uTime.value > ${t + STILL_FOR}`, 'screen frames between steps'); }   // a slower machine: more frames per step
     }
-    const out = await pg.eval(`JSON.stringify({ you: P.pos.toArray().map(v => v.toFixed(6)), wild: wild.filter(w => w.sp).map(w => w.sp.id + ' ' + w.pos.toArray().map(v => v.toFixed(4)).join(' ')), next: rand() })`);
+    const out = await pg.eval(`JSON.stringify({ you: P.pos.toArray().map(v => v.toFixed(6)), camera: camPos.toArray().map(v => v.toFixed(6)), fever: fever.c.toArray().map(v => v.toFixed(6)), wild: wild.filter(w => w.sp).map(w => w.sp.id + ' ' + w.pos.toArray().map(v => v.toFixed(4)).join(' ')), next: rand() })`);
     await pg.close(); return out;
   };
   assert.equal(await run(true), await run(false), 'the same world, frame for frame');
