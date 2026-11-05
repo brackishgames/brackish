@@ -101,16 +101,18 @@ and drop `"prerelease"` in `release-please-config.json`, then commit with a `Rel
 ## Code
 
 `index.html` holds the markup and styles; `src/main.js` loads three.js, the pure-logic modules in `src/lib/` and the core in
-`src/core/` (`env`, `random`, `tune`, `events`, `settings`, `screen`: what everything stands on), then the rest of the game,
-which is still plain scripts in `src/`, run in order and sharing one scope, one file per system while they move to modules
-a layer at a time: `01-geo` (the real-world frame, NOAA data and the `Bay` API),
-`02-render` (renderer, dot-matrix post, seafloor, sky and water), `03-creatures` (species and bodies), `04-logo`,
-`05-structures`, `06-wildlife` (wild animals, the fever, food, mullet shoals), `07-boats` (boats and giggers), `08-input`
+`src/core/` (`env`, `random`, `tune`, `events`, `settings`, `screen`: what everything stands on), `src/render/` (`display`:
+the renderer and the dot-matrix post; `materials`: the shared shading and the animated body material; `effects`: sky,
+water, light shafts and particles) and `src/world/` (`geo`: the real-world frame, the depths, NOAA and the `Bay` API;
+`seafloor`; `structures`; `seabed`). Each module imports what it uses, and `npm run imports` writes those lines from what
+the code actually reads. The rest of the game is still plain scripts in `src/`, run in order and sharing one scope while
+they move to modules a layer at a time: `03-creatures` (species and bodies), `04-logo`,
+`06-wildlife` (wild animals, the fever, food, mullet shoals), `07-boats` (boats and giggers), `08-input`
 (the input snapshot, keys and bindings, mouse, controller, pause menu, photo mode), `09-audio`, `10-hud`, `11-save`,
 `12-story`, `13-frame` (world steps and the frame, the player, the camera), `14-panel` (the dot font and every word on
 screen), `15-touch` (touch and tilt), `16-test` (the test interface and the dev readout), `17-feedback` and `18-boot`.
 The world moves in fixed slices of time and every roll goes through one seeded `rand()`; the numbers that decide how it
-feels, and how long things last, are in `TUNE` at the top of `00-config`. Nothing waits on a guess: a step that follows
+feels, and how long things last, are in `TUNE` in `src/core/tune.js`. Nothing waits on a guess: a step that follows
 another is called when that one has happened (a fade reaching black, a chapter begun, full screen granted). A name declared
 twice across files stops the game at load, which is on purpose.
 

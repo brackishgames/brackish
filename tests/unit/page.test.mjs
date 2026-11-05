@@ -18,5 +18,5 @@ test('every game script main.js loads exists, and the shipped depths are there',
 });
 test('release-please and the deploy agree on the version stamp', () => {
   assert.match(html, /<meta name="version" content="[\d.]+(-beta\.\d+)?"> <!-- x-release-please-version -->/);
-  assert.match(read('.github/workflows/deploy.yml'), /__BUILD__.*index\.html sw\.js src\/core\/\*\.js/);
+  assert.match(read('.github/workflows/deploy.yml'), /__BUILD__.*index\.html sw\.js src\/core\/\*\.js src\/render\/\*\.js src\/world\/\*\.js/);
 });

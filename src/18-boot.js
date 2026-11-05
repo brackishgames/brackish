@@ -14,7 +14,7 @@ async function loadBridges() {
       if (len < 150) continue; for (const [x, z] of pts) if (floorAt(x, z) < -0.3) wet++; if (wet / pts.length < 0.4) continue;
       out.push({ name: e.tags?.name || 'bridge', pts }); }
     if (out.length < 3) throw new Error('too few bridges');
-    bridges = out; try { localStorage.setItem('brackish.osmOk', '1'); } catch {}
+    setBridges(out); try { localStorage.setItem('brackish.osmOk', '1'); } catch {}
   } catch (e) { return; }   // OpenStreetMap is optional; the built-in bridges stay
   for (const b of bridges) { if (b.name === 'bridge') continue; const [x, z] = b.pts[Math.floor(b.pts.length / 2)]; if (!POIS.some(p => p[2] === b.name)) { const [lat, lon] = toLL(x, z); POIS.push([lat, lon, b.name]); } }
 }
@@ -41,7 +41,7 @@ async function boot() {
   catch (e) { loadmsg.textContent = 'DEPTHS UNREACHABLE: ' + e.message; throw e; }
   bar.style.width = '100%';
   const stage = async (msg, fn) => { loadmsg.textContent = msg; try { await fn(); } catch (e) { loadmsg.textContent = 'ERROR IN ' + msg + ': ' + e.message; console.error(e); throw e; } };
-  bridges = BRIDGES_FALLBACK.map(b => ({ name: b.name, pts: b.pts.map(p => toXZ(...p)) }));
+  setBridges(BRIDGES_FALLBACK.map(b => ({ name: b.name, pts: b.pts.map(p => toXZ(...p)) })));
   await stage('BUILDING STRUCTURES', () => buildStructures());
   if (DEV) { for (const sp of SPECIES) unlocked.add(sp.id);
     for (const [lat, lon, name] of POIS) { const [x, z] = toXZ(lat, lon); if (!checkpoints.some(c => c.name === name)) checkpoints.push({ name, x, z }); }

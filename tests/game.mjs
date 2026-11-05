@@ -124,6 +124,13 @@ await scenario('a bull shark hunts: it stalks, winds up, lunges, and lets go onc
   await page.eval(`P.pos.x += 400; 1`); s = await S(page, 2 * SECOND, {});
   assert.equal(await page.eval('__shark.hunting'), false, 'far away, it lets go'); await page.eval('story.ch = 0; 1');
 });
+await scenario('rebuilding the structures (as when OpenStreetMap\'s bridges arrive) frees the old ones and keeps them solid', async () => {
+  const before = await page.eval('({ meshes: world.meshes.length, solids: world.solids.length, geometries: renderer.info.memory.geometries })');
+  await page.eval(`setBridges(bridges.map(b => ({ ...b }))); buildStructures(); 1`); await page.until('renderer.info.memory.geometries > 0', 'a frame drawn');
+  const after = await page.eval('({ meshes: world.meshes.length, solids: world.solids.length, geometries: renderer.info.memory.geometries })');
+  assert.equal(after.meshes, before.meshes, 'the same structures'); assert.equal(after.solids, before.solids, 'just as solid');
+  assert.ok(after.geometries <= before.geometries + 2, `GPU geometries ${before.geometries} → ${after.geometries}: the old ones were freed`);
+});
 await scenario('no errors on the desktop run', async () => noErrors(page));
 await page.close(); page.closed = true;
 

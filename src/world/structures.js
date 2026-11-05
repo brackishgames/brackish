@@ -1,24 +1,32 @@
-'use strict';
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { makeGrid } from '../lib/collide.js?v=__BUILD__';
+import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { rand } from '../core/random.js?v=__BUILD__';
+import { scene } from '../render/display.js?v=__BUILD__';
+import { creatureMat } from '../render/materials.js?v=__BUILD__';
+import { ANCHORAGE, CHANNEL, SKYWAY, WRECKS, floorAt } from './geo.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  STRUCTURES  —  bridges (OSM geometry: pilings to the bottom, decks
 //  above), channel buoys with chains, wrecks and rubble. Built after data.
 // ═══════════════════════════════════════════════════════════════════
-const structMat = creatureMat({ glow: 0.62 });
-let bridges = [];   // [{ name, pts:[[x,z],...] }]
-function hullGeometry(L, W, draft, free, cabin = true) {
+export const structMat = creatureMat({ glow: 0.62 });
+export let bridges = [];   // [{ name, pts:[[x,z],...] }]: the built-in set, then OpenStreetMap's (18-boot.js)
+export function setBridges(list) { bridges = list; }
+export function hullGeometry(L, W, draft, free, cabin = true) {
   const parts = [new THREE.BoxGeometry(W, draft + free, L * 0.78).translate(0, (free - draft) / 2, L * 0.11)];
   parts.push(new THREE.ConeGeometry(W / 2, L * 0.3, 4).rotateX(-Math.PI / 2).rotateZ(Math.PI / 4).scale(1, (draft + free) / W, 1).translate(0, (free - draft) / 2, -L * 0.42));
   if (cabin) parts.push(new THREE.BoxGeometry(W * 0.7, free * 1.6, L * 0.25).translate(0, free + free * 0.8, L * 0.25));
   return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
 }
-const BOAT_TYPES = {
+export const BOAT_TYPES = {
   ship: { L: 180, W: 28, draft: 9, free: 8, speed: 6.5, name: 'cargo ship' },
   cruiser: { L: 12, W: 4, draft: 1.1, free: 1.2, speed: 8, name: 'cruiser' },
   skiff: { L: 6, W: 2.2, draft: 0.5, free: 0.7, speed: 11, name: 'skiff' },
 };
 for (const t of Object.values(BOAT_TYPES)) t.geo = hullGeometry(t.L, t.W, t.draft, t.free, t !== BOAT_TYPES.skiff);
 
-function buildStructures() {
+export function buildStructures() {
   for (const m of world.meshes) { scene.remove(m); if (m.userData.own) { m.geometry.dispose(); m.dispose?.(); } }   // a rebuild frees what the last one built (hull shapes are shared, so they stay)
   world.meshes = []; world.buoys = []; world.wrecks = []; world.colliders = makeGrid(40); world.solids = [];
   const add = (m, own = true) => { m.frustumCulled = false; m.userData.own = own; scene.add(m); world.meshes.push(m); return m; };
@@ -90,4 +98,4 @@ function buildStructures() {
     world.wrecks.push({ x, z, name: w.name });
   }
 }
-const world = { buoys: [], wrecks: [], buoyMesh: null, meshes: [], colliders: null, solids: [] };
+export const world = { buoys: [], wrecks: [], buoyMesh: null, meshes: [], colliders: null, solids: [] };
