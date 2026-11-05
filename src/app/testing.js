@@ -1,6 +1,6 @@
 import { toLL, toXZ } from '../lib/geo.js?v=__BUILD__';
 import { DEV, TEST } from '../core/env.js?v=__BUILD__';
-import { once } from '../core/events.js?v=__BUILD__';
+import { events } from '../core/events.js?v=__BUILD__';
 import { SEED } from '../core/random.js?v=__BUILD__';
 import { portrait } from '../core/screen.js?v=__BUILD__';
 import { Q, camera } from '../render/display.js?v=__BUILD__';
@@ -37,8 +37,9 @@ export function snapshot() {
 }
 export const testApi = {
   ready: booted,
-  async start() { if (!started) { const begun = once('chapter-begun'); startGame(null); await begun; } return snapshot(); },
-  async chapter(i) { const begun = once('chapter-begun'); story.begin(i); await begun; return snapshot(); },
+  // a chapter begins on the world's clock: step the world until it has (always the same number of steps)
+  start() { if (!started) { let begun = false; events.addEventListener('chapter-begun', () => { begun = true; }, { once: true }); startGame(null); while (!begun) simStep(1 / 60); } return snapshot(); },
+  chapter(i) { let begun = false; events.addEventListener('chapter-begun', () => { begun = true; }, { once: true }); story.begin(i); for (let n = 0; !begun; n++) { if (n > 6000) throw new Error('chapter ' + i + ' never began (is the game paused?)'); simStep(1 / 60); } return snapshot(); },
   setInput(o) { setInputOverride({ ...o }); return this; },
   clearInput() { setInputOverride(null); return this; },
   step(n = 1) { for (let i = 0; i < n; i++) simStep(1 / 60); return snapshot(); },
