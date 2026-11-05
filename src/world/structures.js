@@ -29,6 +29,18 @@ export const BOAT_TYPES = {
 };
 for (const t of Object.values(BOAT_TYPES)) t.geo = hullGeometry(t.L, t.W, t.draft, t.free, t !== BOAT_TYPES.skiff);
 
+// the point on the Skyway's path nearest the charted main span, and the direction the path runs there (north to south, as SKYWAY.axis)
+function skywayFrame() {
+  const [cx, cz] = toXZ(...SKYWAY.center), [ax0, az0] = toXZ(...SKYWAY.axis[0]), [bx0, bz0] = toXZ(...SKYWAY.axis[1]);
+  const paths = bridges.filter(b => isSkyway(b.name)).map(b => b.pts), lines = paths.length ? paths : [[[ax0, az0], [bx0, bz0]]];
+  let best = null;
+  for (const pts of lines) for (let i = 0; i + 1 < pts.length; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz; if (L2 < 1) continue;
+    const u = Math.max(0, Math.min(1, ((cx - ax) * dx + (cz - az) * dz) / L2)), x = ax + dx * u, z = az + dz * u, d = Math.hypot(cx - x, cz - z);
+    if (!best || d < best.d) { const L = Math.sqrt(L2), s = Math.sign((bx0 - ax0) * dx + (bz0 - az0) * dz) || 1; best = { d, x, z, ux: s * dx / L, uz: s * dz / L }; }
+  }
+  return [best.x, best.z, best.ux, best.uz];
+}
 export function buildStructures() {
   for (const m of world.meshes) { scene.remove(m); if (m.userData.own) { m.geometry.dispose(); m.dispose?.(); } }   // a rebuild frees what the last one built (hull shapes are shared, so they stay)
   world.meshes = []; world.buoys = []; world.wrecks = []; world.colliders = makeGrid(40); world.solids = [];
@@ -36,9 +48,10 @@ export function buildStructures() {
   const solid = c => { world.colliders.add(c); world.solids.push(c); };   // what you can't swim through: src/lib/collide.js
   const M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), at = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const place = (mesh, i, x, y, z, yaw, pitch, sx, sy, sz) => { e.set(-pitch, yaw, 0); q.setFromEuler(e); M.compose(at.set(x, y, z), q, _s.set(sx, sy, sz)); mesh.setMatrixAt(i, M); };
-  // the Skyway's own frame: distance along it from the middle of the main span
-  const S = SKYWAY_SPEC, [scx, scz] = toXZ(...SKYWAY.center), [sax, saz] = toXZ(...SKYWAY.axis[0]), [sbx, sbz] = toXZ(...SKYWAY.axis[1]);
-  const sL = Math.hypot(sbx - sax, sbz - saz), sux = (sbx - sax) / sL, suz = (sbz - saz) / sL, syaw = Math.atan2(sux, suz), along = (x, z) => (x - scx) * sux + (z - scz) * suz;
+  // the Skyway's own frame: distance along it from the middle of the main span. the middle is found on the bridge's own path
+  // (whichever path the game has: OpenStreetMap's or the built-in one), nearest the charted main span, so the pylons, piers,
+  // cables and the deck's profile all stand on the deck that is actually drawn
+  const S = SKYWAY_SPEC, [scx, scz, sux, suz] = skywayFrame(), syaw = Math.atan2(sux, suz), along = (x, z) => (x - scx) * sux + (z - scz) * suz;
   const stations = skywayStations(), mainBridge = stations[stations.length - 1];
   const decks = [], piles = [], columns = [];
   for (const br of bridges) {

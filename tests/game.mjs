@@ -7,10 +7,12 @@ import { serve } from '../tools/serve.mjs';
 const only = process.argv[2];
 const server = await serve(0), URL0 = `http://localhost:${server.address().port}/?test&seed=1`, browser = await launch();
 const results = []; let page, pad, phone;   // the pages, so each scenario can be started from calm
-async function scenario(name, fn) {
+async function scenario(name, fn, { start = true } = {}) {   // start: a desktop scenario begins in a game already under way, so each can run on its own
   if (only && !name.includes(only)) return;
   const t0 = Date.now();
-  try { for (const p of [page, pad, phone]) if (p?.open && !p.closed) { await p.activate(); await p.eval('__game.calm()').catch(() => {}); } await fn(); results.push([true, name]); console.log(`✔ ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`); }
+  try { for (const p of [page, pad, phone]) if (p?.open && !p.closed) { await p.activate(); await p.eval('__game.calm()').catch(() => {}); }
+    if (start && page && !page.closed) await page.eval('__game.start()');
+    await fn(); results.push([true, name]); console.log(`✔ ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`); }
   catch (e) { results.push([false, name]); console.log(`✖ ${name}\n    ${String(e.stack || e).split('\n').slice(0, 4).join('\n    ')}`); }
 }
 const S = (page, n, input) => page.eval(`__game${input ? `.setInput(${JSON.stringify(input)})` : ''}.step(${n})`);
@@ -26,7 +28,7 @@ await scenario('boots clean; the title waits; the world stands still until stepp
   const shown = await page.eval('WU.uTime.value'); await page.until(`WU.uTime.value > ${shown + STILL_FOR}`, 'screen time passing');
   assert.equal((await page.eval('__game.state()')).simTime, b.simTime, 'no world time passes between steps');
   const c = await S(page, SECOND); assert.ok(Math.abs(c.simTime - b.simTime - 1) < 1e-9, 'sixty steps is one second'); noErrors(page);
-});
+}, { start: false });
 await scenario('cruising with no input holds the cownose ray near its real cruise', async () => {
   await page.eval(`__game.teleport(${HOLE}, 6)`); const s = await S(page, 4 * SECOND, {});
   assert.ok(s.speed > 1.2 && s.speed < 1.7, `speed ${s.speed}`); assert.equal(s.bursting, false);
@@ -66,6 +68,16 @@ await scenario('structures are solid: a burst into a Skyway pier stops at its fa
   for (let i = 0; i < 30; i++) { await S(page, 10, { burst: true }); assert.equal(await page.eval(`pushOut(world.solids.find(c => c.tag === 'skyway pier'), P.pos.x, P.pos.y, P.pos.z, 0.1)`), null, 'never inside the pier'); }
   const s = await page.eval('__game.state()'); assert.ok(s.bumps >= 1, 'a hard hit is felt'); assert.ok(Math.hypot(s.pos[0] - pier.x, s.pos[2] - pier.z) > 4.4, 'stopped outside it');
 });
+await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
+  const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
+    const decks = world.meshes.find(x => x.name === 'bridge decks'), centres = []; for (let i = 0; i < decks.count; i++) { const d = get('bridge decks', i); centres.push(d); }
+    const nearestDeck = (x, z) => Math.min(...centres.map(c => Math.hypot(c.x - x, c.z - z)));
+    const pylons = [0, 1].map(i => get('Skyway pylons', i)), cables = world.meshes.find(x => x.name === 'Skyway stay cables');
+    const feet = []; for (let i = 0; i < cables.count; i++) feet.push(get('Skyway stay cables', i));
+    return { pylonOff: pylons.map(t => nearestDeck(t.x, t.z)), footOff: Math.max(...feet.map(f => nearestDeck(f.x, f.z))), footY: feet.map(f => f.y), deckTop: SKYWAY_SPEC.clearance + SKYWAY_SPEC.deckDepth }; })()`);
+  for (const d of r.pylonOff) assert.ok(d < 12, `a pylon ${d.toFixed(1)} m from the deck's line`);   // the deck is drawn in 20 m pieces: its centres are at most 10 m from any point on it
+  assert.ok(r.footOff < 12, `a cable foot ${r.footOff.toFixed(1)} m off the deck`); for (const y of r.footY) assert.ok(Math.abs(y - r.deckTop) < 0.01, 'every cable meets the deck at its top');
+});
 await scenario('pause stops the world; the card fits on screen; ESC resumes', async () => {
   await page.key('KeyP', 'p', 80); await page.until(`menu?.kind === 'main' && paused`, 'the pause card');
   const t = (await page.eval('__game.state()')).simTime, s = await S(page, SECOND, {}); assert.equal(s.simTime, t, 'paused: no world time');
@@ -100,7 +112,7 @@ await scenario('rebinding: pick BURST, press B, and B bursts; a key already in u
   await page.eval(`settings.binds = { ...DEFAULT_BINDS }; closeMenu(); 1`);
 });
 await scenario('a shape crosses in the murk and never hunts', async () => {
-  await page.eval(`__game.teleport(${HOLE}, 8); shadow.t = 0; 1`); let seen = false;
+  await page.eval(`__game.teleport(${HOLE}, 8); 1`); await S(page, 3 * SECOND, {}); await page.eval('shadow.t = 0; 1'); let seen = false;   // a few seconds for the bay's animals to be about first
   for (let i = 0; i < 40; i++) { const s = await S(page, 45, {}); seen ||= s.passing.length > 0; assert.equal(s.hunted, false, 'nothing hunts you'); }
   assert.ok(seen, 'something passed: ' + await page.eval(`JSON.stringify({ t: shadow.t, y: P.pos.y, started, paused, menu: menu?.kind, hunting: wild.filter(o => o.hunting).map(o => o.sp.id), far: wild.filter(o => o.id < WILD_ACTIVE && o.sp && !o.hunting && !o.partner && !o.passing && o.pos.distanceTo(P.pos) > 60).length, ch: story.ch })`));
 });

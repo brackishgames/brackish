@@ -13,7 +13,7 @@ import { flash, lastCheckpoint, say, travelTo } from '../ui/hud.js?v=__BUILD__';
 import { later, simTime } from '../app/frame.js?v=__BUILD__';
 // The body you are: where it is, how it moves (13-frame steps it), what it can do, and what happens when it's hurt.
 export const unlocked = new Set();
-export const P = { pos: new THREE.Vector3(START[0], -4, START[1]), yaw: Math.PI, pitch: 0, roll: 0, speed: 1.3, yawRate: 0, sp: speciesById.cownose, mesh: null, hp: 3, stun: 0, air: 0 };
+export const P = { pos: new THREE.Vector3(START[0], -4, START[1]), yaw: Math.PI, pitch: 0, roll: 0, vel: new THREE.Vector3(), speed: 1.3, yawRate: 0, sp: speciesById.cownose, mesh: null, hp: 3, stun: 0, air: 0 };
 export const playerMeshes = {};
 export function becomeSpecies(sp) {
   P.air = 1;
