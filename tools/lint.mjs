@@ -7,10 +7,10 @@ const rules = { 'no-undef': 'error', 'no-global-assign': 'error', 'no-unreachabl
   'no-constant-condition': ['error', { checkLoops: false }], 'no-empty': ['error', { allowEmptyCatch: true }], 'no-dupe-else-if': 'error', 'no-duplicate-case': 'error',
   'no-self-compare': 'error', 'use-isnan': 'error', 'valid-typeof': 'error', 'no-loss-of-precision': 'error', 'no-unused-vars': 'off' };
 const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: [
-  { files: ['src/**/*.js', 'sw.js'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: globals.browser }, rules },
-  { files: ['tools/**/*.mjs', 'tools/**/*.js', 'tests/**/*.mjs'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } }, rules },
+  { files: ['src/**/*.js', 'sw.js', 'tools/inspect/*.js'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: globals.browser }, rules },
+  { files: ['tools/**/*.mjs', 'tools/feedback-worker/**/*.js', 'tests/**/*.mjs'], languageOptions: { ecmaVersion: 'latest', sourceType: 'module', globals: { ...globals.node, ...globals.browser } }, rules },
 ] });
-const results = await eslint.lintFiles(['src/**/*.js', 'sw.js', 'tools/**/*.mjs', 'tools/feedback-worker/src/*.js', 'tests/**/*.mjs']);
+const results = await eslint.lintFiles(['src/**/*.js', 'sw.js', 'tools/**/*.mjs', 'tools/feedback-worker/src/*.js', 'tools/inspect/*.js', 'tests/**/*.mjs']);
 const root = new URL('..', import.meta.url).pathname, issues = results.flatMap(r => r.messages.map(m => `${r.filePath.replace(root, '')}:${m.line}:${m.column}  ${m.message}  (${m.ruleId})`));
 if (issues.length) { console.log(issues.join('\n')); console.log(`\n${issues.length} problem${issues.length > 1 ? 's' : ''}`); process.exit(1); }
 console.log(`lint: ${results.length} files clean`);

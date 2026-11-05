@@ -4,7 +4,9 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, posix } from 'node:path';
 const V = process.argv[2] || '0.187.0', CDN = `https://cdn.jsdelivr.net/npm/three@${V}/`, OUT = new URL('../vendor/three/', import.meta.url);
 const ENTRY = ['build/three.module.js', 'examples/jsm/postprocessing/EffectComposer.js', 'examples/jsm/postprocessing/ShaderPass.js',
-  'examples/jsm/postprocessing/UnrealBloomPass.js', 'examples/jsm/utils/BufferGeometryUtils.js', 'LICENSE'];
+  'examples/jsm/postprocessing/UnrealBloomPass.js', 'examples/jsm/utils/BufferGeometryUtils.js', 'LICENSE',
+  // for the model inspector (tools/inspect): export what the game built, and look at it from anywhere
+  'examples/jsm/exporters/GLTFExporter.js', 'examples/jsm/loaders/GLTFLoader.js', 'examples/jsm/controls/OrbitControls.js'];
 const seen = new Set(), queue = [...ENTRY];
 while (queue.length) {
   const p = queue.shift(); if (seen.has(p)) continue; seen.add(p);

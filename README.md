@@ -123,5 +123,8 @@ through one seeded `rand()`. Nothing waits on a guess: a step that follows anoth
 (a fade reaching black, a chapter begun, full screen granted). On your own machine (`?test`, `?dev`) every module's
 exports are reachable from the console, read-only; the published game puts nothing on `window`.
 
-`tools/fetch-dem.mjs` fetches the depths from NOAA again (only if the tile bounds change), `tools/vendor-three.mjs`
+`node tools/export-model.mjs [lat lon radius name]` exports what the game built around a point (structures and the real
+seabed) as a `.glb`, and `tools/inspect/?model=name` (on `node tools/serve.mjs`) shows it lit plainly, with sea level,
+parts you can hide and the height of whatever you point at; `&cam=x,y,z&look=x,y,z` opens on a view. The bridges' heights
+come from `src/world/bridges.js`, which cites its sources and marks what is estimated. `tools/fetch-dem.mjs` fetches the depths from NOAA again (only if the tile bounds change), `tools/vendor-three.mjs`
 copies a three.js version into `vendor/`, and `tools/marks.py` redraws the logo, org avatar and share card in `brand/`.
