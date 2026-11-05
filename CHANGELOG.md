@@ -27,5 +27,4 @@
 * a SHIFT held while the window lost focus no longer bursts forever ([4d901ec](https://github.com/brackishgames/brackish/commit/4d901ec85eb0fee1321910f9daa4f6521b591274))
 * saves are versioned and carried forward, and keep your hearts and burst ([4d901ec](https://github.com/brackishgames/brackish/commit/4d901ec85eb0fee1321910f9daa4f6521b591274))
 * the chapter title heads only its first line ([4d901ec](https://github.com/brackishgames/brackish/commit/4d901ec85eb0fee1321910f9daa4f6521b591274))
-* the world replays exactly, whatever the machine's frame rate ([84d7850](https://github.com/brackishgames/brackish/commit/84d7850e953f4e0615e21eee74d11e4834508ec5))
 * the world replays exactly, whatever the machine's frame rate ([c38a50c](https://github.com/brackishgames/brackish/commit/c38a50c5cf2ff3f62662ef1a7d2ee879f4ebcca9))
