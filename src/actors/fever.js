@@ -6,8 +6,8 @@ import { scene } from '../render/display.js?v=__BUILD__';
 import { creatureMat } from '../render/materials.js?v=__BUILD__';
 import { FEVER_PATH, floorAt } from '../world/geo.js?v=__BUILD__';
 import { rayGeometry, speciesById } from './creatures.js?v=__BUILD__';
+import { P } from './player.js?v=__BUILD__';
 import { PREDATORS, wild } from './wildlife.js?v=__BUILD__';
-import { camPos } from '../app/frame.js?v=__BUILD__';
 // the fever: ~1200 cownose rays, instanced, phase-offset flapping
 export const FEVER_N = MOBILE ? 500 : 1200;
 export const feverMesh = new THREE.InstancedMesh(rayGeometry(speciesById.cownose, 10, 7), creatureMat({ mode: 1, half: 0.45, len: 0.6, freq: 2.6, amp: 0.55, glow: 0.9 }), FEVER_N);
@@ -25,7 +25,7 @@ export function stepFever(dt, t) {
     fever.c.x = ax + (bx - ax) * fever.t; fever.c.z = az + (bz - az) * fever.t; fever.yaw = Math.atan2(-(bx - ax), -(bz - az));
   }
   const f = floorAt(fever.c.x, fever.c.z); fever.c.y = THREE.MathUtils.clamp(f * 0.5 - 1, f + 1.5, -2);
-  feverMesh.visible = fever.c.distanceTo(camPos) < 400; if (!feverMesh.visible) return;   // beyond the murk: don't move 1200 rays nobody can see
+  feverMesh.visible = fever.c.distanceTo(P.pos) < 400; if (!feverMesh.visible) return;   // beyond the murk: don't move 1200 rays nobody can see
   fever.frame = (fever.frame || 0) + 1; fever.floor ??= new Float32Array(FEVER_N).fill(-30); fever.px ??= new Float32Array(FEVER_N); fever.pz ??= new Float32Array(FEVER_N);
   if (!fever.moving) fever.spin = (fever.spin || 0) + 0.02 * dt;   // a waiting fever mills in a slow wheel
   const cs = Math.cos(fever.spin || 0), sn = Math.sin(fever.spin || 0), sharks = wild.filter(w => w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(fever.c) < 90);

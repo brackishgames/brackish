@@ -66,8 +66,8 @@ export const shadow = { t: between(TUNE.shadow.first) };   // until something la
 export function spawnShadow() {
   const w = wild.find(o => o.id < WILD_ACTIVE && o.sp && !o.hunting && !o.partner && !o.passing && o.pos.distanceTo(P.pos) > 60); if (!w) return;
   const first = rand() < 0.5 ? -1 : 1, f = fwdOf(P.yaw, 0);
-  for (const side of [first, -first]) {   // one side of you, or if that's too shallow for it, the other
-    const x = P.pos.x + f.x * 30 + Math.cos(P.yaw) * side * 46, z = P.pos.z + f.z * 30 - Math.sin(P.yaw) * side * 46, fl = floorAt(x, z); if (fl > -4) continue;
+  for (const ahead of [30, 55, 10]) for (const side of [first, -first]) {   // one side of you, then the other, a little further ahead or nearer: wherever it's deep enough to cross
+    const x = P.pos.x + f.x * ahead + Math.cos(P.yaw) * side * 46, z = P.pos.z + f.z * ahead - Math.sin(P.yaw) * side * 46, fl = floorAt(x, z); if (fl > -4) continue;
     setWild(w, speciesById[fl < -9 ? 'hammer' : 'bull'], x, THREE.MathUtils.clamp(P.pos.y - 2.5, fl + 1.5, -1.5), z); w.yaw = P.yaw + side * Math.PI / 2; w.passing = true;   // across your path, from one side to the other
     return;
   }

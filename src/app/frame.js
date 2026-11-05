@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { pushOut } from '../lib/collide.js?v=__BUILD__';
 import { TEST } from '../core/env.js?v=__BUILD__';
-import { fxRand, rand } from '../core/random.js?v=__BUILD__';
+import { fxRand, rand, randGate } from '../core/random.js?v=__BUILD__';
 import { portrait } from '../core/screen.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__BUILD__';
@@ -201,17 +201,17 @@ export function stepCamera(dt) {
     dotPass.uniforms.uTunnel.value += (want - dotPass.uniforms.uTunnel.value) * Math.min(1, 4 * dt); }
   P.idleCam = (input.turn || input.climb || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const sway = settings.sway ? 1 : 0;   // the camera never moves on its own unless that's wanted
-  const drift = sway * (started ? Math.sin(WU.uTime.value * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(WU.uTime.value * 0.07) * 0.5);
+  const drift = sway * (started ? Math.sin(simTime * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(simTime * 0.07) * 0.5);
   if (Math.abs(pad.lookX) > 0 || Math.abs(pad.lookY) > 0) { aim.lookYaw -= pad.lookX * 2.4 * dt; aim.lookPitch = THREE.MathUtils.clamp(aim.lookPitch + pad.lookY * 1.6 * dt, -0.8, 0.8); aim.lookT = 0; }
   aim.lookT += dt; if (!aim.look && aim.lookT > 0.8) { const k = Math.min(1, 2.5 * dt); aim.lookYaw *= 1 - k; aim.lookPitch *= 1 - k; }   // let go and it comes back behind you
   aim.lookYaw = Math.atan2(Math.sin(aim.lookYaw), Math.cos(aim.lookYaw));
-  const yawT = P.yaw + drift + aim.lookYaw + (P.endingCam ? Math.sin(WU.uTime.value * 0.08) * 1.2 * sway : 0);
+  const yawT = P.yaw + drift + aim.lookYaw + (P.endingCam ? Math.sin(simTime * 0.08) * 1.2 * sway : 0);
   const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist); back.y += h;
   const want = _want.copy(P.pos).add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
   if (P.pos.y > 0.05) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;   // breathing happens just under the line; only a breach takes the camera up
   if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
-  want.x += Math.sin(WU.uTime.value * 0.35) * 0.12 * sway; want.y += Math.sin(WU.uTime.value * 0.5 + 1.0) * 0.08 * sway;
+  want.x += Math.sin(simTime * 0.35) * 0.12 * sway; want.y += Math.sin(simTime * 0.5 + 1.0) * 0.08 * sway;
   camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
@@ -281,6 +281,12 @@ export const timers = { screen: [], world: [] };
 export function later(secs, fn, clock = 'screen') { timers[clock].push({ at: (clock === 'world' ? simTime : WU.uTime.value) + secs, fn }); }
 export function runTimers(clock, now) { const q = timers[clock]; if (!q.length || !q.some(t => t.at <= now)) return; timers[clock] = q.filter(t => t.at > now); for (const t of q) if (t.at <= now) t.fn(); }
 export function simStep(dt) {
+  randGate.inStep = true; try { simStepInner(dt); } finally { randGate.inStep = false; }
+}
+// a real pause: sharks, boats and lights wait too. asked fresh by every world step and every frame, so a step never acts on a stale answer
+export function updatePaused() { paused = started && (mapOpen || helpOpen || !!menu || !!photo || needFull() || portrait()); }
+function simStepInner(dt) {
+  updatePaused();
   readInput(); stepStrokes(dt); const t = simTime;
   if (started && !paused) { day.hour = (day.hour + dt / 60) % 24; stepAutosave(dt); stepPlayer(dt); story.step(dt); }
   if (!started) {   // attract: after a while the ray wanders off on its own and the words fade
@@ -288,16 +294,20 @@ export function simStep(dt) {
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
   if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt, P.pos); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); stepThing(dt); simTime += dt; runTimers('world', simTime); }
+  stepCamera(dt);   // with the world, even paused (photo mode orbits a still bay): the animals keep clear of the lens, so it must move the same on every machine
 }
 export function frame() {
+  randGate.inFrame = true; try { frameInner(); } finally { randGate.inFrame = false; }
+}
+function frameInner() {
   requestAnimationFrame(frame);
   const real = Math.min(0.25, clock.getDelta()); WU.uTime.value = clock.elapsedTime;
   stepQuality(started && !paused); pollPad(); if (started && needFull() && !menu) openMenu('main');
-  paused = started && (mapOpen || helpOpen || !!menu || !!photo || needFull() || portrait());   // a real pause: sharks, boats and lights wait too
+  updatePaused();
   stepVolume(); stepTips(); runTimers('screen', WU.uTime.value);
   if (!TEST) { const want = real * timeScale, n = Math.min(SIM_STEPS * Math.ceil(timeScale), Math.max(1, Math.ceil(want / SIM_MAX - 1e-9))); for (let i = 0; i < n; i++) simStep(Math.min(want, n * SIM_MAX) / n); }
   { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
-  stepCamera(real); stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
+  stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
   if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; renderer.domElement.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `brackish-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */   /* the frame just drawn, before it is cleared */
 }

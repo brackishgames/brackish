@@ -43,6 +43,7 @@ export async function launch() {
         keyUp: (code, key = code, vk = 0) => cmd('Input.dispatchKeyEvent', { type: 'keyUp', code, key, windowsVirtualKeyCode: vk }),
         touchDown: (x, y) => cmd('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }),
         touchUp: () => cmd('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
+        activate: () => fetch(`${http}/json/activate/${t.id}`),   // to the front: a tab behind gets no animation frames
         close: async () => { ws.close(); await fetch(`${http}/json/close/${t.id}`).catch(() => {}); },
       };
       return page;
