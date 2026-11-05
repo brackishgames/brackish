@@ -16,7 +16,7 @@ const logo = (() => {
   LOGO_RAY.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '1') { const d = Math.abs(i - (rw >> 1)) / (rw / 2); pts.push([(W - rw) / 2 + i, j, d < 0.15 ? 1.0 : d < 0.55 ? 0.85 : 0.65, 0]); } }));
   [...word].forEach((ch, n) => LOGO_FONT[ch].forEach((row, j) => [...row].forEach((c, i) => { if (c === '1') pts.push([(W - cols) / 2 + n * 6 + i, rh + 2 + j, 0, 1]); })));
   const H = rh + 2 + 7, N = pts.length, tgt = new Float32Array(N * 3), col = new Float32Array(N * 2), seed = new Float32Array(N);
-  pts.forEach(([c, r, b, a], i) => { tgt[i * 3] = c - W / 2; tgt[i * 3 + 1] = H / 2 - r; tgt[i * 3 + 2] = 0; col[i * 2] = b; col[i * 2 + 1] = a; seed[i] = Math.random() * 100; });
+  pts.forEach(([c, r, b, a], i) => { tgt[i * 3] = c - W / 2; tgt[i * 3 + 1] = H / 2 - r; tgt[i * 3 + 2] = 0; col[i * 2] = b; col[i * 2 + 1] = a; seed[i] = rand() * 100; });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
   g.setAttribute('aTarget', new THREE.BufferAttribute(tgt, 3)); g.setAttribute('aCol', new THREE.BufferAttribute(col, 2)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));

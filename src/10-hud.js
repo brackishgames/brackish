@@ -9,8 +9,21 @@ let sayTimer = 0;
 const tipQueue = [];
 function tip(id, text, label = 'TIP') { if (settings.tips[id] || tipQueue.some(q => q.id === id)) return; tipQueue.push({ id, text, label }); }
 function stepTips() { if (!tipQueue.length || sayTimer > 0 || paused || !started || performance.now() - sayEndT < 4000 || huntHeat > 0) return;   /* never on top of another line, never mid-hunt */ const q = tipQueue.shift(); settings.tips[q.id] = 1; saveSettings(); say(q.text(), q.label === 'TIP' ? 5 : 7, q.label); }
-function say(text, secs = 3, label = '') { storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
-bl.textContent = 'WASD swim   SPACE rise   C dive   SHIFT burst   E ability   M map   H help';
+const sayLog = [];   // the last lines the bay said to you, sent along with feedback
+function say(text, secs = 3, label = '') { sayLog.push((label ? label + ' · ' : '') + text.replace(/\n/g, ' / ')); if (sayLog.length > 10) sayLog.shift(); storyEl.innerHTML = (label ? `<b>${label}</b>` : '') + text.replace(/</g, '&lt;'); storyEl.style.opacity = 1; sayTimer = secs; }
+bl.textContent = keyboardHint();
+// the help screen lists your keys as they are bound now, or the touch controls on a phone
+function renderHelpKeys() {
+  const L = a => keyLabel(B(a)), esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  // each line short enough to fit on one row of a small screen (about 28 characters)
+  const rows = MOBILE ? [['TILT', 'lean to turn · tip to dive'], ['HOLD', 'burst, while the dots last'], ['◆', 'sense or echo: finds clams'], ['M', 'map and fast travel'],
+    ['⇄', 'become a body you have been'], ['II', 'pause · settings · feedback']]
+    : [['MOUSE', 'steer · right button looks'], [`${L('forward')} ${L('back')}`, 'forward · back · ↑ ↓ too'], [`${L('left')} ${L('right')}`, 'turn · ← → too'],
+    [`${L('rise')} ${L('dive')}`, 'rise · dive'], [L('burst'), 'burst, while the dots last'], [L('ability'), 'sense or echo: finds clams'], [L('creature'), 'become a body you have been'],
+    [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo, at a moment worth it'], [L('feedback'), 'send us a note from here']];
+  help.querySelector('.keys').innerHTML = rows.map(([k, d]) => `<b>${esc(k)}</b><span>${esc(d)}</span>`).join('');
+}
+renderHelpKeys();
 
 const mapXY = (x, z, S) => { const t = TILES.outer; return [(x - t.xmin) / (t.xmax - t.xmin) * S, (z - t.zmin) / (t.zmax - t.zmin) * S]; };
 let compassMarks = [];
@@ -37,7 +50,7 @@ const LORE = {
   'Egmont Channel': 'The ship channel is dredged through the pass. Everything that comes into the bay comes through here.',
   'Old Skyway rubble': 'When the old bridge was taken down, some of it was dropped here. Now it is reef.',
 };
-function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); hudWakeT = WU.uTime.value; chimeCheckpoint(); if (LORE[name]) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
+function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); hudWakeT = WU.uTime.value; chimeCheckpoint(); if (LORE[name] && !world.wrecks.some(w => w.name === name)) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 function cameraBehind() { camPos.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), -6).add(new THREE.Vector3(0, 1.5, 0)); camLook.copy(P.pos); }   /* no swing on arrival */
 function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }
