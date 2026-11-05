@@ -6,7 +6,9 @@ export const TUNE = {
   hush: 0.88,                                                // how much of the sea goes quiet when a shark takes an interest
   tide: { pull: 0.9, from: 0.3, to: 1.0 },                   // strong currents push this much harder, ramping in between these m/s
   thing: { chance: 0.3, every: [240, 480], floor: 10 },      // the echo's unnamed shape: odds per echo, seconds between, minimum depth below you
+  fever: { behind: 35, rejoin: 300 },                        // metres: where a chapter that follows the fever puts you (behind its middle); how far off a saved game may have left you before it puts you back
   timing: {   // how long things last on purpose. never how long to wait for something else: that is always an event
+    toBlack: 0.9,                   // a new chapter: the screen goes to black, then the world changes, on the world's clock
     cardHold: 1.0,                  // a chapter's title, before its first line takes over
     resumeCard: 0.6,                // the title again when you continue a save
     endingFirst: 2.5, endingCard: 3.6,   // the ending: a breath before the first card, then each card

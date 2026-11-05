@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
 import { DEV, TEST } from '../core/env.js?v=__BUILD__';
 import { emit, once } from '../core/events.js?v=__BUILD__';
@@ -6,7 +7,7 @@ import { canFull, goFull } from '../core/screen.js?v=__BUILD__';
 import { fwdOf } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { WU } from '../render/materials.js?v=__BUILD__';
-import { FEVER_PATH } from '../world/geo.js?v=__BUILD__';
+import { FEVER_PATH, floorAt } from '../world/geo.js?v=__BUILD__';
 import { day } from '../world/time.js?v=__BUILD__';
 import { SPECIES, speciesById } from '../actors/creatures.js?v=__BUILD__';
 import { fever, feverR } from '../actors/fever.js?v=__BUILD__';
@@ -15,7 +16,7 @@ import { WILD_ACTIVE, setWild, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { bell, chimeCheckpoint, chimeStart } from './audio.js?v=__BUILD__';
 import { lockPointer, sprinting } from './input.js?v=__BUILD__';
 import { saveGame } from './save.js?v=__BUILD__';
-import { $, checkpoints, discover, say, sayTimer, travelTo } from '../ui/hud.js?v=__BUILD__';
+import { $, cameraBehind, checkpoints, discover, say, sayTimer, travelTo } from '../ui/hud.js?v=__BUILD__';
 import { logo } from '../ui/logo.js?v=__BUILD__';
 import { whenFaded } from '../ui/panel.js?v=__BUILD__';
 import { tilt } from '../ui/touch.js?v=__BUILD__';
@@ -28,9 +29,9 @@ export const CHAPTERS = [
     lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, into a hole 25 metres deep.', 'Follow the beam of light.', 'E to sense. Clams hide in the sand, and they give a heart back.'] },
   { title: 'II · THE CHANNEL', start: [27.61982, -82.65863], goal: () => toXZ(27.6215, -82.6555), radius: 90,
     lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },
-  { title: 'III · THE FEVER', start: [27.60796, -82.75062], goal: () => [fever.c.x, fever.c.z], radius: 60,
+  { title: 'III · THE FEVER', feverAt: 'hole', start: [27.60796, -82.75062], goal: () => [fever.c.x, fever.c.z], radius: 60,
     lines: ['Thousands of your kind are gathering in the deep water off Egmont.', 'A group of rays is called a fever.', 'Find them.'] },
-  { title: 'IV · THE GULF', follow: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 120 || (fever.seg + 1 >= FEVER_PATH.length && feverR(P.pos) < 1.2),
+  { title: 'IV · THE GULF', follow: true, withFever: true, feverMoves: true, goal: () => [fever.c.x, fever.c.z], radius: 70, done: () => story.followT > 120 || (fever.seg + 1 >= FEVER_PATH.length && feverR(P.pos) < 1.2),
     lines: ['Stay with the fever.', 'They are leaving the bay, west, where the bottom falls away.', 'Do not lose them in the murk.'] },
   { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true, clock: 17.5,
     lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
@@ -40,7 +41,7 @@ export const CHAPTERS = [
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet know you before they see you.', 'Feed. E to lunge. They scatter. Eight will do.'] },
   { title: 'VIII · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
-  { title: 'IX · DAWN', species: 'cownose', start: [27.60629, -82.75359], surface: true, clock: 5.6,
+  { title: 'IX · DAWN', feverAt: 'hole', species: 'cownose', start: [27.60629, -82.75359], surface: true, clock: 5.6,
     lines: ['Spring. The fever comes back to the bay.', 'You are a cownose ray again, in the pass where you began.', 'Rise. Break the surface at dawn.'] },
   { title: 'FREE SWIM', free: true,
     lines: ['The bay is yours, and every body you have been.', 'TAB to change. M for the map and fast travel.', 'There are things on the bottom nobody talks about.'] },
@@ -48,18 +49,20 @@ export const CHAPTERS = [
 export const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
     this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
-    const fade = $('fade'), card = $('chapter');
-    const arrive = () => {
+    const fade = $('fade'), card = $('chapter'), run = this.run = (this.run || 0) + 1, current = () => run === this.run;   // a newer start supersedes this one, and its leftovers do nothing
+    const arrive = () => { if (!current()) return;
+      if (c.feverAt === 'hole') { fever.seg = 0; fever.t = 0; fever.moving = false; fever.c.set(FEVER_PATH[0][0], fever.c.y, FEVER_PATH[0][1]); }   // the fever gathers in the hole off Egmont (III), and is back there in the spring (IX)
       if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) day.hour = c.clock;
-      if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
+      if (c.start) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }   // every chapter that has a place begins there, however you came to it
+      if (c.withFever) joinFever(c.title);   // the fever moves: this chapter starts wherever it has got to
       if (c.pair) this.spawnPartner();
       card.textContent = c.title; card.style.opacity = 1; chimeStart();
-      later(TUNE.timing.cardHold, () => { fade.style.opacity = 0; card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); });   // each new body is another life the bay has kept
-      if (i === 3) fever.moving = true;
-      if (i === CHAPTERS.length - 2) { fever.seg = 0; fever.t = 0; fever.moving = false; fever.c.set(FEVER_PATH[0][0], fever.c.y, FEVER_PATH[0][1]); }   // spring: the fever is back in the hole
+      later(TUNE.timing.cardHold, () => { if (!current()) return; fade.style.opacity = 0; card.style.opacity = 0; say(c.lines[0], 8, c.species && i > 0 ? `${c.title}  ·  THE BAY REMEMBERS` : c.title); });   // each new body is another life the bay has kept
+      if (c.feverMoves) fever.moving = true;   // they leave the bay, and you go with them
       emit('chapter-begun', i);
     };
-    if (i > 0) { fade.style.opacity = 1; whenFaded(fade, 1, arrive); } else arrive();   // a new chapter happens behind the black, once it is black
+    if (i > 0) fade.style.opacity = 1;   // the screen goes black (drawn on screen time) while the chapter waits its moment on the world's clock,
+    later(i > 0 ? TUNE.timing.toBlack : 0, arrive, 'world');   // so the world changes inside a world step, the same on every machine
   },
   ending() {
     const card = $('chapter'), bodies = SPECIES.filter(sp => unlocked.has(sp.id)).map(sp => sp.name), places = checkpoints.map(c => c.name).filter(n => !/^[IVX]+ · /.test(n));
@@ -93,8 +96,11 @@ export const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, was
 export const TITLE_HINT = 'PRESS ENTER OR CLICK';
 export let started = false;   // past the title: set once, by startGame
 export let startedAt = -1e9;   // screen time the swim began: the HUD eases in from here
+// put you at the fever's trailing edge, among the stragglers, wherever it has got to
+export function joinFever(name) { const back = fwdOf(fever.yaw, 0).multiplyScalar(-TUNE.fever.behind).add(fever.c); travelTo({ name, x: back.x, z: back.z }); P.yaw = fever.yaw; P.pos.y = THREE.MathUtils.clamp(fever.c.y, floorAt(P.pos.x, P.pos.z) + P.sp.alt + 0.5, -1); cameraBehind(); }
 export function startGame(save) { if (canFull && !DEV && !TEST) goFull(); tilt.zero = null; started = true; lockPointer(); document.body.classList.add('playing'); startedAt = WU.uTime.value; later(TUNE.timing.hintFor, () => document.body.classList.add('settled'));
   $('title').classList.add('gone');
-  if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); later(TUNE.timing.resumeCard, () => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }); if (save.ch === 3 && !save.fever) fever.moving = true; emit('chapter-begun', save.ch); return; }
+  if (save && CHAPTERS[save.ch].withFever && Math.hypot(P.pos.x - fever.c.x, P.pos.z - fever.c.z) > TUNE.fever.rejoin) joinFever(CHAPTERS[save.ch].title);   // a save from far off: back with them
+  if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); later(TUNE.timing.resumeCard, () => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }); if (CHAPTERS[save.ch].feverMoves && !save.fever) fever.moving = true; emit('chapter-begun', save.ch); return; }
   story.begin(0); }
 export function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }

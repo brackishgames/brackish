@@ -78,6 +78,21 @@ await scenario('the Skyway stands on its own deck: pylons and piers under it, ev
   for (const d of r.pylonOff) assert.ok(d < 12, `a pylon ${d.toFixed(1)} m from the deck's line`);   // the deck is drawn in 20 m pieces: its centres are at most 10 m from any point on it
   assert.ok(r.footOff < 12, `a cable foot ${r.footOff.toFixed(1)} m off the deck`); for (const y of r.footY) assert.ok(Math.abs(y - r.deckTop) < 0.01, 'every cable meets the deck at its top');
 });
+await scenario('every chapter begins where it should, however far away you were: at its place, or in reach of its goal', async () => {
+  const far = [27.93, -82.63];   // Old Tampa Bay, the far end of the bay from every chapter
+  const n = await page.eval('CHAPTERS.length');
+  for (let i = 0; i < n; i++) {
+    await page.eval(`__game.teleport(${far}, 4); 1`); const s = await page.eval(`__game.chapter(${i})`);
+    const r = await page.eval(`(() => { const c = CHAPTERS[${i}], g = c.goal ? c.goal() : null,   /* the chapter's own goal: story.goal only catches up on the next step */ at = c.start ? toXZ(...c.start) : null;
+      return { title: c.title, free: !!c.free, fromStart: at ? Math.hypot(P.pos.x - at[0], P.pos.z - at[1]) : null, fromGoal: g ? Math.hypot(P.pos.x - g[0], P.pos.z - g[1]) : null, withFever: !!c.withFever, feverR: feverR(P.pos) }; })()`);
+    assert.equal(s.chapter, i, `${r.title} began`);
+    if (r.free) continue;   // free swim: anywhere is fine
+    if (r.withFever) assert.ok(r.feverR < 1.2, `${r.title}: among the fever (${r.feverR.toFixed(2)})`);
+    else if (r.fromStart != null) assert.ok(r.fromStart < 150, `${r.title}: ${r.fromStart.toFixed(0)} m from where it begins`);
+    if (r.fromGoal != null) assert.ok(r.fromGoal < 800, `${r.title}: its goal ${r.fromGoal.toFixed(0)} m away`);
+  }
+  await page.eval('__game.chapter(0)');
+});
 await scenario('pause stops the world; the card fits on screen; ESC resumes', async () => {
   await page.key('KeyP', 'p', 80); await page.until(`menu?.kind === 'main' && paused`, 'the pause card');
   const t = (await page.eval('__game.state()')).simTime, s = await S(page, SECOND, {}); assert.equal(s.simTime, t, 'paused: no world time');

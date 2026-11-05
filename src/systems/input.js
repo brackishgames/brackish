@@ -3,7 +3,6 @@ import { DEV, MOBILE, TEST } from '../core/env.js?v=__BUILD__';
 import { canFull, fullscreen, goFull, isFull, lockLandscape } from '../core/screen.js?v=__BUILD__';
 import { DEFAULT_BINDS, saveSettings, settings } from '../core/settings.js?v=__BUILD__';
 import { resize } from '../render/display.js?v=__BUILD__';
-import { START } from '../world/geo.js?v=__BUILD__';
 import { world } from '../world/structures.js?v=__BUILD__';
 import { day } from '../world/time.js?v=__BUILD__';
 import { feverR } from '../actors/fever.js?v=__BUILD__';
@@ -11,9 +10,9 @@ import { P, act } from '../actors/player.js?v=__BUILD__';
 import { wild } from '../actors/wildlife.js?v=__BUILD__';
 import { startAudio } from './audio.js?v=__BUILD__';
 import { SAVE_KEY, loadedSave } from './save.js?v=__BUILD__';
-import { CHAPTERS, pressedAny, startGame, started, story } from './story.js?v=__BUILD__';
+import { pressedAny, startGame, started, story } from './story.js?v=__BUILD__';
 import { feedbackItems, feedbackKey, openFeedback } from '../ui/feedback.js?v=__BUILD__';
-import { $, LORE, bl, checkpoints, help, mapKey, mapOpen, renderHelpKeys, say, toggleMap, travelTo } from '../ui/hud.js?v=__BUILD__';
+import { $, LORE, bl, checkpoints, help, mapKey, mapOpen, renderHelpKeys, say, toggleMap } from '../ui/hud.js?v=__BUILD__';
 import { cycleCreature, tilt, touch, touchHint } from '../ui/touch.js?v=__BUILD__';
 import { camPos, paused } from '../app/frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
@@ -122,7 +121,7 @@ export const onOff = v => v ? 'ON' : 'OFF';
 export function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; aim.look = false; if (document.pointerLockElement) document.exitPointerLock?.(); }
 export function closeMenu() { menu = null; }
 export function resume() { closeMenu(); tilt.zero = null; if (canFull && !DEV && !TEST && !isFull() && !pad.active) goFull(); lockPointer(); }
-export function restartChapter() { closeMenu(); if (story.ch === 0) travelTo({ name: CHAPTERS[0].title, x: START[0], z: START[1] }); story.begin(story.ch); resume(); }
+export function restartChapter() { closeMenu(); story.begin(story.ch); resume(); }   // the chapter puts you where it begins
 export function menuItems() {
   if (menu.kind === 'settings') return [
     { label: () => 'VOLUME  ' + '◆'.repeat(settings.volume) + '·'.repeat(10 - settings.volume), adj: d => settings.volume = d === 'cycle' ? (settings.volume + 1) % 11 : clampI(settings.volume + d, 0, 10) },
