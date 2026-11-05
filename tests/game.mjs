@@ -83,7 +83,7 @@ await scenario('feedback: F opens a note; Enter sends it as a filled-in GitHub i
   await page.key('KeyF', 'f', 70); await page.until(`menu?.kind === 'feedback' && document.activeElement.id === 'fbtext'`, 'the note box, with the keyboard');
   await page.cmd('Input.insertText', { text: 'the shark went through a piling' });
   await page.until(`feedbackLines(40).join(' ').includes('the shark went through a piling')`, 'the note on the card');
-  const sent = page.event('feedback-sent'); await page.key('Enter', 'Enter', 13); const { url } = await sent;
+  const sent = await page.event('feedback-sent'); await page.key('Enter', 'Enter', 13); const { url } = await sent();
   const u = new URL(url), body = u.searchParams.get('body'); assert.equal(u.origin + u.pathname, 'https://github.com/brackishgames/brackish/issues/new');
   assert.ok(body.includes('the shark went through a piling') && body.includes('| chapter |') && body.includes('| seed | 1 |'), 'the note and what the game knew');
   assert.deepEqual(u.searchParams.get('labels').split(','), ['feedback', 'beta']);
@@ -158,7 +158,7 @@ await pad.close(); pad.closed = true;
 phone = await browser.page(); await phone.open(URL0, { mobile: true, w: 390, h: 844 });
 await scenario('phone: upright it waits on a card; sideways a tap starts; tilt steers and dives; a held thumb bursts', async () => {
   assert.equal((await phone.eval('__game.state()')).portrait, true);
-  const tap = async (x, y) => { const up = phone.eval(`new Promise(r => addEventListener('pointerup', r, { once: true }))`); await phone.touchDown(x, y); await phone.touchUp(); await up; };
+  const tap = async (x, y) => { const up = await phone.domEvent('pointerup'); await phone.touchDown(x, y); await phone.touchUp(); await up(); };
   await tap(195, 420); assert.equal((await phone.eval('__game.state()')).started, false, 'upright, a tap does not start');
   await phone.metrics({ mobile: true, w: 844, h: 390, angle: 90 }); await phone.until('!portrait()', 'the phone turned sideways');
   await tap(420, 200); await phone.until('started', 'a sideways tap starting the game');
