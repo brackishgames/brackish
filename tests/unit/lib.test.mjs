@@ -69,8 +69,10 @@ test('collision: pushed out of pilings and turned boxes, not out of what is abov
 test('feedback reports: no pings, no escaping, fit in a link', () => {
   assert.equal(defang('hi @joe ```x```'), "hi @​joe '''x'''");
   const r = buildReport('the shark @everyone\nsecond line', { version: '0.1.0-beta.1', chapter: 'III', said: ['a'], errors: ['TypeError: x'] });
-  assert.match(r.title, /^Beta feedback \(0\.1\.0-beta\.1\): the shark @​everyone$/);
-  assert.ok(r.body.includes('| chapter | III |')); assert.ok(r.body.includes('TypeError: x')); assert.deepEqual(r.labels, ['feedback', 'beta']);
-  assert.equal(buildReport('', { version: 'x' }, 'error').labels[0], 'crash');
-  const url = issueUrl({ ...r, body: 'x'.repeat(20000) }); assert.ok(url.length <= 7000); assert.ok(url.startsWith('https://github.com/brackishgames/brackish/issues/new?'));
+  assert.equal(r.title, 'Feedback: the shark @\u200beveryone');
+  assert.ok(r.details.includes('chapter: III') && r.details.includes('version: 0.1.0-beta.1') && r.details.includes('  TypeError: x'));
+  assert.ok(r.body.startsWith('### What happened?\n\nthe shark') && r.body.includes('### Game details\n\n```text\nversion: 0.1.0-beta.1'), 'laid out like the issue form');
+  assert.deepEqual(r.labels, ['feedback', 'beta']); assert.equal(buildReport('', { version: 'x' }, 'error').labels[0], 'crash');
+  const u = new URL(issueUrl(r)); assert.equal(u.searchParams.get('template'), 'feedback.yml'); assert.equal(u.searchParams.get('what'), r.what); assert.equal(u.searchParams.get('details'), r.details);
+  const long = issueUrl({ ...r, details: 'x'.repeat(20000) }); assert.ok(long.length <= 7000); assert.equal(new URL(long).searchParams.get('what'), r.what, 'the details give way before the note');
 });

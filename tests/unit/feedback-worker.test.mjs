@@ -12,7 +12,7 @@ test('a note from the game becomes an issue, with no pings and the token only in
   assert.equal(r.status, 201); assert.equal(r.headers.get('access-control-allow-origin'), 'https://brackishgames.github.io'); assert.equal((await r.json()).number, 7);
   assert.equal(sent.length, 1); assert.equal(sent[0].url, 'https://api.github.com/repos/brackishgames/brackish/issues');
   assert.equal(sent[0].init.headers.authorization, 'Bearer t0ken'); assert.ok(!JSON.stringify(sent[0].body).includes('t0ken'));
-  assert.ok(sent[0].body.title.includes('@​everyone')); assert.deepEqual(sent[0].body.labels, ['feedback', 'beta']); assert.ok(sent[0].body.body.includes('| chapter | III |'));
+  assert.ok(sent[0].body.title.includes('@​everyone')); assert.deepEqual(sent[0].body.labels, ['feedback', 'beta']); assert.ok(sent[0].body.body.includes('chapter: III'));
 });
 test('refuses other sites, other methods, big bodies, junk, empty notes, and floods', async () => {
   const sent = fakeGitHub();

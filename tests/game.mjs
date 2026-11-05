@@ -84,9 +84,10 @@ await scenario('feedback: F opens a note; Enter sends it as a filled-in GitHub i
   await page.cmd('Input.insertText', { text: 'the shark went through a piling' });
   await page.until(`feedbackLines(40).join(' ').includes('the shark went through a piling')`, 'the note on the card');
   const sent = await page.event('feedback-sent'); await page.key('Enter', 'Enter', 13); const { url } = await sent();
-  const u = new URL(url), body = u.searchParams.get('body'); assert.equal(u.origin + u.pathname, 'https://github.com/brackishgames/brackish/issues/new');
-  assert.ok(body.includes('the shark went through a piling') && body.includes('| chapter |') && body.includes('| seed | 1 |'), 'the note and what the game knew');
-  assert.deepEqual(u.searchParams.get('labels').split(','), ['feedback', 'beta']);
+  const u = new URL(url); assert.equal(u.origin + u.pathname, 'https://github.com/brackishgames/brackish/issues/new'); assert.equal(u.searchParams.get('template'), 'feedback.yml', 'the issue form');
+  assert.equal(u.searchParams.get('what'), 'the shark went through a piling', 'the note, in its own box');
+  const details = u.searchParams.get('details'); assert.ok(/^version: /.test(details) && details.includes('\nchapter: I · THE HOLE OFF EGMONT') && details.includes('\nseed: 1'), 'what the game knew, as plain lines');
+  assert.equal(u.searchParams.get('title'), 'Feedback: the shark went through a piling');
   await browser.closeWhere(u => u.startsWith('https://github.com/')); await page.activate();   // the issue tab would sit in front of the game
   const s = await page.eval('__game.state()'); assert.equal(s.menu, null); assert.match(s.said, /THANK YOU/);
 });
