@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { pushOut } from '../lib/collide.js?v=__BUILD__';
 import { TEST } from '../core/env.js?v=__BUILD__';
-import { rand } from '../core/random.js?v=__BUILD__';
+import { fxRand, rand } from '../core/random.js?v=__BUILD__';
 import { portrait } from '../core/screen.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__BUILD__';
@@ -216,7 +216,7 @@ export function stepCamera(dt) {
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
   camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6 * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(_sc.set(0, 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
-  camera.position.copy(camPos); { const k = settings.horizonTilt ? P.roll * 0.15 : 0; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(_sc.set(rand() - .5, rand() - .5, rand() - .5).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
+  camera.position.copy(camPos); { const k = settings.horizonTilt ? P.roll * 0.15 : 0; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(_sc.set(fxRand() - .5, fxRand() - .5, fxRand() - .5).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
   WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * (1 - 0.55 * (P.reveal || 0)); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
