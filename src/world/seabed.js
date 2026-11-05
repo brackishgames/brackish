@@ -8,6 +8,7 @@ import { floorAt } from './geo.js?v=__BUILD__';
 import { structMat } from './structures.js?v=__BUILD__';
 // the bottom near you: seagrass in the shallows, rocks where it is steep, sea fans on deeper hard ground. rebuilt as you move
 export const grassCenter = new THREE.Vector2(1e9, 1e9);   // where the last rebuild was centred
+const _sc = new THREE.Vector3(), _e = new THREE.Euler();   // scratch for the rebuild
 // seagrass (instanced blades in the shallows)
 export const GRASS_MAX = MOBILE ? 5000 : 14000;
 export const tuftGeo = mergeGeometries([0, 1, 2].map(i => new THREE.PlaneGeometry(0.045, 0.45 + i * 0.08).translate(0, 0.25 + i * 0.04, 0).rotateZ(0.18).rotateY(i * 2.09).toNonIndexed()), false);

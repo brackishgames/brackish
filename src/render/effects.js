@@ -3,6 +3,7 @@ import { MOBILE } from '../core/env.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
 import { scene } from './display.js?v=__BUILD__';
 import { GLSL_COMMON, mat } from './materials.js?v=__BUILD__';
+import { spotNear } from '../world/geo.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  SKY, WATER SURFACE (both sides), LIGHT SHAFTS, PARTICLES
 // ═══════════════════════════════════════════════════════════════════
@@ -75,9 +76,9 @@ export const snow = pointsCloud(MOBILE ? 1000 : 2500, 1, 0.28), snowBox = 110;
 { const a = snow.geometry.attributes.position.array; for (let i = 0; i < a.length; i++) a[i] = (rand() - 0.5) * snowBox; }
 export const bubbles = pointsCloud(600, 2.2, 0.9, true), bubbleLife = new Float32Array(600).fill(99);
 export const seeps = Array.from({ length: 6 }, () => ({ p: new THREE.Vector3(), t: rand() * 3, rate: 0.4 + rand() * 0.6 }));
-export function stepSeeps(dt) {
+export function stepSeeps(dt, near) {   // bubbles leaking from the bottom, kept near `near`
   for (const sp of seeps) {
-    if (sp.p.lengthSq() === 0 || sp.p.distanceTo(P.pos) > 110) { const spot = spotNear(15, 90, 2.5); if (!spot) continue; sp.p.set(spot.x, spot.f + 0.1, spot.z); }
+    if (sp.p.lengthSq() === 0 || sp.p.distanceTo(near) > 110) { const spot = spotNear(near, 15, 90, 2.5); if (!spot) continue; sp.p.set(spot.x, spot.f + 0.1, spot.z); }
     sp.t -= dt; if (sp.t <= 0) { sp.t = sp.rate * (0.5 + rand()); emitBubble(sp.p.x + (rand() - .5) * 0.3, sp.p.y, sp.p.z + (rand() - .5) * 0.3); }
   }
 }

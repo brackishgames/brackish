@@ -29,7 +29,7 @@ const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: fal
     this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter');
     const arrive = () => {
-      if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) dayClock = c.clock;
+      if (c.species) becomeSpecies(speciesById[c.species]); if (c.clock !== undefined) day.hour = c.clock;
       if (c.start && i > 0) { const [x, z] = toXZ(...c.start); travelTo({ name: c.title, x, z }); }
       if (c.pair) this.spawnPartner();
       card.textContent = c.title; card.style.opacity = 1; chimeStart();

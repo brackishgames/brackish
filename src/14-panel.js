@@ -14,6 +14,7 @@ function panelResize(w, h) {
   panel.tex.minFilter = panel.tex.magFilter = THREE.NearestFilter; panel.tex.unpackAlignment = 1; panel.tex.needsUpdate = true;
   dotPass.uniforms.tText.value = panel.tex; panel.map = null;
 }
+whenResized(panelResize);   // the panel's dots are the display's grid
 let pGain = 1;   // the HUD draws through this so it can fade when the water is quiet
 let pFail = 0, pFailK = 0;   // and this, so it can lose segments in deep water, like a stereo going under
 function pDot(x, y, v) { x |= 0; y |= 0; v *= pGain; if (pFail > 0 && hash2(x * 73 + (y >> 2) * 9, pFailK) < pFail) return; if (x < 0 || y < 0 || x >= panel.w || y >= panel.h || v <= 0) return; const i = (panel.h - 1 - y) * panel.w + x; if (v > panel.data[i]) panel.data[i] = Math.min(255, v); }

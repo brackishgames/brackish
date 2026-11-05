@@ -3,7 +3,7 @@
 //  BOATS  —  ships work the channel, small craft wander the flats.
 //  You hear them before you see them. Near the surface they can hit you.
 // ═══════════════════════════════════════════════════════════════════
-const boatMat = creatureMat({ glow: 0.45 }), UP = new THREE.Vector3(0, 1, 0);
+const UP = new THREE.Vector3(0, 1, 0);
 const boats = [];
 function addBoat(type, route) {
   const t = BOAT_TYPES[type], m = new THREE.Mesh(t.geo, boatMat); m.frustumCulled = false; scene.add(m);
@@ -20,7 +20,7 @@ function stepBoats(dt, t) {
       if (b.u < 0) { if (i > 0) { b.seg--; b.u = 1; } else { b.dir = 1; b.u = 0; } }
       b.pos.set(ax + (bx - ax) * b.u, 0, az + (bz - az) * b.u); b.yaw = Math.atan2(-(bx - ax) * b.dir, -(bz - az) * b.dir);
     } else {
-      if (b.pos.lengthSq() === 0 || b.pos.distanceTo(P.pos) > 700) { const sp = spotNear(150, 500, 2, 20); if (sp) { b.pos.set(sp.x, 0, sp.z); b.yaw = rand() * 6.28; } }
+      if (b.pos.lengthSq() === 0 || b.pos.distanceTo(P.pos) > 700) { const sp = spotNear(P.pos, 150, 500, 2, 20); if (sp) { b.pos.set(sp.x, 0, sp.z); b.yaw = rand() * 6.28; } }
       b.turn += (rand() - 0.5) * dt; b.turn *= 0.98;
       fwdInto(_f, b.yaw).multiplyScalar(60).add(b.pos); if (!isWater(_f.x, _f.z, 2)) b.turn += 1.2 * dt;
       b.yaw += b.turn * dt; b.pos.addScaledVector(fwdInto(_f, b.yaw), b.type.speed * dt);
@@ -65,10 +65,9 @@ const gigLight = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true).transl
 gigLight.frustumCulled = false; gigLight.visible = false; scene.add(gigLight);
 const gig = { on: false, pos: new THREE.Vector3(), bow: new THREE.Vector3(), yaw: 0, turn: 0, inT: 0, strikeT: 0, mesh: new THREE.Mesh(BOAT_TYPES.skiff.geo, boatMat) };
 gig.mesh.visible = false; gig.mesh.frustumCulled = false; scene.add(gig.mesh);
-const isNight = () => dayClock < 5.8 || dayClock > 19.5;
 if (DEV) window.__bay = { floorAt: (lat, lon) => floorAt(...toXZ(lat, lon)) };   // local dev only: lets tools check depths
 function stepGig(dt, t) {
-  if (!gig.on) { if (isNight() && started && rand() < dt / 25) { const sp = spotNear(70, 170, 0.5, 24); if (sp && sp.f > -2.2) { if (DEV) console.log('[gig] a light out on the flats'); gig.on = true; gig.pos.set(sp.x, 0, sp.z); gig.yaw = rand() * 6.28; gig.inT = 0; } } }
+  if (!gig.on) { if (isNight() && started && rand() < dt / 25) { const sp = spotNear(P.pos, 70, 170, 0.5, 24); if (sp && sp.f > -2.2) { if (DEV) console.log('[gig] a light out on the flats'); gig.on = true; gig.pos.set(sp.x, 0, sp.z); gig.yaw = rand() * 6.28; gig.inT = 0; } } }
   else if (!isNight() || gig.pos.distanceTo(P.pos) > 300) gig.on = false;
   gig.mesh.visible = gigLight.visible = gig.on; P.lit = false; if (!gig.on) return;
   // poled along the flats at a walk, turning back from the channel edge and the sand bars

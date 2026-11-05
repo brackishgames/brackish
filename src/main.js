@@ -8,9 +8,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';   // stamped by the deploy, so a visitor never gets a mix of old and new files
 // the module layers, lowest first. each module imports what it uses (tools/imports.mjs writes those lines)
 const MODULES = ['lib/rng', 'lib/geo', 'lib/text', 'lib/tiff', 'lib/dem', 'lib/tilt', 'lib/save', 'lib/collide', 'lib/feedback',
-  'core/env', 'core/random', 'core/tune', 'core/events', 'core/settings', 'core/screen',   // what everything stands on
+  'core/env', 'core/random', 'core/tune', 'core/events', 'core/settings', 'core/screen', 'core/space',   // what everything stands on
   'render/display', 'render/materials', 'render/effects',                                 // the dot-matrix display and what draws on it
-  'world/geo', 'world/seafloor', 'world/structures', 'world/seabed'];                     // the bay: its depths and data, its floor, what is built in it, what grows on it
+  'world/time', 'world/geo', 'world/seafloor', 'world/structures', 'world/seabed'];                     // the bay: its depths and data, its floor, what is built in it, what grows on it
 const mods = await Promise.all(MODULES.map(m => import(`./${m}.js?v=${BUILD}`)));
 Object.assign(window, { THREE, EffectComposer, ShaderPass, UnrealBloomPass, mergeGeometries, BUILD });
 // the game scripts below still share one scope while they move to modules: each export reaches them as a live, read-only

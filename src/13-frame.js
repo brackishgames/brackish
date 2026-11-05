@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = performance.now(), d = (n - this.last) / 1000; this.last = n; this.elapsedTime += d; return d; } }, _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
-let dayClock = 6.5, above = false, aboveMix = 0, nearestPoi = '', poiTimer = 0, lastFloor = -5;
+let above = false, aboveMix = 0, nearestPoi = '', poiTimer = 0, lastFloor = -5;
 
 const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
 // ── the player, one step. each stage hands the next what it needs: what you're asking for, the seabed, whether you're
@@ -211,7 +211,7 @@ function stepAmbient(dt, t) {
   // mullet schools
   let k = 0;
   for (const s of schools) {
-    if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + rand() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
+    if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(P.pos, 25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + rand() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
     const pd = s.c.distanceTo(P.pos);
     if (pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3;   // a charge scatters the school
     if (s.panic <= 0) for (const w of wild) if (w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(s.c) < 14) { s.panic = 3; if (pd < 50) flush(s.c.x, s.c.z, 1 - pd / 50); break; }   // sharks are silent; their prey is not
@@ -273,22 +273,22 @@ function later(secs, fn, clock = 'screen') { timers[clock].push({ at: (clock ===
 function runTimers(clock, now) { const q = timers[clock]; if (!q.length || !q.some(t => t.at <= now)) return; timers[clock] = q.filter(t => t.at > now); for (const t of q) if (t.at <= now) t.fn(); }
 function simStep(dt) {
   readInput(); stepStrokes(dt); const t = simTime;
-  if (started && !paused) { dayClock = (dayClock + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } stepPlayer(dt); story.step(dt); }
+  if (started && !paused) { day.hour = (day.hour + dt / 60) % 24; saveTimer += dt; if (saveTimer > 30) { saveTimer = 0; saveGame(); } stepPlayer(dt); story.step(dt); }
   if (!started) {   // attract: after a while the ray wanders off on its own and the words fade
     P.titleIdle = (P.titleIdle || 0) + dt; if (P.titleIdle > 40) { $('title').classList.add('attract'); logo.release();
       P.yaw += Math.sin(t * 0.12) * 0.25 * dt; fwdInto(_f, P.yaw).multiplyScalar(1.6 * dt); const nx = P.pos.x + _f.x, nz = P.pos.z + _f.z; if (floorAt(nx, nz) < -2.5) { P.pos.x = nx; P.pos.z = nz; } else P.yaw += 1.2 * dt;
       P.pos.y = THREE.MathUtils.clamp(P.pos.y + Math.sin(t * 0.07) * 0.15 * dt, floorAt(P.pos.x, P.pos.z) + 1.2, -1.5); P.mesh.position.copy(P.pos); orient(P.mesh, P.yaw, 0, 0); } }
-  if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); stepThing(dt); simTime += dt; runTimers('world', simTime); }
+  if (!paused) { stepDives(dt, t); stepAmbient(dt, t); stepWild(dt, t); stepJellies(dt, t); stepFood(dt, t); stepSeeps(dt, P.pos); stepBoats(dt, t); stepGig(dt, t); stepFever(dt, t); stepSpray(dt); stepThing(dt); simTime += dt; runTimers('world', simTime); }
 }
 function frame() {
   booting = false;
   requestAnimationFrame(frame);
   const real = Math.min(0.25, clock.getDelta()); WU.uTime.value = clock.elapsedTime;
-  stepQuality(); pollPad(); if (started && needFull() && !menu) openMenu('main');
+  stepQuality(started && !paused); pollPad(); if (started && needFull() && !menu) openMenu('main');
   paused = started && (mapOpen || helpOpen || !!menu || !!photo || needFull() || portrait());   // a real pause: sharks, boats and lights wait too
   stepVolume(); stepTips(); runTimers('screen', WU.uTime.value);
   if (!TEST) { const want = real * timeScale, n = Math.min(SIM_STEPS * Math.ceil(timeScale), Math.max(1, Math.ceil(want / SIM_MAX - 1e-9))); for (let i = 0; i < n; i++) simStep(Math.min(want, n * SIM_MAX) / n); }
-  { const a = (dayClock - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
+  { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   stepCamera(real); stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
   renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
   if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; renderer.domElement.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `brackish-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */   /* the frame just drawn, before it is cleared */

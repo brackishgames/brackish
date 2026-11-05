@@ -87,7 +87,7 @@ function photoSpot() {
   for (const w of world.wrecks) if (Math.hypot(w.x - P.pos.x, w.z - P.pos.z) < 70) return w.name;
   if (feverR(P.pos) < 1.2) return 'THE FEVER';
   if (wild.some(o => o.partner && o.air)) return 'TOGETHER';
-  if (dayClock > 5.4 && dayClock < 7.2 && P.pos.y > -1.2) return 'DAWN';
+  if (day.hour > 5.4 && day.hour < 7.2 && P.pos.y > -1.2) return 'DAWN';
   return null;
 }
 function startPhoto() { const spot = photoSpot(); if (!spot) return; closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9, spot }; lockPointer(); }

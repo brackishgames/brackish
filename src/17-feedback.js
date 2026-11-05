@@ -23,7 +23,7 @@ function feedbackContext() {
   const [lat, lon] = toLL(P.pos.x, P.pos.z), q = typeof Q !== 'undefined' ? Q : null;
   return { version: versionString, build: BUILD, seed: SEED, chapter: CHAPTERS[story.ch]?.title, body: P.sp?.name, place: nearestPoi || '-',
     where: `${lat.toFixed(5)}, ${lon.toFixed(5)}`, depth: `${Math.max(0, -P.pos.y).toFixed(1)} m of ${Math.max(0, -floorAt(P.pos.x, P.pos.z)).toFixed(1)} m`,
-    hearts: P.hp, 'time of day': `${Math.floor(dayClock)}:${String(Math.floor(dayClock % 1 * 60)).padStart(2, '0')}`, fps: q ? (1 / q.ema).toFixed(0) : '-', 'pixel ratio': q ? q.dprs[q.level] : '-',
+    hearts: P.hp, 'time of day': `${Math.floor(day.hour)}:${String(Math.floor(day.hour % 1 * 60)).padStart(2, '0')}`, fps: q ? (1 / q.ema).toFixed(0) : '-', 'pixel ratio': q ? q.dprs[q.level] : '-',
     device: MOBILE ? (tiltOn() ? 'touch, tilt' : 'touch') : 'desktop', controller: pad.active ? (pad.sony ? 'playstation' : 'xbox or other') : 'none',
     screen: `${innerWidth}×${innerHeight} @${devicePixelRatio}`, browser: navigator.userAgent, said: sayLog.slice(-5), errors: errorLog.slice(-5).map(e => e.text) };
 }

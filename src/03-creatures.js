@@ -79,24 +79,9 @@ function creatureMesh(sp, glow = 1) {
   const m = new THREE.Mesh(creatureGeometry(sp), creatureMat({ mode: sp.kind === 'ray' ? 1 : (sp.fluke === 'h' || sp.fluke === 'paddle') ? 6 : 2, half: (sp.span ?? sp.len) / 2, len: sp.len, freq: sp.freq, amp: sp.amp, glow }));
   m.userData.sp = sp; m.userData.size = size; m.frustumCulled = false; return m;
 }
-// Shared creature orientation: heading yaw, pitch, bank roll. Forward is -Z.
-function orient(obj, yaw, pitch, roll) { obj.rotation.set(0, 0, 0); obj.rotateY(yaw); obj.rotateX(pitch); obj.rotateZ(roll); }   // +pitch = nose up (forward is -Z)
 for (const ev of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(ev, () => { fullscreen.pending = false; });
 for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { fullscreen.pending = false; for (const k in keys) keys[k] = false; if (isFull() && menu && canFull) closeMenu(); if (MOBILE && isFull()) lockLandscape(); });
 const sprinting = () => input.burst;
 // WASD players drive their own speed; until a WASD key is pressed the animal cruises on its own (arrows, touch)
 let wasdSeen = false; const usingWASD = () => wasdSeen;
 
-const fwdInto = (out, yaw, pitch = 0) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
-const FWD_POOL = Array.from({ length: 64 }, () => new THREE.Vector3()); let fwdNext = 0;
-const fwdOf = (yaw, pitch = 0) => fwdInto(FWD_POOL[fwdNext = (fwdNext + 1) & 63], yaw, pitch);   // a pooled vector: use it now, .clone() it to keep it
-const _s = new THREE.Vector3(), _f = new THREE.Vector3(), _M = new THREE.Matrix4(), _E = new THREE.Euler();
-// place one instance: position, euler rotation, scale
-function placeInstance(mesh, i, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) {
-  _E.set(rx, ry, rz); _M.makeRotationFromEuler(_E); if (sx !== 1 || sy !== 1 || sz !== 1) _M.scale(_s.set(sx, sy, sz)); _M.setPosition(x, y, z); mesh.setMatrixAt(i, _M);
-}
-// a random point in water around the player, or null
-function spotNear(rMin, rMax, minDepth = 2, tries = 12) {
-  for (let k = 0; k < tries; k++) { const a = rand() * Math.PI * 2, r = rMin + rand() * (rMax - rMin), x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r, f = floorAt(x, z); if (f < -minDepth) return { x, z, f }; }
-  return null;
-}

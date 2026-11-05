@@ -30,7 +30,7 @@ function setWild(w, sp, x, y, z) {   // put a wild slot into the water as this s
   w.hunting = false; w.interest = 0; w.warned = false; w.feverPass = 0; w.cool = 0; w.air = false; w.partner = false; w.passing = false; w.passedClose = false;
 }
 function spawnWild(w, first = false) {
-  const spot = spotNear(first ? 20 : 70, first ? 110 : 130, 2); if (!spot) return;
+  const spot = spotNear(P.pos, first ? 20 : 70, first ? 110 : 130, 2); if (!spot) return;
   { const { x, z, f } = spot;
     const sp = pickSpecies(f < -8);
     setWild(w, sp, x, Math.min(-1.2, f + 1.5 + rand() * Math.max(0.5, -f - 3)), z); return;
@@ -93,7 +93,7 @@ function animalLifecycle(w, dt) {
 function stepInterest(w, rel, d, { hunters, fr, pFloor }, dt) {
   const otherHunter = hunters > (w.hunting ? 1 : 0), hammer = w.sp.id === 'hammer';
   if (rel === 'hunt' && !w.hunting && started && d < 45 && w.cool <= 0 && !otherHunter && !(hammer && pFloor > -3)) {
-    const dim = dayClock < 7.5 || dayClock > 18;   // they hunt the low light
+    const dim = day.hour < 7.5 || day.hour > 18;   // they hunt the low light
     const rate = fr < 0.85 ? -0.3 : (fr < 1.2 ? 0.22 : 0.14) * (P.speed > P.sp.cruise * 1.2 ? 1.8 : 1) * (P.hp < 3 ? 1.5 : 1) * (dim ? 1.3 : 1);   // panic and blood draw it in
     w.interest = THREE.MathUtils.clamp((w.interest || 0) + rate * dt, 0, 1);
     if (w.interest > 0.45 && !w.warned) { w.warned = true; say('something large is keeping pace below you', 2.5); tip('burst', () => `${kn('burst')} bursts. a hard turn inside its lunge makes it miss. lose it in the fever, or far away.`); }
@@ -202,7 +202,7 @@ jellyMesh.frustumCulled = false; scene.add(jellyMesh);
 const jellies = Array.from({ length: JELLIES }, () => ({ p: new THREE.Vector3(), ph: rand() * 6.28, s: 0.6 + rand() * 1.2 }));
 function stepJellies(dt, t) {
   for (let i = 0; i < JELLIES; i++) { const j = jellies[i];
-    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const sp = spotNear(20, 110, 3); if (!sp) { placeInstance(jellyMesh, i, 0, 9999, 0); continue; } j.p.set(sp.x, sp.f * (0.3 + rand() * 0.5), sp.z); }
+    if (j.p.lengthSq() === 0 || j.p.distanceTo(P.pos) > 130) { const sp = spotNear(P.pos, 20, 110, 3); if (!sp) { placeInstance(jellyMesh, i, 0, 9999, 0); continue; } j.p.set(sp.x, sp.f * (0.3 + rand() * 0.5), sp.z); }
     const f = floorAt(j.p.x, j.p.z);
     j.p.y = THREE.MathUtils.clamp(j.p.y + Math.sin(t * 0.3 + j.ph) * 0.08 * dt + 0.02 * dt, f + 1, -1.5); j.p.x += Math.sin(t * 0.1 + j.ph) * 0.05 * dt; j.p.z += Math.cos(t * 0.13 + j.ph) * 0.05 * dt;
     placeInstance(jellyMesh, i, j.p.x, j.p.y, j.p.z, Math.sin(t * 0.4 + j.ph) * 0.2, j.ph, Math.cos(t * 0.3 + j.ph) * 0.2, j.s); }
