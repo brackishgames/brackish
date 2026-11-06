@@ -5,6 +5,10 @@ export const TUNE = {
   fail: { from: 12, to: 26 },                                // metres down where the display starts, and finishes, losing segments
   hush: 0.88,                                                // how much of the sea goes quiet when a shark takes an interest
   tide: { pull: 0.9, from: 0.3, to: 1.0 },                   // strong currents push this much harder, ramping in between these m/s
+  // the quiet HUD: each part comes up when it has something to tell you, and goes down `linger` seconds after it last did
+  hud: { linger: 4, rise: 6, fall: 0.8,                      // seconds it stays; how fast it comes up and goes (per second)
+    chapterShow: 20, speedStep: 0.5, offGoal: 25, farGoal: 800,  // all of it, the first seconds of a chapter; a speed change worth showing (M/S); the goal this far off your nose (degrees) brings the compass, this far away (M) the chart
+    sinking: 0.4, nearFloor: 1.5, airShow: 0.5 },             // rising or sinking this fast (M/S) brings the depth, as does the floor this close (M); air below this shows, and the edges close in
   thing: { chance: 0.3, every: [240, 480], floor: 10 },      // the echo's unnamed shape: odds per echo, seconds between, minimum depth below you
   fever: { behind: 35, rejoin: 300 },                        // metres: where a chapter that follows the fever puts you (behind its middle); how far off a saved game may have left you before it puts you back
   timing: {   // how long things last on purpose. never how long to wait for something else: that is always an event

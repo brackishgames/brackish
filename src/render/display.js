@@ -45,10 +45,10 @@ export const cellMat = new THREE.ShaderMaterial({ uniforms: { tScene: { value: l
     }` });
 export const cellScene = new THREE.Scene(), cellCam = new THREE.Camera(); { const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), cellMat); q.frustumCulled = false; cellScene.add(q); }
 export const DotShader = {
-  uniforms: { tScene: { value: null }, tText: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 }, uDim: { value: 0 }, uTunnel: { value: 0 } },
+  uniforms: { tScene: { value: null }, tText: { value: null }, uGrid: { value: new THREE.Vector2() }, uPitch: { value: 8 }, uDim: { value: 0 }, uTunnel: { value: 0 }, uClose: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D tScene, tText; uniform vec2 uGrid; uniform float uPitch, uDim, uTunnel;
+    uniform sampler2D tScene, tText; uniform vec2 uGrid; uniform float uPitch, uDim, uTunnel, uClose;
     vec3 palette(float b) {
       b = clamp(b, 0.0, 1.0);
       vec3 c0 = vec3(0.01, 0.07, 0.12), c1 = vec3(0.03, 0.47, 0.72), c2 = vec3(0.30, 0.88, 0.94), c3 = vec3(0.96, 1.0, 1.0);   // leaning to the OEL's cyan
@@ -63,7 +63,7 @@ export const DotShader = {
       vec3 unlit = vec3(0.003, 0.008, 0.012) * (1.0 - smoothstep(0.7, 0.95, d));
       vec3 col = palette(b) * mask;
       if (am > 0.03) { float ra = 0.5 + 0.45 * am, ma = 1.0 - smoothstep(ra - 0.3, ra + 0.05, d); col = mix(col, vec3(0.72, 0.84, 1.0) * (0.42 + 0.38 * am), ma); }
-      vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = (1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc))) * (1.0 - uTunnel * smoothstep(0.18, 0.5, length(vc)));
+      vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = (1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc))) * (1.0 - uTunnel * smoothstep(0.18, 0.5, length(vc))) * (1.0 - uClose * smoothstep(0.22, 0.62, length(vc)));   // uClose: hunted, or out of air
       vec3 outc = (col * (1.0 - uDim) + unlit) * vig;
       float ptx = texture2D(tText, uv).r;   // the panel layer: every word and symbol is lit dots on the same matrix
       if (ptx > 0.0) { float rt = 0.5 + 0.42 * ptx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = mix(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * ptx), mt); }

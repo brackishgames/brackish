@@ -51,12 +51,15 @@ your ability on its key, then the tide on you, air and the hunt when they matter
 compass, the goal and its distance on it, and the place you're in. The left edge is the depth: the surface at the top, the
 bottom under you at the foot, and how deep you are riding beside you. A bottom corner holds the chart and the live NOAA
 water level and temperature. Bottom middle is what you hear and what you're told, the sounds leaning to the side they came
-from. Clams give a heart back, and a well-fed animal carries up to five. At a moment worth keeping
+from. It is quiet by default: each part comes up only while it has something to tell you (a hit, a burst, a turn away from
+the goal, a new place, rising or diving, the bottom close) and goes back down a few seconds later, so calm water is just the
+bay. Depth reads in the stereo's own seven-segment digits. Hunted or short of air, the edges of the screen close in. HUD in
+settings switches it to always on. Clams give a heart back, and a well-fed animal carries up to five. At a moment worth keeping
 (a wreck or landmark close by, inside the fever, a leap together, the surface at dawn) a prompt appears and O opens photo
 mode: the bay stops, the screen clears, and Enter saves a picture.
 
 Settings cover volume (with ambience and effects apart), every key (CONTROLS), mouse speed, invert Y, turn speed, large
-text, opt-in crash reports and sound captions, which show the sounds that matter (an engine, a shark's pressure wave, fish scattering)
+text, the HUD (quiet or always on), opt-in crash reports and sound captions, which show the sounds that matter (an engine, a shark's pressure wave, fish scattering)
 on the side they came from. COMFORT holds what keeps the camera from making anyone queasy: field of view, horizon tilt,
 camera sway, speed effects, a comfort vignette that steadies the edges in fast motion, screen shake, hit flash, and
 flicker (never faster than 2.5 changes a second, and none when off). If your system asks for reduced motion, they all
