@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-beta.4](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-11-05)
+
+
+### Bug Fixes
+
+* every chapter begins where it should, however you came to it ([1e75efe](https://github.com/brackishgames/brackish/commit/1e75efe9cd14149b492f5ec51a03ab381b227809))
+* starting a chapter just after another no longer leaves it never set up ([1e75efe](https://github.com/brackishgames/brackish/commit/1e75efe9cd14149b492f5ec51a03ab381b227809))
+
 ## [0.1.0-beta.3](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.2...v0.1.0-beta.3) (2026-11-05)
 
 
