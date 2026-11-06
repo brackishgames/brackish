@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.6](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.5...v0.1.0-beta.6) (2026-11-06)
+
+
+### Features
+
+* a quiet HUD, the stereo's digits, and the edges closing in ([162c803](https://github.com/brackishgames/brackish/commit/162c803facbf77826e1e770a43d7b47073c404e7))
+
 ## [0.1.0-beta.5](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.4...v0.1.0-beta.5) (2026-11-06)
 
 
