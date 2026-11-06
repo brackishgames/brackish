@@ -18,7 +18,7 @@ import { stepBoats, stepGig } from '../actors/boats.js?v=__BUILD__';
 import { stepFever } from '../actors/fever.js?v=__BUILD__';
 import { BIRDS, GONE, birdMesh, dives, fishMesh, flocks, schools, steerToSchool, stepDives, stepFood, stepJellies } from '../actors/life.js?v=__BUILD__';
 import { AIR, HOLD, HP_MAX, P, hurt } from '../actors/player.js?v=__BUILD__';
-import { PREDATORS, stepThing, stepWild, wild } from '../actors/wildlife.js?v=__BUILD__';
+import { PREDATORS, huntHeat, stepThing, stepWild, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { blow, flush, splash, stepAudio, stepVolume, thud, whoosh } from '../systems/audio.js?v=__BUILD__';
 import { aim, helpOpen, input, keys, kn, menu, mouseSteering, needFull, openMenu, pad, photo, pollPad, readInput, rumble, sprinting } from '../systems/input.js?v=__BUILD__';
 import { stepAutosave } from '../systems/save.js?v=__BUILD__';
@@ -199,6 +199,8 @@ export function stepCamera(dt) {
   camera.fov = (camera.userData.baseFov || 60) + (settings.speedFx ? 14 : 0) * P.burstMix; camera.updateProjectionMatrix();   // the view widens at speed, unless that's turned off for comfort
   { const want = settings.vignette ? Math.min(0.85, 0.75 * P.burstMix + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) / 1.2) + 0.35 * Math.min(1, (P.speed || 0) / Math.max(1, P.sp.max))) : 0;
     dotPass.uniforms.uTunnel.value += (want - dotPass.uniforms.uTunnel.value) * Math.min(1, 4 * dt); }
+  { const air = P.air ?? 1, close = Math.max(0.55 * huntHeat, air < TUNE.hud.airShow ? 0.7 * (1 - air / TUNE.hud.airShow) : 0);   // hunted, or short of air: the edges close in
+    dotPass.uniforms.uClose.value += (close - dotPass.uniforms.uClose.value) * Math.min(1, 2 * dt); }
   P.idleCam = (input.turn || input.climb || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const sway = settings.sway ? 1 : 0;   // the camera never moves on its own unless that's wanted
   const drift = sway * (started ? Math.sin(simTime * 0.05) * 0.9 * THREE.MathUtils.smoothstep(P.idleCam, 12, 30) : Math.sin(simTime * 0.07) * 0.5);

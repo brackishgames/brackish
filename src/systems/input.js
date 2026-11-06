@@ -135,6 +135,7 @@ export function menuItems() {
     ...(MOBILE ? [{ label: () => `TILT STEERING  ${onOff(settings.tilt)}`, adj: () => { settings.tilt = !settings.tilt; tilt.turn = tilt.climb = 0; tilt.zero = null; if (settings.tilt && !tilt.ok) tilt.asked = false; bl.textContent = touchHint(); } }] : []),
     { label: () => `INVERT Y  ${onOff(settings.invertY)}`, adj: () => settings.invertY = !settings.invertY },
     { label: () => `LARGE TEXT  ${onOff(settings.bigText)}`, adj: () => settings.bigText = !settings.bigText },
+    { label: () => `HUD  ${settings.hudFull ? 'ALWAYS ON' : 'QUIET'}`, adj: () => settings.hudFull = !settings.hudFull },   // quiet: each readout only while it matters
     ...(MOBILE ? [] : [{ label: () => 'CONTROLS', act: () => { menu.kind = 'controls'; menu.sel = 0; } }]),
     { label: () => `SEND CRASH REPORTS  ${onOff(settings.crashReports)}`, adj: () => settings.crashReports = !settings.crashReports },
     { label: () => 'SHOW TIPS AGAIN', act: () => { settings.tips = {}; say('tips will show again', 1.5); } },

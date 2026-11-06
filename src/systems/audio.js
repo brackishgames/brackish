@@ -75,9 +75,12 @@ export function burst({ buf = 'pink', type = 'bandpass', f0 = 400, f1 = 1600, f2
     src.connect(f).connect(gg); out.connect(audio.master); src.start(t); src.stop(t + length + 0.05); }, when);
 }
 export const _ear = new THREE.Vector3();
-export function panAt(x, z) {   // -1 left .. 1 right of where you are looking, narrowed with distance
-  camera.getWorldDirection(_ear); const dx = x - camPos.x, dz = z - camPos.z, d = Math.hypot(dx, dz) || 1, side = (dx * -_ear.z + dz * _ear.x) / (d * (Math.hypot(_ear.x, _ear.z) || 1));
-  return THREE.MathUtils.clamp(side * (0.2 + 0.8 * THREE.MathUtils.smoothstep(40 - d, 0, 35)), -1, 1);
+export function sideOf(x, z) {   // -1 left .. 1 right of where you are looking
+  camera.getWorldDirection(_ear); const dx = x - camPos.x, dz = z - camPos.z, d = Math.hypot(dx, dz) || 1; return (dx * -_ear.z + dz * _ear.x) / (d * (Math.hypot(_ear.x, _ear.z) || 1));
+}
+export function panAt(x, z) {   // where a sound sits in the mix: its side, narrowed with distance
+  const d = Math.hypot(x - camPos.x, z - camPos.z);
+  return THREE.MathUtils.clamp(sideOf(x, z) * (0.2 + 0.8 * THREE.MathUtils.smoothstep(40 - d, 0, 35)), -1, 1);
 }
 export function stab(x, z) { caption('stab', 'GIG', x, z);   // a gig going in: the plunk of the shaft, the hiss of its wake
   const p = panAt(x, z); burst({ buf: 'white', type: 'bandpass', f0: 1800, f1: 3000, f2: 900, q: 1.2, attack: 0.005, length: 0.18, g: 0.35, pan: p });

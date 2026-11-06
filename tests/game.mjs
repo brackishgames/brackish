@@ -136,6 +136,15 @@ await scenario('deep water: the display loses segments; near the top it is whole
   assert.ok((await page.eval('__game.state()')).depth > 18); await page.until('lastHudFail > 0', 'segments dropping at depth');
   await page.eval(`P.pos.y = -2; 1`); await page.until('lastHudFail === 0', 'a whole display near the top');
 });
+await scenario('the quiet HUD: calm water is just the bay; a hit brings the hearts up; ALWAYS ON keeps it all up', async () => {
+  const was = await page.eval('({ linger: TUNE.hud.linger, fall: TUNE.hud.fall })');
+  await page.eval(`__game.teleport(${HOLE}, 12); story.beganAt = -1e9; TUNE.hud.linger = 0.3; TUNE.hud.fall = 6; 1`);
+  try {
+    await page.until(`['hearts', 'motion', 'ability', 'place', 'depth'].every(n => hudParts[n].k === 0)`, 'everything about you down, in calm water');
+    await page.eval('P.hp = 2; 1'); await page.until('hudParts.hearts.k === 1', 'the hearts up after a hit');
+    await page.eval('settings.hudFull = true; 1'); await page.until('Object.values(hudParts).every(p => p.k === 1)', 'all of it up, always');
+  } finally { await page.eval(`settings.hudFull = false; TUNE.hud.linger = ${was.linger}; TUNE.hud.fall = ${was.fall}; P.hp = 3; 1`); }
+});
 await scenario('a dolphin\'s echo, deep, can come back off something with no name', async () => {
   await page.eval(`becomeSpecies(speciesById.dolphin); __game.teleport(${HOLE}, 12); thing.next = 0; TUNE.thing.chance = 1; echoThing(); TUNE.thing.chance = 0.3; 1`);
   assert.ok(await page.eval('thing.mesh.visible')); const d = await page.eval('thing.mesh.position.distanceTo(P.pos)'); assert.ok(d > 35 && d < 60, `at ${d} m`);
