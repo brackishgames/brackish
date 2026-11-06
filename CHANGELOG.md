@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-beta.5](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.4...v0.1.0-beta.5) (2026-11-06)
+
+
+### Features
+
+* the HUD is laid out by what each thing is about ([bcb508e](https://github.com/brackishgames/brackish/commit/bcb508e1e2d2dd17308a973bebc02fb786b38c75))
+
 ## [0.1.0-beta.4](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.3...v0.1.0-beta.4) (2026-11-05)
 
 
