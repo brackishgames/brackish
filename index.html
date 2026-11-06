@@ -35,8 +35,6 @@
   body:not(.playing) .hud, body:not(.playing) #compass, body:not(.playing) #mini { visibility: hidden; }
   .hud { position: fixed; pointer-events: none; white-space: pre; font-size: 13px; line-height: 1.6;
     letter-spacing: 2px; text-shadow: 0 0 6px #9fd0ff, 0 0 14px #5aa8ff88; text-transform: uppercase; }
-  #tl { top: 14px; left: 18px; font-size: 12px; letter-spacing: 3px; opacity: .9; }
-  #tr { top: 14px; right: 18px; text-align: right; font-size: 12px; letter-spacing: 4px; opacity: .75; }
   #bl { bottom: 12px; left: 18px; font-size: 11px; opacity: .7; transition: opacity 2s; }
   body.settled #bl { opacity: 0; }
   #warn { top: 96px; left: 50%; transform: translateX(-50%); font-size: 16px; color: #ffffff; opacity: 0; transition: opacity .2s; }
@@ -76,8 +74,6 @@
   /* ── touch and small screens ── */
   html, body, * { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   html, body { overscroll-behavior: none; height: 100dvh; }
-  #tl { top: calc(14px + env(safe-area-inset-top)); left: calc(18px + env(safe-area-inset-left)); }
-  #tr { top: calc(14px + env(safe-area-inset-top)); right: calc(18px + env(safe-area-inset-right)); }
   #compass { top: calc(10px + env(safe-area-inset-top)); width: min(720px, 86vw); height: auto; }
   #touch { display: none; } body.touch #touch { display: block; }
   .tbtn { position: fixed; z-index: 7; display: flex; align-items: center; justify-content: center; color: #e8f1ff; background: #0007; border: 1px solid #e8f1ff55;
@@ -92,7 +88,7 @@
   #stick i { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: #e8f1ff1f; border: 1px solid #e8f1ff66; }
   .restart { margin-top: 18px; padding: 8px 16px; border: 1px solid #e8f1ff44; border-radius: 3px; }
   @media (max-width: 760px), (max-height: 520px) {
-    .hud, #tr { font-size: 10px; letter-spacing: 2px; } #bl { display: none; }
+    .hud { font-size: 10px; letter-spacing: 2px; } #bl { display: none; }
     #story { font-size: 12px; letter-spacing: 2px; bottom: calc(132px + env(safe-area-inset-bottom)); max-width: 82vw; }
     #chapter { font-size: 17px; letter-spacing: 6px; }
     .panel h1 { font-size: 20px; letter-spacing: 8px; } .panel p { font-size: 11px; white-space: pre-line; line-height: 1.9; }
@@ -133,8 +129,6 @@ a shark on you stays until you lose it: go far, or into the fever.
 at night, keep out of the lights on the flats.
 dolphins and manatees need air.</p><small>H to close</small></div>
 <div id="map"><div><h2>FAST TRAVEL — ↑↓ pick · ENTER go · M close</h2><ul id="cplist"></ul></div><canvas id="bigmap" width="560" height="560"></canvas></div>
-<div class="hud" id="tl" aria-hidden="true"></div>
-<div class="hud" id="tr" aria-hidden="true"></div>
 <div class="hud" id="bl" aria-hidden="true"></div>
 <div class="hud" id="warn" role="alert"></div>
 <canvas id="compass" width="720" height="52" aria-hidden="true"></canvas>
