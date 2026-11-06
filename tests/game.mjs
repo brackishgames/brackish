@@ -60,7 +60,7 @@ await scenario('the current is drift, not thrust: it carries you while your own 
   const a = await S(page, SECOND / 2, { throttle: 0 }), b = await S(page, 2 * SECOND, { throttle: 0 });
   const dx = b.pos[0] - a.pos[0]; assert.ok(dx > 2.8 && dx < 4.6, `carried ${dx.toFixed(2)} m east in 2 s`); assert.ok(b.speed < 0.5, `own speed ${b.speed}`); assert.equal(b.bursting, false);
   assert.ok(Math.abs(b.current - 1) < 0.05, `current ${b.current}`);
-  await page.until(`tl.textContent.includes('TIDE 1.0→')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
+  await page.until(`readouts.tide.includes('TIDE 1.0→')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
 });
 await scenario('structures are solid: a burst into a Skyway pier stops at its face, and you feel it', async () => {
   const pier = await page.eval(`world.solids.find(c => c.tag === 'skyway pier')`); assert.ok(pier, 'the Skyway piers are colliders');

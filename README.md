@@ -46,8 +46,12 @@ ability, the right stick looks around, START pauses. A phone plays sideways: til
 to dive or toward you to rise, and hold a thumb anywhere to burst (TILT STEERING in settings turns tilt off for a drag
 stick). F, or *Send feedback* in the pause menu, sends us a note from where you are.
 
-At the top left, DOWN is how deep you are and FLOOR is the bottom under you; the gauge below them shows you between the
-surface and the seafloor. Clams give a heart back, and a well-fed animal carries up to five. At a moment worth keeping
+The screen is laid out by what each thing is about. Top left is you: your hearts, your speed and the burst you have left,
+your ability on its key, then the tide on you, air and the hunt when they matter. Top middle is where you're going: the
+compass, the goal and its distance on it, and the place you're in. The left edge is the depth: the surface at the top, the
+bottom under you at the foot, and how deep you are riding beside you. A bottom corner holds the chart and the live NOAA
+water level and temperature. Bottom middle is what you hear and what you're told, the sounds leaning to the side they came
+from. Clams give a heart back, and a well-fed animal carries up to five. At a moment worth keeping
 (a wreck or landmark close by, inside the fever, a leap together, the surface at dawn) a prompt appears and O opens photo
 mode: the bay stops, the screen clears, and Enter saves a picture.
 

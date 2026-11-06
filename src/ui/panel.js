@@ -12,11 +12,11 @@ import { Bay, TILES, floorAt, loadmsg } from '../world/geo.js?v=__BUILD__';
 import { P, abilityName, pulses } from '../actors/player.js?v=__BUILD__';
 import { huntHeat } from '../actors/wildlife.js?v=__BUILD__';
 import { captions, panAt } from '../systems/audio.js?v=__BUILD__';
-import { aim, menu, menuItems, mouseSteering, pad, photo, photoSpot, sprinting } from '../systems/input.js?v=__BUILD__';
+import { aim, kn, menu, menuItems, mouseSteering, pad, photo, photoSpot, sprinting } from '../systems/input.js?v=__BUILD__';
 import { lastSaved } from '../systems/save.js?v=__BUILD__';
 import { startedAt, story } from '../systems/story.js?v=__BUILD__';
 import { feedbackLines } from './feedback.js?v=__BUILD__';
-import { $, LORE, bl, checkpoints, compassMarks, headingDeg, help, mapOpen, mapSel, mapXY, storyEl, tl, tr, warn } from './hud.js?v=__BUILD__';
+import { $, LORE, bl, checkpoints, compassMarks, headingDeg, help, mapOpen, mapSel, mapXY, readouts, storyEl, warn } from './hud.js?v=__BUILD__';
 import { STICK_R, touch } from './touch.js?v=__BUILD__';
 import { _cur, _v, simTime } from '../app/frame.js?v=__BUILD__';
 import { drawDebug } from '../app/testing.js?v=__BUILD__';
@@ -128,38 +128,47 @@ export function drawHud(v) {
   const introK = THREE.MathUtils.smoothstep(t - startedAt, ...TUNE.timing.hudIn);   // the HUD eases in over the first seconds of a swim
   pGain = hudGain * introK;
   setHudFailure(v);
-  drawReadouts(v); drawMeters(v); drawDepthGauge(v); drawVitals(v); drawAimMark(v);
+  // laid out by what each thing is about, so the eye learns where to look: you (top left), where you are going (top middle),
+  // how deep (left edge), the water around you (the chart, in a bottom corner), what you hear and are told (bottom middle)
+  drawYou(v); drawDepthGauge(v); drawSystem(v); drawAimMark(v);
   _v.copy(P.pos).project(camera); const px = (_v.x * 0.5 + 0.5) * W, py = (0.5 - _v.y * 0.5) * H, onScreen = _v.z < 1;   // where you are on screen
   drawPulses(v, px, py); drawTurnMarks(v, px, py, onScreen); drawCurrentDashes(v); drawBurstStreaks(v);
-  drawCompassTape(v); drawPhotoPrompt(v, introK); drawWarning(v); drawMinimap(v); drawCaptions(v, introK); drawKeyHint(v); drawTouchControls(v);
+  drawCompassTape(v); drawPhotoPrompt(v, introK); drawWarning(v); drawChart(v); drawCaptions(v, introK); drawKeyHint(v); drawTouchControls(v);
 }
 export function setHudFailure(v) {   // deep water: the readouts lose dots, and now and then the whole display stutters
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   { const deep = THREE.MathUtils.smoothstep(-P.pos.y, TUNE.fail.from, TUNE.fail.to); pFailK = settings.flicker ? Math.floor(t * 2.5) : 0;   // deep water: the readouts lose dots, and now and then the whole display stutters
     pFail = deep * (0.1 + 0.2 * Math.max(0, Math.sin(t * 0.53) * Math.sin(t * 1.7))); if (settings.flicker && deep > 0.3 && hash2(pFailK, 41) < 0.04 * deep) pFail = 0.6; } lastHudFail = pFail;
 }
-export function drawReadouts(v) {   // the two lines at the top, and SAVED
-  const { W, H, ST, SL, SB, cx, t, cols } = v;
-  pText(tl.textContent, SL, ST + 2, 230, 'left', 1, true); pText(tr.textContent, W - SL, ST + 2, 180, 'right', 1, true);
-  { const age = (performance.now() - lastSaved) / 1000; if (age < 2) pText('SAVED', W - SL, ST + 9, 150 * Math.min(1, 2 - age), 'right', 1, true); }
+export function drawSystem(v) {   // top right: what the game did for you (SAVED)
+  const { W, ST, SL } = v;
+  const age = (performance.now() - lastSaved) / 1000; if (age < 2) pText('SAVED', W - SL, ST + 2, 150 * Math.min(1, 2 - age), 'right', 1, true);
 }
-export function drawMeters(v) {   // the burst dots and the ability
-  const { W, H, ST, SL, SB, cx, t, cols } = v;
-  const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(SL + i * 4 + x, ST + 9, on ? 220 : 60); }
-  { const ready = (P.actReady || 0) <= simTime; pText('E ' + abilityName(), SL, ST + 12, ready ? 170 : 70, 'left', 1, true); }
+// top left, you: your hearts; how you are moving (speed, and the burst you have left); your ability, on its own key.
+// then the tide on you, air and the hunt, only when they matter. labels dim, values bright, and every row keeps its place whether or not the others show
+export const YOU_ROW = 8;
+export function drawYou(v) {
+  const { SL, ST, t } = v, row = k => ST + 2 + k * YOU_ROW, slots = Math.max(3, P.hp);
+  for (let i = 0; i < slots; i++) pText('♥', SL + i * 5, row(0), i < P.hp ? 230 : 55, 'left', 1, true);   // the hearts you have, and the ones you've lost
+  if (P.fed) pText('+' + P.fed, SL + slots * 5 + 2, row(0), 150, 'left', 1, true);
+  const spd = P.speed.toFixed(1), bx = SL + 32; pText(spd, SL, row(1), 230, 'left', 1, true); pText('M/S', SL + spd.length * 4 + 2, row(1), 120, 'left', 1, true);
+  const sta = P.sta ?? 1; if (sta < 0.999 || sprinting()) for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 3; x++) pDot(bx + i * 4 + x, row(1) + 2, on ? 220 : 60); }   // the burst left
+  { const ready = (P.actReady || 0) <= simTime, key = document.body.classList.contains('touch') ? '◆' : kn('ability');
+    pText(key, SL, row(2), ready ? 230 : 80, 'left', 1, true); pText(abilityName(), SL + [...key].length * 4 + 4, row(2), ready ? 170 : 70, 'left', 1, true); }
+  let k = 3;
+  if (readouts.tide) pText(readouts.tide, SL, row(k++), 200, 'left', 1, true);   // drift, under your own speed: the two are different things
+  if ((P.air ?? 1) < 0.999) { const low = P.air < 0.25, y = row(k++); pText('AIR', SL, y, low ? 150 + 105 * (0.5 + 0.5 * Math.sin(t * 8)) : 170, 'left', 1, true); for (let i = 0; i < 8; i++) { const on = i < Math.ceil(P.air * 8); for (let x = 0; x < 3; x++) pDot(SL + 14 + i * 4 + x, y + 2, on ? 220 : 60); } }   // lungs
+  if (huntHeat > 0) { const n = Math.ceil(huntHeat * 3); pText('HUNTED ' + '◆'.repeat(n) + '·'.repeat(3 - n), SL, row(k++), 150 + 105 * (0.5 + 0.5 * Math.sin(t * 6)), 'left', 1, true); }   // stars: break contact to drain them
 }
 export function drawDepthGauge(v) {   // surface at the top, the bottom of the bay below, you between; rise and dive chevrons beside you
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  { const gx = SL, g0 = Math.round(H * 0.34), gh = Math.max(16, Math.round(H * 0.3)), floor = Math.max(1, -floorAt(P.pos.x, P.pos.z)), at = THREE.MathUtils.clamp(-P.pos.y / floor, 0, 1);   /* depth gauge: surface at the top, the bottom of the bay below, you between */
+  { const gx = SL, g0 = Math.round(H * 0.34), gh = Math.max(16, Math.min(Math.round(H * 0.3), chartBox(v).left ? H - chartBox(v).MS - SB - 30 - g0 : H)),   /* on a phone, clear of the chart below it */ floor = Math.max(1, -floorAt(P.pos.x, P.pos.z)), at = THREE.MathUtils.clamp(-P.pos.y / floor, 0, 1);   /* depth gauge: surface at the top, the bottom of the bay below, you between */
     for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
     const py = g0 + Math.round(at * gh); for (let x = -1; x <= 2; x++) { pDot(gx + x, py, 255); pDot(gx + x, py + 1, 255); }
+    pText(Math.max(0, -P.pos.y).toFixed(1) + 'M', gx + 5, py - 2, 230, 'left', 1, true);   // how deep you are rides beside you
+    pText('FLOOR', gx - 1, g0 + gh + 4, 110, 'left', 1, true); pText(readouts.floor + 'M', gx + 23, g0 + gh + 4, 190, 'left', 1, true);   // and the bottom under you, at the bottom
     const climbIn = P.climbIn || 0, fl = (t * 2.2) % 1;   // rise and dive: chevrons flowing up or down the gauge, beside you
-    if (Math.abs(climbIn) > 0.1) for (let k = 0; k < 2; k++) { const up = climbIn > 0, d = 4 + (k + fl) * 5; pText(up ? '▲' : '▼', gx + 8, up ? py - 6 - d : py - 2 + d, 240 * Math.min(1, Math.abs(climbIn) * 1.5) * (1 - 0.7 * (k + fl) / 2), 'center'); } }
-}
-export function drawVitals(v) {   // air, when you need it, and how hard you are hunted
-  const { W, H, ST, SL, SB, cx, t, cols } = v;
-  if ((P.air ?? 1) < 0.999) { const low = P.air < 0.25; pText('AIR', SL, ST + 19, low ? 150 + 105 * (0.5 + 0.5 * Math.sin(t * 8)) : 170, 'left', 1, true); for (let i = 0; i < 8; i++) { const on = i < Math.ceil(P.air * 8); for (let x = 0; x < 3; x++) pDot(SL + 14 + i * 4 + x, ST + 21, on ? 220 : 60); } }   // lungs
-  if (huntHeat > 0) { const n = Math.ceil(huntHeat * 3); pText('HUNTED ' + '◆'.repeat(n) + '·'.repeat(3 - n), SL, ST + ((P.air ?? 1) < 0.999 ? 26 : 19), 150 + 105 * (0.5 + 0.5 * Math.sin(t * 6)), 'left', 1, true); }   // stars: break contact to drain them
+    if (Math.abs(climbIn) > 0.1) for (let k = 0; k < 2; k++) { const up = climbIn > 0, d = 9 + (k + fl) * 5; pText(up ? '▲' : '▼', gx + 8, up ? py - 6 - d : py - 2 + d, 240 * Math.min(1, Math.abs(climbIn) * 1.5) * (1 - 0.7 * (k + fl) / 2), 'center'); } }
 }
 export function drawAimMark(v) {   // where the mouse is steering you: faint, never faded
   const { W, H, ST, SL, SB, cx, t, cols } = v;
@@ -193,7 +202,7 @@ export function drawBurstStreaks(v) {   // burst: streaks rushing out from the m
   if (settings.speedFx && (P.burstMix || 0) > 0.02) for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2 + hash2(i, 7) * 0.15, u = (t * 1.8 + hash2(i, 3)) % 1, r = 0.38 + u * 0.62, ca = Math.cos(a), sa = Math.sin(a);
     for (let k = 0; k < 7; k++) { const rr = r + k * 0.022; pDot(cx + ca * rr * W * 0.5, (H >> 1) + sa * rr * H * 0.5, 240 * P.burstMix * (0.35 + 0.65 * u) * (k + 2) / 8); } }
 }
-export function drawCompassTape(v) {   // the compass tape, its lubber line, and the goal on it
+export function drawCompassTape(v) {   // top middle, where you are going: the compass tape, the goal on it, and the place you're in
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   const hdg = headingDeg(), half = Math.max(24, Math.floor(W * 0.17)), ppd = half / 60;   // compass
   for (const [deg, name] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W'], [45, '·'], [135, '·'], [225, '·'], [315, '·']]) { const rel = ((deg - hdg + 540) % 360) - 180; if (Math.abs(rel) <= 60) pText(name, cx + Math.round(rel * ppd), ST + 9, name === '·' ? 110 : 190, 'center', 1, true); }
@@ -202,18 +211,20 @@ export function drawCompassTape(v) {   // the compass tape, its lubber line, and
   if (goal) { const raw = ((goal.bearing - hdg + 540) % 360) - 180, off = Math.abs(raw) > 52, gx = cx + Math.round(THREE.MathUtils.clamp(raw, -52, 52) * ppd);
     const label = goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + 'KM' : Math.round(goal.dist / 10) * 10 + 'M';
     pText(off ? (raw > 0 ? '►' : '◄') : '◆', gx, ST + 1, 255, 'center', 1, true); pText(label, gx + (raw > 0 ? -4 : 4), ST + 1, 190, raw > 0 ? 'right' : 'left', 1, true); }
+  if (readouts.place) pText(readouts.place, cx, ST + 19, 150, 'center', 1, true);   // where you are, under which way you are going
 }
 export function drawPhotoPrompt(v, introK) {   // a moment worth keeping
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  { const spot = photoSpot(); if (spot) { pGain = 1; pText(`◆ ${pad.active ? 'R3' : 'O'} PHOTO`, W - SL, ST + 9 + ((performance.now() - lastSaved) / 1000 < 2 ? 7 : 0), 130 + 40 * Math.sin(t * 2), 'right', 1, true); pGain = hudGain * introK; } }   /* a moment worth keeping */
+  { const spot = photoSpot(); if (spot) { pGain = 1; pText(`◆ ${pad.active ? 'R3' : 'O'} PHOTO`, W - SL, ST + 2 + ((performance.now() - lastSaved) / 1000 < 2 ? 8 : 0), 130 + 40 * Math.sin(t * 2), 'right', 1, true); pGain = hudGain * introK; } }   /* a moment worth keeping */
 }
 export function drawWarning(v) {   // DIVE, or what is hunting you
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  const ow = opa(warn), failW = pFail; pFail = 0; if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, ST + 20, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center'); pFail = failW;
+  const ow = opa(warn), failW = pFail; pFail = 0; if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, ST + 28, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center'); pFail = failW;
 }
-export function drawMinimap(v) {   // the chart in the corner, and the live NOAA readings over it
+export const chartBox = v => ({ MS: Math.max(22, Math.min(46, Math.floor(v.H * 0.2))), left: document.body.classList.contains('touch') });   // the chart's size, and which corner
+export function drawChart(v) {   // a bottom corner, the water around you: the chart, and the live NOAA readings over it. on a phone the buttons have the right, so it sits left
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  { const MS = Math.max(22, Math.min(46, Math.floor(H * 0.2))), mx = W - MS - SL, my = H - MS - SB, span = 3000;
+  { const { MS, left } = chartBox(v), mx = left ? SL : W - MS - SL, my = H - MS - SB, span = 3000, ax = left ? mx : mx + MS, al = left ? 'left' : 'right';
     if (!panel.mini || panel.miniS !== MS || t - (panel.miniT || 0) > 0.5) { panel.mini = Bay.chart(P.pos.x, P.pos.z, span, MS, panel.mini && panel.miniS === MS ? panel.mini : undefined); panel.miniS = MS; panel.miniT = t; panel.miniC = [P.pos.x, P.pos.z]; }
     const [mcx, mcz] = panel.miniC;
     for (let j = 0; j < MS; j++) for (let i = 0; i < MS; i++) pDot(mx + i, my + j, panel.mini[j * MS + i] * 0.85);
@@ -222,19 +233,23 @@ export function drawMinimap(v) {   // the chart in the corner, and the live NOAA
     const [px2, py2] = Bay.toChart(P.pos.x, P.pos.z, mcx, mcz, span, MS), hx = -Math.sin(P.yaw), hz = -Math.cos(P.yaw);
     if (Math.sin(t * 6) > -0.4) { pDot(mx + px2, my + py2, 255); pDot(mx + px2 + 1, my + py2, 255); pDot(mx + px2, my + py2 + 1, 255); pDot(mx + px2 + 1, my + py2 + 1, 255); }
     for (let k = 2; k <= 4; k++) pDot(mx + px2 + 0.5 + hx * k, my + py2 + 0.5 + hz * k, 200);
-    const L = Bay.live; if (L.ok) { const kt = ((P.current || 0) * 1.944).toFixed(1), tide = L.level != null ? (L.level >= 0 ? '+' : '') + L.level.toFixed(1) + 'M' + (L.rising == null ? '' : L.rising ? '▲' : '▼') : '';
-      pText('NOAA LIVE', mx + MS, my - 20, 150, 'right', 1, true); pText([tide, L.temp != null ? L.temp.toFixed(0) + '°C' : ''].filter(Boolean).join(' '), mx + MS, my - 14, 190, 'right', 1, true); pText(kt + 'KT', mx + MS, my - 8, 160, 'right', 1, true); } }
+    const L = Bay.live; if (L.ok) { const level = L.level != null ? 'WATER ' + (L.level >= 0 ? '+' : '') + L.level.toFixed(1) + 'M' + (L.rising == null ? '' : L.rising ? '▲' : '▼') : '';   // the current on you is in your own readout, in M/S, once
+      pText('NOAA LIVE', ax, my - 15, 110, al, 1, true); pText([level, L.temp != null ? L.temp.toFixed(0) + 'C' : ''].filter(Boolean).join('  '), ax, my - 8, 190, al, 1, true); } }
 }
-export function drawCaptions(v, introK) {   // what you would hear, shown on the side it came from
+export function drawCaptions(v, introK) {   // what you would hear, above the story line, leaning to the side it came from
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   pFail = 0; if (captions.size) { pGain = 1; const nowMs = performance.now(), sides = { l: 0, r: 0, c: 0 };   /* what you'd hear, shown on the side it came from */
-    const shown = new Set(); for (const [k, c] of captions) { const left = c.until - nowMs; if (left <= 0) { captions.delete(k); continue; } const side = panAt(c.x, c.z), s = side < -0.3 ? 'l' : side > 0.3 ? 'r' : 'c', v = 170 * Math.min(1, left / 400); if (shown.has(s + c.text)) continue; shown.add(s + c.text);   /* one line per sound per side, however many boats */
-      if (s === 'l') pText('◄ ' + c.text, SL, Math.round(H * 0.42) + 10 * sides.l++, v, 'left', 1, true); else if (s === 'r') pText(c.text + ' ►', W - SL, Math.round(H * 0.42) + 10 * sides.r++, v, 'right', 1, true); else pText(c.text, cx, ST + 30 + 8 * sides.c++, v, 'center', 1, true); }
+    const shown = new Set(); for (const [k, c] of captions) { const left = c.until - nowMs; if (left <= 0) { captions.delete(k); continue; } const side = panAt(c.x, c.z), s = side < -0.3 ? 'l' : side > 0.3 ? 'r' : 'c', a = 170 * Math.min(1, left / 400); if (shown.has(s + c.text)) continue; shown.add(s + c.text);   /* one line per sound per side, however many boats */
+      const y = storyTop(v) - 10 - 8 * sides[s]++, lean = Math.round(v.W * 0.18);
+      if (s === 'l') pText('◄ ' + c.text, cx - lean, y, a, 'center', 1, true); else if (s === 'r') pText(c.text + ' ►', cx + lean, y, a, 'center', 1, true); else pText(c.text, cx, y, a, 'center', 1, true); }
     pGain = hudGain * introK; }
 }
 export function drawKeyHint(v) {   // the key hints along the bottom, until they settle away
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  const ob = opa(bl); if (ob > 0.01 && W > 120) pText(bl.textContent, SL, H - 7 - SB, 120 * ob, 'left', 1, true);
+  // in the space beside the chart: as many keys to a row as fit, the rows stacking up from the bottom
+  const ob = opa(bl); if (ob > 0.01 && W > 120) { const { MS, left } = chartBox(v), x0 = left ? SL + MS + 6 : SL, room = Math.floor((W - SL * 2 - MS - 6) / 4), rows = [];
+    for (const part of bl.textContent.split(/\s{3,}|\s·\s/)) { const last = rows[rows.length - 1]; if (last && last.length + 3 + part.length <= room) rows[rows.length - 1] += '   ' + part; else rows.push(part); }
+    rows.forEach((r, i) => pText(r, x0, H - 7 - SB - (rows.length - 1 - i) * 7, 120 * ob, 'left', 1, true)); }
 }
 export function drawTouchControls(v) {   // the round buttons and the drag stick, as dots
   const { W, H, ST, SL, SB, cx, t, cols } = v;
@@ -245,10 +260,13 @@ export function drawTouchControls(v) {   // the round buttons and the drag stick
     if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }
   }
 }
+export const storyRoom = v => { const { MS, left } = chartBox(v); return left ? Math.floor((v.W - 2 * (v.SL + MS + 4)) / 6) : Infinity; };   // on a phone the chart has one bottom corner and the buttons the other
+export function storyLayout(v) { const ts = settings.bigText && v.W > 200 ? 2 : 1, b = storyEl.querySelector('b'), label = b ? b.textContent : ''; return { ts, label, lines: opa(storyEl) > 0.01 ? wrap(storyEl.textContent.slice(label.length), Math.floor(Math.min(v.cols, 64, storyRoom(v)) / ts)) : [] }; }
+export const storyTop = v => { const { ts, label, lines } = storyLayout(v); return v.H - 14 - v.SB - lines.length * 10 * ts - (label && lines.length ? 11 : 0); };   // the top of the story line, or where it would start
 export function drawStoryLine(v, oHelp) {   // the story line at the bottom (hidden while a chapter card is up)
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   const os = opa(storyEl) * (1 - opa($('chapter'))) * (1 - oHelp) * (mapOpen || menu ? 0 : 1); if (os > 0.01) {   // story line (hidden while a chapter card is up)
-  const ts = settings.bigText && W > 200 ? 2 : 1, b = storyEl.querySelector('b'), label = b ? b.textContent : '', lines = wrap(storyEl.textContent.slice(label.length), Math.floor(Math.min(cols, 64) / ts));
+  const { ts, label, lines } = storyLayout(v);
   let y = H - 14 - SB - lines.length * 10 * ts; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center', ts); y += 10 * ts; } }
 }
 export function drawHelp(v, oHelp) {   // how to swim: measured first, centred when there is room, shrunk when there is not

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { toLL, toXZ } from '../lib/geo.js?v=__BUILD__';
+import { toXZ } from '../lib/geo.js?v=__BUILD__';
 import { MOBILE } from '../core/env.js?v=__BUILD__';
 import { saveSettings, settings } from '../core/settings.js?v=__BUILD__';
 import { fwdOf } from '../core/space.js?v=__BUILD__';
@@ -20,7 +20,7 @@ import { camLook, camPos, lastFloor, paused, tideArrow } from '../app/frame.js?v
 //  HUD  —  readouts, compass tape, minimap, fast-travel map, story text
 // ═══════════════════════════════════════════════════════════════════
 export const $ = id => document.getElementById(id);
-export const tl = $('tl'), tr = $('tr'), bl = $('bl'), warn = $('warn'), storyEl = $('story'), flash = $('flash'), help = $('help'), mapEl = $('map');
+export const bl = $('bl'), warn = $('warn'), storyEl = $('story'), flash = $('flash'), help = $('help'), mapEl = $('map');
 export const mini = $('mini'), mctx = mini.getContext('2d'), cmp = $('compass'), cctx = cmp.getContext('2d'), big = $('bigmap'), bctx = big.getContext('2d');
 export let sayTimer = 0, sayEndT = 0;   // how long the line on screen has left; when the last one went
 export const tipQueue = [];
@@ -91,17 +91,16 @@ export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0
   goalBeam.scale.set(2 + d * 0.02, Math.max(12, -f + 30), 1);
 }
 // the readouts, the place you're in, the warning, the compass marks, and the story line's countdown: once a frame
+export const readouts = { place: '', floor: '0', tide: '' };   // worked out here, laid out by the panel (src/ui/panel.js)
 export let nearestPoi = '', poiTimer = 0;
 export function stepHud(dt) {
-  const f = lastFloor / vex, [lat, lon] = toLL(P.pos.x, P.pos.z);
-  const tide = (P.current || 0) > 0.15 ? `  TIDE ${P.current.toFixed(1)}${tideArrow()}` : '';
-  tl.textContent = `DOWN ${Math.max(0, -P.pos.y).toFixed(1)}M  FLOOR ${(-f).toFixed(0)}M  ${P.speed.toFixed(1)}M/S${tide}  ${'♥'.repeat(P.hp)}${P.fed ? '  +' + P.fed : ''}`;
+  readouts.floor = (-lastFloor / vex).toFixed(0); readouts.tide = (P.current || 0) > 0.15 ? `TIDE ${P.current.toFixed(1)}${tideArrow()}` : '';
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }
     for (const w of world.wrecks) { const d = Math.hypot(w.x - P.pos.x, w.z - P.pos.z); if (d < 22 && started && LORE[w.name]) tip('lore:' + w.name, () => LORE[w.name], w.name.toUpperCase()); if (d < 60) { best = w.name; if (started) discover(w.name, w.x, w.z); } }
     nearestPoi = best; }
-  tr.textContent = nearestPoi;
+  readouts.place = nearestPoi;
   const { b, d } = nearestBoat(); const danger = b && d < (b.type === BOAT_TYPES.ship ? 220 : 60) && P.pos.y > -2.5;
   const hunter = wild.find(w => w.hunting);
   const L = hunter && hunter.lunge, tele = L ? (L.phase === 'wind' ? `${L.side < 0 ? '◄' : '►'} ${L.side < 0 ? 'LEFT' : 'RIGHT'} · wait` : L.phase === 'lunge' ? 'TURN' : hunter.sp.name.toUpperCase()) : '';
