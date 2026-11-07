@@ -76,7 +76,7 @@ of that, and dev mode never touches your save. The page's security policy allows
 
 ## Pictures and models
 
-`npm run check` is the first stop for tuning: it measures motion (tail beats and Strouhal numbers against published swimming studies), the camera's framing, the sound's spectrum (against ambient-ocean noise curves, and what fear should do to it), faults in the picture, and what a frame costs, and prints one line per fault. Change a number in `src/core/tune.js` and run it again; look at a picture only when a number can't say what is wrong.
+`npm run check` (part of `npm test`) is the first stop for tuning: it checks every model in both views and every frame, and measures motion (tail beats and Strouhal numbers against published swimming studies), the camera's framing, the sound's spectrum (against ambient-ocean noise curves, and what fear should do to it), faults in the picture, and what a frame costs, and prints one line per fault. Change a number in `src/core/tune.js` and run it again; look at a picture only when a number can't say what is wrong.
 
 `npm run shot` takes every scene (the title, swimming, a burst, the surface, night, the menus, photo mode, a phone) from the same seed into `.shots/`, with all of them on one `sheet.png`. `node tools/shot.mjs surface burst` takes just those, `--list` shows them, and `--at 27.62,-82.65,8 --clock 22 --js "P.hp = 1"` shoots any spot at any hour. It says so if the page logged an error or the canvas doesn't fit the window.
 

@@ -9,7 +9,7 @@ import { WU } from '../render/materials.js?v=__BUILD__';
 import { ENV, applyEnv, fogReach } from '../world/conditions.js?v=__BUILD__';
 import { WRECKS, floorAt } from '../world/geo.js?v=__BUILD__';
 import { fans, grass, rocks } from '../world/seabed.js?v=__BUILD__';
-import { updateClipmap } from '../world/seafloor.js?v=__BUILD__';
+import { uBottomFade, updateClipmap } from '../world/seafloor.js?v=__BUILD__';
 import { BOAT_TYPES, boatMat, skywayFrame, structMat, world } from '../world/structures.js?v=__BUILD__';
 import { SPECIES, creatureMesh, speciesById } from '../actors/creatures.js?v=__BUILD__';
 import { feverMesh } from '../actors/fever.js?v=__BUILD__';
@@ -67,30 +67,31 @@ export function applySpecimen() {}   // each frame sets its own conditions as it
 // the conditions a frame shows: what is really happening, then anything you set for all frames, then anything set for this one
 export const CONTROLS = [['hour', 'Hour', 0, 24, 0.25], ['rain', 'Rain', 0, 1, 0.05], ['cloud', 'Cloud', 0, 1, 0.05], ['wind', 'Wind (m/s)', 0, 28, 0.5], ['windDir', 'Wind from (deg)', 0, 359, 5], ['tide', 'Tide (m)', -1.2, 1.2, 0.05], ['clarity', 'Murk', 0, 1, 0.05]];
 export const frameEnv = i => ({ hour: 12, ...ENV, ...specimen.all, ...(specimen.frames[i] || {}) });
-function useEnv(i) { const e = frameEnv(i), a = (e.hour - 6) / 12 * Math.PI, el = Math.sin(a); applyEnv(e); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25) * (1 - 0.6 * e.cloud); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); const place = !!specimen.item?.place; WU.uFogD.value = (place ? 0.018 * (specimen.radius > 200 ? 25 / specimen.radius : 1) * fogReach(e) : 0.25 / Math.max(specimen.radius, 1) / 3); WU.uFogB.value = 0; }   // clear water at noon: a model is judged, not hidden
-const viewsOf = item => item?.views || (item?.place ? PLACE : ALL_FOUR);
+function useEnv(i) { surface.visible = !specimen.item?.place || specimen.item.group === 'weather';   /* a place is judged by what is in it; the sea from above would only hide it */ const e = frameEnv(i), a = (e.hour - 6) / 12 * Math.PI, el = Math.sin(a); applyEnv(e); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25) * (1 - 0.6 * e.cloud); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); const place = !!specimen.item?.place; WU.uFogD.value = (place ? 0.55 * fogReach(e) : 0.25) / Math.max(specimen.dist, 0.1);   /* fog scaled to this frame's own distance, so the subject always shows and the murk control still means something */ WU.uFogB.value = 0; }   // clear water at noon: a model is judged, not hidden
+export const viewsOf = item => item?.views || (item?.place ? PLACE : ALL_FOUR);
 const HEAD_PX = 54, CTRL_PX = 190;   // the page's own header
 // the grid fits how many views this model has: one fills the page, two or three share a row, four make a square. in CSS pixels from the top left
-const layout = (i, n) => { const on = listEl && listEl.style.display !== 'none', left = on ? LIST_PX : 0, W = innerWidth - left - (on ? CTRL_PX : 0), H = innerHeight - HEAD_PX, cols = n === 4 ? 2 : n, rows = n === 4 ? 2 : 1, w = W / cols, h = H / rows; return { x: left + (i % cols) * w, y: HEAD_PX + Math.floor(i / cols) * h, w, h }; };
+export const layout = (i, n) => { const on = listEl && listEl.style.display !== 'none', left = on ? LIST_PX : 0, W = innerWidth - left - (on ? CTRL_PX : 0), H = innerHeight - HEAD_PX, cols = n === 4 ? 2 : n, rows = n === 4 ? 2 : 1, w = W / cols, h = H / rows; return { x: left + (i % cols) * w, y: HEAD_PX + Math.floor(i / cols) * h, w, h }; };
 // close enough that this model fills this panel from this side, measured from its own box, so a long thin thing isn't lost in a square
 function fitCamera(yaw, pitch, aspect) {
   const { at, half } = specimen, t = Math.tan(THREE.MathUtils.degToRad(FOV / 2)); _d.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
   camera.position.copy(at).addScaledVector(_d, 1); camera.up.set(0, 1, 0); camera.lookAt(at); camera.updateMatrixWorld(); _r.setFromMatrixColumn(camera.matrixWorld, 0); _u.setFromMatrixColumn(camera.matrixWorld, 1);
-  let need = 0, deep = 0; for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) { _c.set(sx * half.x, sy * half.y, sz * half.z); need = Math.max(need, Math.abs(_c.dot(_r)) / (t * aspect), Math.abs(_c.dot(_u)) / t); deep = Math.max(deep, _c.dot(_d)); }
-  const dist = Math.max(need * 1.08 + deep * 0.75, deep * 1.15); camera.near = Math.max(0.005, dist * 0.02); camera.far = Math.max(30000, dist * 4); camera.updateProjectionMatrix(); camera.position.copy(at).addScaledVector(_d, dist); camera.lookAt(at);   // the lens's near limit is for a bay; a clam is closer
+  let need = 0, deep = 0; for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) { _c.set(sx * half.x, sy * half.y, sz * half.z); const near = _c.dot(_d); need = Math.max(need, Math.abs(_c.dot(_r)) / (t * aspect) + near, Math.abs(_c.dot(_u)) / t + near); deep = Math.max(deep, near); }   // every corner of its box inside the frame, nearest ones counted for how much larger they look
+  const dist = Math.max(need * 1.14, deep * 1.15); specimen.dist = dist;   // a little room: bodies and blades move beyond their resting shape
+  camera.near = Math.max(0.005, dist * 0.02); camera.far = Math.max(30000, dist * 4); camera.updateProjectionMatrix(); camera.position.copy(at).addScaledVector(_d, dist); camera.lookAt(at);   // the lens's near limit is for a bay; a clam is closer
 }
 // In game: the bay's own lighting, through the dot matrix. a little fill so the dark side of a model still shows
 export function renderSpecimenViews() {
   const rt = lowRT, gw = rt.width, gh = rt.height, k = gw / innerWidth, names = viewsOf(specimen.item); rt.scissorTest = true; camera.fov = FOV; WU.uRaw.value = 0; WU.uFill.value = 0;
   renderer.setClearColor(0x000000, 1); rt.viewport.set(0, 0, gw, gh); rt.scissor.set(0, 0, gw, gh); renderer.setRenderTarget(rt); renderer.clear();
   names.forEach((name, i) => { const b = layout(i, names.length), x = Math.round(b.x * k), w = Math.round(b.w * k) - 1, h = Math.round(b.h * k) - 1, y = gh - Math.round((b.y + b.h) * k); rt.viewport.set(x, y, w, h); rt.scissor.set(x, y, w, h); renderer.setRenderTarget(rt);
-    camera.aspect = w / h; camera.updateProjectionMatrix(); useEnv(i); fitCamera(...VIEW[name], camera.aspect); surface.position.set(camera.position.x, 0, camera.position.z); rainFall.position.copy(surface.position); renderer.render(scene, camera); });
+    camera.aspect = w / h; camera.updateProjectionMatrix(); fitCamera(...VIEW[name], camera.aspect); useEnv(i); surface.position.set(camera.position.x, 0, camera.position.z); rainFall.position.copy(surface.position); renderer.render(scene, camera); });
   applyEnv(); rt.viewport.set(0, 0, gw, gh); rt.scissor.set(0, 0, gw, gh); rt.scissorTest = false; renderer.setRenderTarget(rt);
 }
 // Raw: the model itself, straight to the screen in studio light
 export function renderSpecimenRaw() {
   const names = viewsOf(specimen.item), H = innerHeight; renderer.setRenderTarget(null); renderer.setScissorTest(true); renderer.setViewport(0, 0, innerWidth, H); renderer.setScissor(0, 0, innerWidth, H); renderer.setClearColor(0x161b21, 1); renderer.clear(); camera.fov = FOV; WU.uRaw.value = 1; WU.uFill.value = 0;
-  names.forEach((name, i) => { const b = layout(i, names.length); renderer.setViewport(b.x, H - b.y - b.h, b.w - 1, b.h - 1); renderer.setScissor(b.x, H - b.y - b.h, b.w - 1, b.h - 1); camera.aspect = b.w / b.h; camera.updateProjectionMatrix(); useEnv(i); fitCamera(...VIEW[name], camera.aspect); surface.position.set(camera.position.x, 0, camera.position.z); rainFall.position.copy(surface.position); renderer.render(scene, camera); });
+  names.forEach((name, i) => { const b = layout(i, names.length); renderer.setViewport(b.x, H - b.y - b.h, b.w - 1, b.h - 1); renderer.setScissor(b.x, H - b.y - b.h, b.w - 1, b.h - 1); camera.aspect = b.w / b.h; camera.updateProjectionMatrix(); fitCamera(...VIEW[name], camera.aspect); useEnv(i); surface.position.set(camera.position.x, 0, camera.position.z); rainFall.position.copy(surface.position); renderer.render(scene, camera); });
   applyEnv(); renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, H); renderer.setClearColor(0x000000, 1); WU.uRaw.value = 0;
 }
 // the header and each panel's name, in plain type above whichever view is on
@@ -124,7 +125,7 @@ function renderList() { if (!listEl) return; renderLabels(); renderControls(); f
 export function stepSpecimenList(d) { const i = SPECIMENS.indexOf(specimen.item); showSpecimen(SPECIMENS[(i + d + SPECIMENS.length) % SPECIMENS.length].id); }
 const BTN = 'display:block;width:100%;text-align:left;background:none;border:0;padding:2px 6px;border-radius:3px;cursor:pointer;font:inherit;color:#7f93a6';
 export function enterSpecimens() {
-  specimen.on = true; $('title').classList.add('gone'); document.title = 'BRACKISH models'; setDotPitch(3);
+  specimen.on = true; uBottomFade.value = 0; $('title').classList.add('gone'); document.title = 'BRACKISH models'; setDotPitch(3);
   listEl = document.createElement('nav'); listEl.setAttribute('style', `position:fixed;left:0;top:0;bottom:0;width:${LIST_PX}px;box-sizing:border-box;overflow:auto;padding:10px;background:#05080c;border-right:1px solid #1c2a38;font:12px/1.5 ui-monospace,monospace;z-index:20`);
   const tool = (fn) => { const b = document.createElement('button'); b.setAttribute('style', BTN + ';border:1px solid #1c2a38;margin-bottom:4px'); b.onclick = () => { fn(); renderList(); }; listEl.append(b); return b; };
   viewBtn = tool(() => { specimen.raw = !specimen.raw; }); wireBtn = tool(() => setWire(!specimen.wire)); turnBtn = tool(() => setTurning(!specimen.turning));

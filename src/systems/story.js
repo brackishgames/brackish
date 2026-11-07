@@ -38,7 +38,7 @@ export const CHAPTERS = [
   { title: 'VI · THE POD', species: 'dolphin', start: [27.6185, -82.66117], pair: true, goal: () => { const m = wild.find(o => o.partner); return m && m.pos.distanceTo(P.pos) > 25 ? [m.pos.x, m.pos.z] : null; },
     lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and one of the pod has come to swim beside you.', 'Swim close beside it, near the top. Burst, and you leap together. Three times.'] },
   { title: 'VII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
-    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet know you before they see you.', 'Feed. E to lunge. They scatter. Eight will do.'] },
+    lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. A and D, in turn, are your tail. Rhythm is speed.', 'The mullet feel you coming. Slow, from below, until you are close. E strikes. Eight will do.'] },
   { title: 'VIII · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
     lines: ['You are a manatee. Nothing here is fast except the boats.', 'The power plant at Apollo Beach runs warm water into the bay, and in winter that is the only warm water there is.', 'Get there. Stay deep when the water hums.'] },
   { title: 'IX · DAWN', feverAt: 'hole', species: 'cownose', start: [27.60629, -82.75359], surface: true, clock: 5.6,
@@ -48,7 +48,7 @@ export const CHAPTERS = [
 ];
 export const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
-    this.ch = i; document.body.classList.toggle('free', !!CHAPTERS[i].free || DEV); renderHelpKeys(); this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
+    this.ch = i; document.body.classList.toggle('free', !!CHAPTERS[i].free || DEV); renderHelpKeys(); this.line = 0; this.followT = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter'), run = this.run = (this.run || 0) + 1, current = () => run === this.run;   // a newer start supersedes this one, and its leftovers do nothing
     const arrive = () => { if (!current()) return;
       if (c.feverAt === 'hole') { fever.seg = 0; fever.t = 0; fever.moving = false; fever.c.set(FEVER_PATH[0][0], fever.c.y, FEVER_PATH[0][1]); }   // the fever gathers in the hole off Egmont (III), and is back there in the spring (IX)

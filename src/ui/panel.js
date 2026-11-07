@@ -14,7 +14,7 @@ import { Bay, TILES, floorAt, loadmsg } from '../world/geo.js?v=__BUILD__';
 import { clockText, day } from '../world/time.js?v=__BUILD__';
 import { P, abilityName, pulses } from '../actors/player.js?v=__BUILD__';
 import { huntHeat } from '../actors/wildlife.js?v=__BUILD__';
-import { captions, sideOf } from '../systems/audio.js?v=__BUILD__';
+import { audio, audioOn, captions, sideOf } from '../systems/audio.js?v=__BUILD__';
 import { aim, kn, menu, menuItems, mouseSteering, pad, photo, photoSpot } from '../systems/input.js?v=__BUILD__';
 import { lastSaved } from '../systems/save.js?v=__BUILD__';
 import { startedAt, story } from '../systems/story.js?v=__BUILD__';
@@ -312,9 +312,16 @@ export function drawStoryLine(v, oHelp) {   // the story line at the bottom (hid
   let y = H - 14 - SB - lines.length * 10 * ts; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center', ts); y += 10 * ts; } }
 }
 // every card on this display is built the same: a frame of fine dots, a title and a rule, then its rows, with the head unit's status beside the title and the keys under the frame
+// the deck's spectrum analyzer: the bay's real sound, in bands, each with a peak dot that hangs and falls. nothing here is decoration: it is what you are hearing
+export const spectrum = { bins: null, peaks: new Float32Array(20), data: null };
+export function drawSpectrum(x, y, w, h, a = 1) { const n = 20, gap = Math.max(1, Math.floor(w / n)), P_ = spectrum.peaks; let levels = null; const tap = audio?.tap;
+  if (tap && audioOn) { spectrum.data ??= new Uint8Array(tap.frequencyBinCount); tap.getByteFrequencyData(spectrum.data); const hz = audio.ac.sampleRate / tap.fftSize; levels = Array.from({ length: n }, (_, i) => { const lo = 40 * Math.pow(250, i / n), hi = 40 * Math.pow(250, (i + 1) / n); let m = 0; for (let k = Math.floor(lo / hz); k <= hi / hz && k < spectrum.data.length; k++) m = Math.max(m, spectrum.data[k]); return Math.pow(m / 255, 1.4); }); }
+  for (let i = 0; i < n; i++) { const lv = levels ? levels[i] : 0, top = Math.round(lv * h); P_[i] = Math.max(lv, P_[i] - fadeDt * 0.5); const bx = x + i * gap; for (let k = 0; k < h; k += 2) { const on = k < top; for (let c = 0; c < gap - 1; c++) pDot(bx + c, y + h - k, (on ? 200 : 28) * a); } const py = Math.round(P_[i] * h); if (py > 0) for (let c = 0; c < gap - 1; c++) pDot(bx + c, y + h - py - 1, 255 * a); } }
+// the indicator lamps: lit when that feed is really connected
+export const LAMPS = () => [['NOAA', !!Bay.live.ok], ['WX', !!ENV.live], ['TIDE', Bay.live.rising == null ? null : Bay.live.rising ? '▲' : '▼']];
+export function drawLamps(x, y, a = 1) { for (const [name, state] of LAMPS()) { const lit = !!state; pText(name, x, y, (lit ? 220 : 60) * a, 'left', 1, true); x += name.length * 4 + 1; pText(typeof state === 'string' ? state : '·', x, y, (lit ? 255 : 50) * a, 'left', 1, true); x += 9; } return x; }
 export function cardFrame(bx, by, bw, bh, a = 1) { for (let x = bx; x <= bx + bw; x += 2) { pDot(x, by, 70 * a); pDot(x, by + bh, 70 * a); } for (let y = by; y <= by + bh; y += 2) { pDot(bx, y, 70 * a); pDot(bx + bw, y, 70 * a); } }
-export function cardHead(title, ix, by, bx, bw, a = 1) { pText(title, ix, by + 6, 240 * a); pText(statusLine(), bx + bw - 7, by + 7, 140 * a, 'right', 1, true); for (let x = ix; x < bx + bw - 7; x += 2) pDot(x, by + 16, 90 * a); return by + 22; }
-export const statusLine = () => `${clockText(day.hour)}${ENV.live ? '  ' + (ENV.rain > 0 ? 'RAIN' : ENV.cloud > 0.6 ? 'OVERCAST' : 'CLEAR') : ''}`;   // the clock on the stereo's glass
+export function cardHead(title, ix, by, bx, bw, a = 1) { pText(title, ix, by + 6, 240 * a); { const c = clockText(day.hour).split(' '), w = (c[0].length - 1) * 6 + 2 + 10; pSeg(c[0].replace(':', '.'), bx + bw - 8 - w - 2, by + 6, 230 * a); pText(c[1], bx + bw - 7, by + 8, 140 * a, 'right', 1, true); } for (let x = ix; x < bx + bw - 7; x += 2) pDot(x, by + 16, 90 * a); return by + 22; }
 export function drawHelp(v, oHelp) {   // how to swim: a card like every other, one thing a row
   const { W, H, cx } = v, ks = [...help.querySelectorAll('.keys > *')], pairs = []; for (let i = 0; i + 1 < ks.length; i += 2) pairs.push([ks[i].textContent, ks[i + 1].textContent]);
   const keyW = Math.max(...pairs.map(p => [...p[0]].length)) * 6 + 8, descW = Math.max(...pairs.map(p => p[1].length)) * 6, bw = Math.min(W - 6, Math.max(keyW + descW + 16, 32 * 6 + 15)), bh = 28 + pairs.length * 10, bx = (W - bw) >> 1, by = Math.max(2, (H - bh - 10) >> 1), ix = bx + 8, a = oHelp;
@@ -337,11 +344,12 @@ export function drawPauseCard(v) {   // paused: a small framed card, left-aligne
     if (on) for (let yy = y - 2; yy < y + 8; yy++) for (let x = bx + 3; x <= bx + bw - 3; x++) pDot(x, yy, 46);   // the lit band of a head unit's list
     pText(name, ix, y, on ? 255 : 165); if (value) pText(value, right, y, on ? 255 : 200, 'right'); else if (it.act && !/BACK|RESUME|NO,|YES,/.test(name)) pText('►', right, y + 1, on ? 220 : 90, 'right', 1, true); menu.rows.push([y - 2, y + 8]); y += 10; });
   if (first > 0) pText('▲', bx + bw - 6, by + 18, 120, 'center', 1, true); if (first + fit < items.length) pText('▼', bx + bw - 6, by + bh - 7, 120, 'center', 1, true);
+  if (menu.kind === 'main' || menu.kind === 'sound') { const sh = 14, sy = by + bh + 14; if (sy + sh + 3 < H) { drawSpectrum(bx + 2, sy, bw - 70, sh); drawLamps(bx + bw - 62, sy + sh - 4); pText(ENV.live ? (ENV.rain > 0 ? 'RAIN' : ENV.cloud > 0.6 ? 'OVERCAST' : 'CLEAR') : '', bx + bw - 2, sy + 2, 140, 'right', 1, true); } }
   pText(menu.kind === 'feedback' ? (MOBILE ? 'TYPE, THEN TAP SEND' : 'ENTER SEND  SHIFT+ENTER NEW LINE  ESC BACK') : menu.binding ? 'PRESS THE NEW KEY  ESC KEEP IT' : pad.active ? 'A CHOOSE  ◄► CHANGE  B BACK' : 'ENTER CHOOSE   ◄► CHANGE   ESC BACK', cx, by + bh + 5, 105, 'center', 1, true);
 }
 export function drawFastTravel(v) {   // fast travel: the bay as dots, the places you have found
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  pText('FAST TRAVEL', 6, 3, 240); pText(statusLine(), W - 6, 4, 140, 'right', 1, true); for (let x = 6; x < W - 6; x += 2) pDot(x, 12, 90);
+  pText('FAST TRAVEL', 6, 3, 240); pText(clockText(day.hour), W - 6, 4, 140, 'right', 1, true); for (let x = 6; x < W - 6; x += 2) pDot(x, 12, 90);
   const land = W > H * 1.3, S = Math.max(20, land ? Math.min(H - 20, (W >> 1) - 8) : Math.min(W - 12, Math.floor(H * 0.55))), mx = land ? W - S - 6 : (W - S) >> 1, my = 16;
   const tt = TILES.outer, span = tt.xmax - tt.xmin, ccx = (tt.xmin + tt.xmax) / 2, ccz = (tt.zmin + tt.zmax) / 2;
   if (!panel.map || panel.mapS !== S) { panel.map = Bay.chart(ccx, ccz, span, S); panel.mapS = S; }

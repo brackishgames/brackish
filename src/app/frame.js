@@ -41,13 +41,20 @@ export const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = ne
 //    bursting, how hard you're swimming. the body's lasting state is on P.
 // a bubble in your wake: from behind the body, whichever way you are facing
 export function wakeBubble(sp) { const f = fwdOf(P.yaw, P.pitch), side = (rand() - 0.5) * (sp.span ?? sp.len) * 0.5, back = sp.len * 0.55; emitBubble(P.pos.x - f.x * back + Math.cos(P.yaw) * side, P.pos.y - f.y * back + (rand() - 0.5) * 0.1, P.pos.z - f.z * back - Math.sin(P.yaw) * side); }
+// a shark swims with its tail, so that is what your hands do: left, right, left, right, each stroke a push. keep the rhythm and you fly; stop and you glide
+export const TAIL_SWIMMERS = new Set(['bull', 'hammer']);
+export function stepTail(sp, dt) {
+  if (!TAIL_SWIMMERS.has(sp.id)) { P.tail = 0; return; } const T = TUNE.tail, side = input.turn > 0.5 ? 1 : input.turn < -0.5 ? -1 : 0;
+  if (side && side !== P.tailHeld && side !== P.tailSide) { if (simTime - (P.tailAt ?? -9) < T.window) { P.tail = Math.min(1, (P.tail || 0) + T.gain); whoosh(0.12); } P.tailSide = side; P.tailAt = simTime; }
+  P.tailHeld = side; P.tail = Math.max(0, (P.tail || 0) - T.decay * dt);
+}
 export function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
   const intent = steerIntent(dt, stunned), ground = terrainAround(sp, dt, intent.climb);
   steerBody(sp, intent, ground, dt);
   const wantBurst = stepBurst(stunned, dt), thrust = swim(sp, intent, wantBurst, stunned, dt);
-  porpoise(sp, wantBurst, dt); breathe(sp, wantBurst, dt);
+  stepTail(sp, dt); porpoise(sp, wantBurst, dt); breathe(sp, wantBurst, dt);
   moveThroughWater(sp, ground.fHere, dt);
   rippleAndSplash(sp, dt); const surf = surfacing(sp, dt); wake(sp, dt);
   poseBody(sp, thrust, surf, dt);
@@ -94,7 +101,8 @@ export function stepBurst(stunned, dt) {
 }
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
 export function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? Math.min(sp.max * TUNE.burst.boost, TUNE.burst.top) : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantBase = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? Math.min(sp.max * TUNE.burst.boost, TUNE.burst.top) : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const wantSpeed = Math.max(wantBase, (P.tail || 0) > 0 ? sp.cruise * 0.5 + (P.tail) * (sp.max - sp.cruise * 0.5) : wantBase);
   const along = P.vel.dot(fwd), dragAt = v => 2.4 * sp.max * v * Math.abs(v) / (sp.max * sp.max);   // the same quadratic drag the water applies below
   // thrust = what holding that speed costs against the drag, plus a push toward it, so every speed is actually reached; a burst pushes hardest
   const thrust = THREE.MathUtils.clamp(dragAt(wantSpeed) / 0.85 + (wantSpeed - along) * (wantBurst ? 10.0 : 6.0), -0.6 * sp.max, wantBurst ? Math.max(4.5 * sp.max, 1.3 * dragAt(wantSpeed) / 0.85) : 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
@@ -256,7 +264,7 @@ export function stepAmbient(dt, t) {
   for (const s of schools) {
     if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(P.pos, 25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + rand() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
     const pd = s.c.distanceTo(P.pos);
-    if (pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3;   // a charge scatters the school
+    { const H = TUNE.hunt, hunter = PREDATORS.has(P.sp.id), felt = (P.speed > P.sp.cruise * H.fastOver ? H.feelFast : H.feelSlow) * (P.pos.y < s.c.y - 0.5 ? H.under : 1); if (hunter ? pd < felt : pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3; }   // their flanks feel pressure in the water: rush and they are gone; come slowly from below and you may get close
     if (s.panic <= 0) for (const w of wild) if (w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(s.c) < 14) { s.panic = 3; if (pd < 50) flush(s.c.x, s.c.z, 1 - pd / 50); break; }   // sharks are silent; their prey is not
     s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * 3 : s.base) - s.spread) * Math.min(1, 3 * dt);
     if (s.panic > 0) { steerToSchool(s, 2 * s.c.x - P.pos.x, 2 * s.c.z - P.pos.z); }
@@ -264,7 +272,7 @@ export function stepAmbient(dt, t) {
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
       const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
-      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; if (P.fed % 3 === 0 && P.hp < HP_MAX) { P.hp++; say('♥  well fed', 1.2); } s.panic = 3; emitBubble(fx, fy, fz); }
+      if (fish.alive && (P.strikeT > 0 ? PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' : P.sp.id === 'dolphin' && P.speed > P.sp.cruise * 1.3) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? TUNE.hunt.reach : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? TUNE.hunt.reach : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; if (P.fed % 3 === 0 && P.hp < HP_MAX) { P.hp++; say('♥  well fed', 1.2); } s.panic = 3; emitBubble(fx, fy, fz); }
       if (!fish.alive) _m.scale(GONE);
       _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }

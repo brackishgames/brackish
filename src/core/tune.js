@@ -7,6 +7,8 @@ export const TUNE = {
   hush: 0.88,                                                // how much of the sea goes quiet when a shark takes an interest
   tide: { pull: 0.9, from: 0.3, to: 1.0 },                   // strong currents push this much harder, ramping in between these m/s
   photo: { reach: 40, lens: [25, 90], shutter: 0.25, hint: 6 },   // photo mode: how far (m) the lens may wander from you, its field of view, the shutter's blink (s), how long the keys stay on screen (s)
+  tail: { window: 0.9, gain: 0.2, decay: 0.32 },             // swimming as a shark: A and D in turn are your tail. how long you may wait between strokes (s), how much each adds, how fast it fades (per s)
+  hunt: { feelSlow: 5, feelFast: 24, fastOver: 1.15, under: 0.6, reach: 1.8 },   // mullet feel pressure in the water: how far (m) if you come slowly, how far if you rush (over this much of your cruise), how much closer from beneath, and how far a strike takes them
   camera: { near: 0.8, perSize: 1.32, perSpeed: 0.04 },        // how far behind you: a base, per metre of body, per m/s. tools/check.mjs measures how much of the screen the animal fills
   // the sound, by the science. tools/check.mjs measures the result against what the ocean does, so these are tuned from numbers, not by ear
   sound: { swell: 0.1, shrimp: 0.05, pressure: 0.32, pressureDeep: 0.22, rough: 0.14, roughHz: 70, chorus: 1, ring: 3600, ringLevel: 0.02, ringFor: 5 },   // the sea breathes at 0.1 Hz (six breaths a minute, the calmest human rate); snapping shrimp; a sub-bass pressure near a hunter, and a little in deep water; the alarm of 30-150 Hz roughness (Arnal et al. 2015) at this rate; fish at dusk
