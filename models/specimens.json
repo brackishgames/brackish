@@ -1,0 +1,384 @@
+[
+ {
+  "id": "cownose",
+  "name": "Cownose Ray",
+  "group": "animals",
+  "place": false,
+  "real": 0.9,
+  "size": [
+   0.899,
+   0.132,
+   1.366
+  ],
+  "triangles": 3842,
+  "stl": "cownose.stl"
+ },
+ {
+  "id": "dolphin",
+  "name": "Bottlenose Dolphin",
+  "group": "animals",
+  "place": false,
+  "real": 2.6,
+  "size": [
+   1.627,
+   1.385,
+   3.029
+  ],
+  "triangles": 1029,
+  "stl": "dolphin.stl"
+ },
+ {
+  "id": "manatee",
+  "name": "West Indian Manatee",
+  "group": "animals",
+  "place": false,
+  "real": 3,
+  "size": [
+   2.348,
+   1.949,
+   3.864
+  ],
+  "triangles": 1022,
+  "stl": "manatee.stl"
+ },
+ {
+  "id": "bull",
+  "name": "Bull Shark",
+  "group": "animals",
+  "place": false,
+  "real": 2.4,
+  "size": [
+   1.533,
+   1.318,
+   2.832
+  ],
+  "triangles": 1014,
+  "stl": "bull.stl"
+ },
+ {
+  "id": "hammer",
+  "name": "Great Hammerhead",
+  "group": "animals",
+  "place": false,
+  "real": 3.4,
+  "size": [
+   1.691,
+   1.9,
+   4.012
+  ],
+  "triangles": 1026,
+  "stl": "hammer.stl"
+ },
+ {
+  "id": "mullet",
+  "name": "Striped Mullet",
+  "group": "animals",
+  "place": false,
+  "real": 0.45,
+  "size": [
+   0.093,
+   0.155,
+   0.508
+  ],
+  "triangles": 1013,
+  "stl": "mullet.stl"
+ },
+ {
+  "id": "fever-ray",
+  "name": "Cownose Ray, in the fever",
+  "group": "animals",
+  "place": false,
+  "real": 0.9,
+  "size": [
+   0.9,
+   0.132,
+   1.366
+  ],
+  "triangles": 282,
+  "stl": "fever-ray.stl"
+ },
+ {
+  "id": "school-fish",
+  "name": "Schooling mullet",
+  "group": "animals",
+  "place": false,
+  "real": null,
+  "size": [
+   0,
+   0.11,
+   0.31
+  ],
+  "triangles": 3,
+  "stl": "school-fish.stl"
+ },
+ {
+  "id": "jelly",
+  "name": "Jellyfish",
+  "group": "animals",
+  "place": false,
+  "real": null,
+  "size": [
+   0.44,
+   0.642,
+   0.429
+  ],
+  "triangles": 222,
+  "stl": "jelly.stl"
+ },
+ {
+  "id": "bird",
+  "name": "Seabird",
+  "group": "animals",
+  "place": false,
+  "real": null,
+  "size": [
+   2,
+   0,
+   0.7
+  ],
+  "triangles": 6,
+  "stl": "bird.stl"
+ },
+ {
+  "id": "ship",
+  "name": "cargo ship",
+  "group": "boats",
+  "place": false,
+  "real": 180,
+  "size": [
+   28,
+   29.8,
+   192.6
+  ],
+  "triangles": 32,
+  "stl": "ship.stl"
+ },
+ {
+  "id": "cruiser",
+  "name": "cruiser",
+  "group": "boats",
+  "place": false,
+  "real": 12,
+  "size": [
+   4,
+   4.22,
+   12.84
+  ],
+  "triangles": 32,
+  "stl": "cruiser.stl"
+ },
+ {
+  "id": "skiff",
+  "name": "skiff",
+  "group": "boats",
+  "place": false,
+  "real": 6,
+  "size": [
+   2.2,
+   1.2,
+   6.42
+  ],
+  "triangles": 20,
+  "stl": "skiff.stl"
+ },
+ {
+  "id": "buoy",
+  "name": "Channel buoy, chain and sinker",
+  "group": "structures",
+  "place": false,
+  "real": null,
+  "size": [
+   2.2,
+   11.4,
+   2.2
+  ],
+  "triangles": 48,
+  "stl": "buoy.stl"
+ },
+ {
+  "id": "clam",
+  "name": "Clam",
+  "group": "the bottom",
+  "place": false,
+  "real": null,
+  "size": [
+   0.36,
+   0.36,
+   0.36
+  ],
+  "triangles": 80,
+  "stl": "clam.stl"
+ },
+ {
+  "id": "seagrass",
+  "name": "Seagrass tuft",
+  "group": "the bottom",
+  "place": false,
+  "real": null,
+  "size": [
+   0.176,
+   0.608,
+   0.223
+  ],
+  "triangles": 6,
+  "stl": "seagrass.stl"
+ },
+ {
+  "id": "sea-fan",
+  "name": "Sea fan",
+  "group": "the bottom",
+  "place": false,
+  "real": null,
+  "size": [
+   1.1,
+   0.9,
+   0
+  ],
+  "triangles": 14,
+  "stl": "sea-fan.stl"
+ },
+ {
+  "id": "rock",
+  "name": "Rock",
+  "group": "the bottom",
+  "place": false,
+  "real": null,
+  "size": [
+   2,
+   2,
+   2
+  ],
+  "triangles": 80,
+  "stl": "rock.stl"
+ },
+ {
+  "id": "skyway",
+  "name": "Sunshine Skyway main span",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "the-barge",
+  "name": "The Barge",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "egmont-wreck",
+  "name": "Egmont wreck",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "old-skyway-rubble",
+  "name": "Old Skyway rubble",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "shelf-wreck",
+  "name": "Shelf wreck",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "deep-reef",
+  "name": "Deep reef",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "hillsborough-hulk",
+  "name": "Hillsborough hulk",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "old-tampa-bay-skiff",
+  "name": "Old Tampa Bay skiff",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "uscgc-blackthorn",
+  "name": "USCGC Blackthorn",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "fort-dade-ruins",
+  "name": "Fort Dade ruins",
+  "group": "places",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ }
+]

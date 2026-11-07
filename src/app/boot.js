@@ -18,6 +18,7 @@ import { $, cameraBehind, checkpoints, initHud } from '../ui/hud.js?v=__BUILD__'
 import { drawPanel, whenFaded } from '../ui/panel.js?v=__BUILD__';
 import { initTouch, setTitleHint } from '../ui/touch.js?v=__BUILD__';
 import { frame } from './frame.js?v=__BUILD__';
+import { SPECIMENS_PAGE, enterSpecimens } from './specimens.js?v=__BUILD__';
 import { bootDone } from './testing.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  BOOT
@@ -76,6 +77,6 @@ export async function boot() {
   setTitleHint(); { const [, base, beta] = (document.querySelector('meta[name=version]')?.content || '').match(/^([\d.]+)(?:-beta\.(\d+))?/) || []; $('ver').textContent = base ? base + (beta != null ? ' beta ' + beta : '') : ''; }   // 0.1.0-beta.3 reads as 0.1.0 BETA 3: still being built, and saying so
   await stage('WAKING THE BAY', () => { if (loadedSave) applySave(loadedSave); else { becomeSpecies(speciesById.cownose); cameraBehind(); } rebuildGrass(P.pos.x, P.pos.z); resize(); });
   $('load').classList.add('gone'); whenFaded($('load'), 0, () => { if (!started) $('title').classList.remove('gone'); });   // one card out, then the next in (unless you've already begun)
-  booting = false; frame(); bootDone();
+  booting = false; frame(); bootDone(); if (SPECIMENS_PAGE) enterSpecimens();
   if ('serviceWorker' in navigator && !LOCAL) navigator.serviceWorker.register('sw.js').catch(() => {});   // offline play on the published site; never on your machine, where it would only get in the way
 }

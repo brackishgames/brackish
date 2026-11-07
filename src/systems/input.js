@@ -2,19 +2,20 @@ import * as THREE from 'three';
 import { DEV, MOBILE, TEST } from '../core/env.js?v=__BUILD__';
 import { canFull, fullscreen, goFull, isFull, lockLandscape } from '../core/screen.js?v=__BUILD__';
 import { DEFAULT_BINDS, saveSettings, settings } from '../core/settings.js?v=__BUILD__';
-import { resize } from '../render/display.js?v=__BUILD__';
+import { camera, resize } from '../render/display.js?v=__BUILD__';
 import { world } from '../world/structures.js?v=__BUILD__';
 import { day } from '../world/time.js?v=__BUILD__';
 import { feverR } from '../actors/fever.js?v=__BUILD__';
 import { P, act } from '../actors/player.js?v=__BUILD__';
-import { wild } from '../actors/wildlife.js?v=__BUILD__';
+import { bodySize, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { startAudio } from './audio.js?v=__BUILD__';
 import { SAVE_KEY, loadedSave } from './save.js?v=__BUILD__';
 import { pressedAny, startGame, started, story } from './story.js?v=__BUILD__';
 import { feedbackItems, feedbackKey, openFeedback } from '../ui/feedback.js?v=__BUILD__';
-import { $, LORE, bl, checkpoints, help, mapKey, mapOpen, renderHelpKeys, say, toggleMap } from '../ui/hud.js?v=__BUILD__';
+import { $, LORE, bl, checkpoints, help, mapKey, mapOpen, readouts, renderHelpKeys, say, toggleMap } from '../ui/hud.js?v=__BUILD__';
 import { cycleCreature, tilt, touch, touchHint } from '../ui/touch.js?v=__BUILD__';
-import { camPos, paused } from '../app/frame.js?v=__BUILD__';
+import { paused } from '../app/frame.js?v=__BUILD__';
+import { specimen } from '../app/specimens.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  INPUT (arrows + space), AUDIO
 // ═══════════════════════════════════════════════════════════════════
@@ -103,7 +104,7 @@ export let helpOpen = false;
 export function setHelp(open) { helpOpen = open; help.classList.toggle('gone', !open); }
 // ── pause menu: leaving full screen, P, or START opens it; the bay stops while it is up
 export let menu = null, photo = null;
-// photo opportunities: the game picks the moments, not the player. a landmark or wreck close by, inside the fever,
+// photo mode works anywhere. these are the moments the game points out: a landmark or wreck close by, inside the fever,
 // a leap together with the pod, the surface at dawn.
 export function photoSpot() {
   if (!started) return null;
@@ -113,9 +114,10 @@ export function photoSpot() {
   if (day.hour > 5.4 && day.hour < 7.2 && P.pos.y > -1.2) return 'DAWN';
   return null;
 }
-export function startPhoto() { const spot = photoSpot(); if (!spot) return; closeMenu(); const d = camPos.clone().sub(P.pos); photo = { yaw: Math.atan2(d.x, d.z), pitch: Math.asin(THREE.MathUtils.clamp(d.y / (d.length() || 1), -0.9, 0.9)), dist: Math.max(2, d.length()), t: 0, shot: false, savedT: -9, spot }; lockPointer(); }
+// opens on a three-quarter view of you, wherever the swim camera happened to be
+export function startPhoto() { if (!started) return; closeMenu(); photo = { yaw: P.yaw + Math.PI - 0.7, pitch: 0.22, dist: bodySize(P.sp) * 2.4 + 1, at: P.pos.clone(), fov: camera.userData.baseFov || 60, t: 0, shot: false, savedT: -9, spot: photoSpot() || readouts.place }; lockPointer(); }
 export function endPhoto() { photo = null; }
-addEventListener('wheel', e => { if (photo) photo.dist = THREE.MathUtils.clamp(photo.dist * (e.deltaY > 0 ? 1.1 : 0.9), 1.2, 60); }, { passive: true });
+addEventListener('wheel', e => { if (photo) photo.dist = THREE.MathUtils.clamp(photo.dist * (e.deltaY > 0 ? 1.1 : 0.9), 0.6, 60); }, { passive: true });
 export const clampI = (v, a, b) => Math.max(a, Math.min(b, v));
 export const onOff = v => v ? 'ON' : 'OFF';
 export function openMenu(kind) { menu = { kind, sel: 0, rows: [] }; for (const k in keys) keys[k] = false; aim.look = false; if (document.pointerLockElement) document.exitPointerLock?.(); }
@@ -173,7 +175,7 @@ export function menuItems() {
     { label: () => 'FAST TRAVEL', act: () => { closeMenu(); toggleMap(); } },
     { label: () => 'JOURNAL', act: () => goMenu('journal') },
     { label: () => 'HOW TO SWIM', act: () => { closeMenu(); setHelp(true); } },
-    ...(photoSpot() ? [{ label: () => 'PHOTO MODE · ' + photoSpot().toUpperCase(), act: startPhoto }] : []),
+    { label: () => 'PHOTO MODE', act: startPhoto },
     { label: () => 'RESTART CHAPTER', act: restartChapter },
     { label: () => 'SETTINGS', act: () => goMenu('settings') }];
 }
@@ -199,6 +201,7 @@ addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', B('rise'), B('dive'), B('creature')].includes(e.code)) e.preventDefault();
   if (started && needFull() && !menu) openMenu('main');
   if (started && menu) { if (menu.binding) { e.preventDefault(); if (e.isTrusted) bindKey(e.code); } else menuKey(e.code); return; }
+  if (specimen.on) return;   // the specimen page has its own keys
   if (photo) { if (e.code === 'Enter') photo.shot = true; else if (is('photo') || is('pause') || e.code === 'Escape') endPhoto(); return; }
   if (started && is('photo') && !mapOpen && !helpOpen) { startPhoto(); return; }
   if (started && is('feedback') && !mapOpen) { if (helpOpen) setHelp(false); openFeedback(); return; }   /* only where there is something to take */

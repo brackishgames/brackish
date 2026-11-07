@@ -5,6 +5,7 @@ export const TUNE = {
   fail: { from: 12, to: 26 },                                // metres down where the display starts, and finishes, losing segments
   hush: 0.88,                                                // how much of the sea goes quiet when a shark takes an interest
   tide: { pull: 0.9, from: 0.3, to: 1.0 },                   // strong currents push this much harder, ramping in between these m/s
+  photo: { reach: 40, lens: [25, 90], shutter: 0.25, hint: 6 },   // photo mode: how far (m) the lens may wander from you, its field of view, the shutter's blink (s), how long the keys stay on screen (s)
   water: { glow: 0.09, fade: 0.06 },                          // what distance fades to under water: how bright just under a noon surface, and how fast that goes with depth (per metre, as the light does)
   // the quiet HUD: each part comes up when it has something to tell you, and goes down `linger` seconds after it last did
   hud: { linger: 4, rise: 6, fall: 0.8,                      // seconds it stays; how fast it comes up and goes (per second)

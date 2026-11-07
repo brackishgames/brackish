@@ -7,7 +7,7 @@ const MODULES = ['lib/rng', 'lib/units', 'lib/geo', 'lib/text', 'lib/tiff', 'lib
   'actors/creatures', 'actors/player', 'actors/wildlife', 'actors/fever', 'actors/life', 'actors/boats',   // what swims in it, and what floats on it
   'systems/input', 'systems/audio', 'systems/save', 'systems/story',                      // what you do, what you hear, what is kept, what happens
   'ui/hud', 'ui/panel', 'ui/logo', 'ui/touch', 'ui/feedback',                              // everything on screen
-  'app/frame', 'app/testing', 'app/boot'];                                                // the loop, the test interface, and starting up
+  'app/specimens', 'app/frame', 'app/testing', 'app/boot'];                                                // the loop, the test interface, and starting up
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';   // stamped by the deploy, so a visitor never gets a mix of old and new files
 const mods = {};
 for (const m of MODULES) mods[m] = await import(`./${m}.js?v=${BUILD}`);   // one at a time, in order: each layer is ready before the next starts

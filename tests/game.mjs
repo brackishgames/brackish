@@ -79,6 +79,22 @@ await scenario('the title logo lets go when you turn away, instead of hanging th
   assert.ok(await page.eval('logo.m.uniforms.uGo.value >= 0'), 'released');
   await page.eval('logo.mesh.visible = false; logo.m.uniforms.uGo.value = 6; 1');
 });
+await scenario('photo mode opens anywhere, frames you, stays near you, and saves a picture', async () => {
+  await page.eval(`__game.teleport(${HOLE}, 12); 1`); await page.key('KeyO', 'o', 79); await page.until('photo && paused', 'photo mode, with no landmark near');
+  await S(page, 2); const d = await page.eval('camera.position.distanceTo(P.pos)'); assert.ok(d > 1 && d < 6, `framed at ${d.toFixed(1)} m`);
+  await page.eval(`photo.at.copy(P.pos).add(new THREE.Vector3(500, 0, 0)); 1`); await S(page, 1); assert.ok(await page.eval('photo.at.distanceTo(P.pos) <= TUNE.photo.reach + 0.01'), 'the lens stays near you');
+  const saved = await page.event('photo-saved'); await page.key('Enter', 'Enter', 13); const r = await saved(); assert.match(r.name, /^brackish-.*\.png$/); assert.ok(r.size > 1000, `a real picture: ${r.size} bytes`);
+  await page.key('KeyO', 'o', 79); await page.until('!photo && !paused', 'back to swimming');
+});
+await scenario('near the surface the lens never slices the water off in a straight line', async () => {
+  for (const depth of [0.2, 0.8, 1.4, 2, 3]) { await page.eval(`__game.teleport(${HOLE}, ${depth}); P.pos.y = -${depth}; 1`); await S(page, 3);
+    assert.ok(await page.eval('Math.abs(camera.position.y) >= camera.near'), `at ${depth} m the surface is further away than the lens can cut`); }
+});
+await scenario('every model in the game builds on the specimen page', async () => {
+  const sp = await browser.page(); await sp.open(URL0 + '&specimens', { w: 800, h: 600 });
+  const r = await sp.eval(`SPECIMENS.map(s => showSpecimen(s.id))`); assert.ok(r.length > 20); for (const m of r) if (!m.place) assert.ok(m.triangles > 0 && m.size.some(v => v > 0), m.id);
+  assert.deepEqual(sp.errors, []); await sp.close?.(); await page.activate();
+});
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
     const decks = world.meshes.find(x => x.name === 'bridge decks'), centres = []; for (let i = 0; i < decks.count; i++) { const d = get('bridge decks', i); centres.push(d); }

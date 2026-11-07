@@ -37,7 +37,7 @@ export function renderHelpKeys() {
     ['⇄', 'become a body you have been'], ['II', 'pause · settings · feedback']]
     : [['MOUSE', 'steer · right button looks'], [`${L('forward')} ${L('back')}`, 'forward · back · ↑ ↓ too'], [`${L('left')} ${L('right')}`, 'turn · ← → too'],
     [`${L('rise')} ${L('dive')}`, 'rise · dive'], [L('burst'), 'burst, while the dots last'], [L('ability'), 'sense or echo: finds clams'], [L('creature'), 'become a body you have been'],
-    [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo, at a moment worth it'], [L('feedback'), 'send us a note from here']];
+    [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo mode, anywhere'], [L('feedback'), 'send us a note from here']];
   help.querySelector('.keys').innerHTML = rows.map(([k, d]) => `<b>${esc(k)}</b><span>${esc(d)}</span>`).join('');
 }
 

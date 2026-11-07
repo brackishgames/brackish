@@ -30,7 +30,7 @@ export const BOAT_TYPES = {
 for (const t of Object.values(BOAT_TYPES)) t.geo = hullGeometry(t.L, t.W, t.draft, t.free, t !== BOAT_TYPES.skiff);
 
 // the point on the Skyway's path nearest the charted main span, and the direction the path runs there (north to south, as SKYWAY.axis)
-function skywayFrame() {
+export function skywayFrame() {
   const [cx, cz] = toXZ(...SKYWAY.center), [ax0, az0] = toXZ(...SKYWAY.axis[0]), [bx0, bz0] = toXZ(...SKYWAY.axis[1]);
   const paths = bridges.filter(b => isSkyway(b.name)).map(b => b.pts), lines = paths.length ? paths : [[[ax0, az0], [bx0, bz0]]];
   let best = null;

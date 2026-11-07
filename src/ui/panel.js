@@ -10,6 +10,7 @@ import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { camera, dotPass, renderer, whenResized } from '../render/display.js?v=__BUILD__';
 import { WU } from '../render/materials.js?v=__BUILD__';
 import { Bay, TILES, floorAt, loadmsg } from '../world/geo.js?v=__BUILD__';
+import { clockText, day } from '../world/time.js?v=__BUILD__';
 import { P, abilityName, pulses } from '../actors/player.js?v=__BUILD__';
 import { huntHeat } from '../actors/wildlife.js?v=__BUILD__';
 import { captions, sideOf } from '../systems/audio.js?v=__BUILD__';
@@ -20,6 +21,7 @@ import { feedbackLines } from './feedback.js?v=__BUILD__';
 import { $, LORE, bl, checkpoints, compassMarks, headingDeg, help, mapOpen, mapSel, mapXY, readouts, storyEl, warn } from './hud.js?v=__BUILD__';
 import { STICK_R, touch } from './touch.js?v=__BUILD__';
 import { _cur, _v, simTime } from '../app/frame.js?v=__BUILD__';
+import { specimen, specimenInfo } from '../app/specimens.js?v=__BUILD__';
 import { drawDebug } from '../app/testing.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  PANEL  —  the display draws its own type: a 5×7 dot font, the compass,
@@ -102,6 +104,7 @@ export function drawPanel() {
   const done = () => { panel.tex.needsUpdate = true; };
   if (oLoad > 0.01) { drawLoading(v, oLoad); return done(); }
   if (portrait()) { drawTurnPhone(v); return done(); }
+  if (specimen.on) { drawSpecimenLabel(v); return done(); }
   if (photo) { drawPhotoHints(v); return done(); }
   if (oTitle > 0.01) drawTitle(v, oTitle);
   wakeHud(v);
@@ -127,12 +130,17 @@ export function drawTurnPhone(v) {   // held upright: a phone outline turning on
   for (let y = 0; y <= ph; y++) { pDot(cx - pw / 2, py - ph / 2 + y, 200); pDot(cx + pw / 2, py - ph / 2 + y, 200); }
   wrap('turn your phone sideways', cols).forEach((l, i) => pText(l, cx, py + 22 + i * 10, 220, 'center'));
 }
-export function drawPhotoHints(v) {   // photo mode: the bay and nothing else, a hint that fades, and SAVED
-  const { W, H, ST, SL, SB, cx, t, cols } = v;
-  dotPass.uniforms.uDim.value = 0; const hint = Math.max(0, Math.min(1, 4 - photo.t)), saved = Math.max(0, 1.5 - (photo.t - photo.savedT));
-  if (hint > 0) pText(photo.spot.toUpperCase(), cx, H - 22, 190 * hint, 'center');
-  if (hint > 0) pText(pad.active ? 'STICKS ORBIT · A SAVE · B EXIT' : 'MOUSE ORBIT · WHEEL ZOOM · ENTER SAVE · O EXIT', cx, H - 12, 150 * hint, 'center');
-  if (saved > 0) pText('SAVED TO DOWNLOADS', cx, 6, 200 * Math.min(1, saved), 'center');
+export function drawSpecimenLabel(v) {   // the specimen page: what this is, and its size
+  const { H, SL, SB, cx } = v, it = specimen.item; if (!it) return;
+  pText(it.name, cx, 4, 230, 'center'); pText(specimenInfo(), cx, 14, 150, 'center', 1, true);
+}
+export function drawPhotoHints(v) {   // photo mode: the bay and a small stamp, as the stereo would print it. the keys fade away, and are never in the picture
+  const { W, H, SL, SB, cx } = v, since = photo.t - photo.savedT, hint = Math.max(0, Math.min(1, TUNE.photo.hint - photo.t));
+  dotPass.uniforms.uDim.value = settings.flash ? Math.max(0, 1 - since / TUNE.photo.shutter) : 0;   // the shutter
+  pText(photo.spot || '', SL, H - 7 - SB, 170, 'left', 1, true); pText(`${Math.max(0, -P.pos.y).toFixed(1)}M  ${clockText(day.hour)}`, W - SL, H - 7 - SB, 170, 'right', 1, true);
+  if (photo.shot) return;
+  if (hint > 0) pText(pad.active ? 'STICKS MOVE · RT ZOOM · A SAVE · B EXIT' : 'MOUSE ORBIT · WHEEL ZOOM · WASD MOVE · Q E LENS · ENTER SAVE · ESC EXIT', cx, H - 18 - SB, 140 * hint, 'center', 1, true);
+  if (since < 1.5) pText('SAVED TO DOWNLOADS', cx, 6, 200 * Math.min(1, 1.5 - since), 'center');
 }
 export function drawTitle(v, oTitle) {   // the title: under the bubble logo, the prompt, the version
   const { W, H, ST, SL, SB, cx, t, cols } = v;
@@ -235,8 +243,8 @@ export function drawCurrentDashes(v) {   // the current: faint dashes drifting o
 export function drawBurstStreaks(v) {   // burst: streaks rushing out from the middle of the view
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   // burst: streaks rushing out from the middle of the view, the way speed looks
-  if (settings.speedFx && (P.burstMix || 0) > 0.02) for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2 + hash2(i, 7) * 0.15, u = (t * 1.8 + hash2(i, 3)) % 1, r = 0.38 + u * 0.62, ca = Math.cos(a), sa = Math.sin(a);
-    for (let k = 0; k < 7; k++) { const rr = r + k * 0.022; pDot(cx + ca * rr * W * 0.5, (H >> 1) + sa * rr * H * 0.5, 240 * P.burstMix * (0.35 + 0.65 * u) * (k + 2) / 8); } }
+  if (settings.speedFx && (P.burstMix || 0) > 0.02) for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2 + hash2(i, 7) * 0.15, u = (t * 1.8 + hash2(i, 3)) % 1, r = 0.72 + u * 0.4, ca = Math.cos(a), sa = Math.sin(a);
+    for (let k = 0; k < 4; k++) { const rr = r + k * 0.022; pDot(cx + ca * rr * W * 0.5, (H >> 1) + sa * rr * H * 0.5, 130 * P.burstMix * Math.sin(u * Math.PI) * (k + 2) / 5); } }   // out at the edges, and only a glance: nearer the middle they read as scratches on the picture
 }
 export function drawCompassTape(v) {   // top middle, where you are going: the compass tape and the goal on it
   const { W, H, ST, SL, SB, cx, t, cols } = v;
@@ -251,7 +259,7 @@ export function drawCompassTape(v) {   // top middle, where you are going: the c
 export function drawPlace(v) { if (readouts.place) pText(readouts.place, v.cx, v.ST + 19, 150, 'center', 1, true); }   // where you are, under which way you are going
 export function drawPhotoPrompt(v, introK) {   // a moment worth keeping
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  { const spot = photoSpot(); if (spot) { pGain = 1; pText(`◆ ${pad.active ? 'R3' : 'O'} PHOTO`, W - SL, ST + 2 + ((performance.now() - lastSaved) / 1000 < 2 ? 8 : 0), 130 + 40 * Math.sin(t * 2), 'right', 1, true); pGain = introK; } }   /* a moment worth keeping */
+  { const spot = photoSpot(); if (spot) { pGain = 1; pText(`◆ ${kn('photo')} PHOTO`, W - SL, ST + 2 + ((performance.now() - lastSaved) / 1000 < 2 ? 8 : 0), 130 + 40 * Math.sin(t * 2), 'right', 1, true); pGain = introK; } }   /* a moment worth keeping */
 }
 export function drawWarning(v) {   // DIVE, or what is hunting you
   const { W, H, ST, SL, SB, cx, t, cols } = v;

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { ramp, tiltAngles } from '../lib/tilt.js?v=__BUILD__';
 import { MOBILE } from '../core/env.js?v=__BUILD__';
 import { goLandscape, portrait } from '../core/screen.js?v=__BUILD__';
@@ -5,12 +6,13 @@ import { settings } from '../core/settings.js?v=__BUILD__';
 import { SPECIES } from '../actors/creatures.js?v=__BUILD__';
 import { P, act, becomeSpecies, unlocked } from '../actors/player.js?v=__BUILD__';
 import { audio, splash, startAudio } from '../systems/audio.js?v=__BUILD__';
-import { helpOpen, keys, menu, menuKey, needFull, openMenu, setHelp } from '../systems/input.js?v=__BUILD__';
+import { endPhoto, helpOpen, keys, menu, menuKey, needFull, openMenu, photo, setHelp } from '../systems/input.js?v=__BUILD__';
 import { loadedSave } from '../systems/save.js?v=__BUILD__';
 import { CHAPTERS, TITLE_HINT, pressedAny, startGame, started } from '../systems/story.js?v=__BUILD__';
 import { fbEl } from './feedback.js?v=__BUILD__';
 import { $, bl, checkpoints, help, mapEl, say, tip, toggleMap, travelTo } from './hud.js?v=__BUILD__';
 import { toCell } from './panel.js?v=__BUILD__';
+import { specimen } from '../app/specimens.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  TOUCH  —  drag anywhere to swim (an analog stick that appears under
 //  your thumb), hold BURST, tap MAP or ⇄. Works with a mouse as well.
@@ -55,13 +57,26 @@ export function tbtn(id, down, up) {
   el.addEventListener('pointerdown', e => { stop(e); unlockAudio(); down(el); });
   if (up) for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, e => { stop(e); up(el); });
 }
+// photo mode on a phone: drag to orbit, pinch to zoom, tap to save, the pause button leaves
+const lens = new Map(); let lensMoved = 0;
+export function photoPointer(e, what) {
+  if (what === 'down') { lens.set(e.pointerId, [e.clientX, e.clientY]); lensMoved = 0; return; }
+  const was = lens.get(e.pointerId); if (!was) return;
+  if (what === 'up') { lens.delete(e.pointerId); if (!lens.size && lensMoved < 10) photo.shot = true; return; }
+  const dx = e.clientX - was[0], dy = e.clientY - was[1], other = [...lens].find(([id]) => id !== e.pointerId)?.[1]; lensMoved += Math.hypot(dx, dy);
+  if (other) { const before = Math.hypot(was[0] - other[0], was[1] - other[1]), after = Math.hypot(e.clientX - other[0], e.clientY - other[1]); photo.dist = THREE.MathUtils.clamp(photo.dist * before / Math.max(after, 1), 0.6, 60); }
+  else { photo.yaw -= dx * 0.006; photo.pitch = THREE.MathUtils.clamp(photo.pitch + dy * 0.006, -1.3, 1.3); }
+  lens.set(e.pointerId, [e.clientX, e.clientY]);
+}
 export const letGo = () => { for (const k in keys) keys[k] = false; touch.turn = touch.climb = 0; touch.hold = false; touch.holdId = null; };
 // wiring: the phone's buttons and stick, the map and help taps, letting go of everything when the window loses focus. boot calls this once everything has loaded
 export function initTouch() {
   (screen.orientation || window).addEventListener(screen.orientation ? 'change' : 'orientationchange', () => tilt.last && onTilt(tilt.last));   // the screen turned: its frame changed even if the sensor didn't
   if (MOBILE) { document.body.classList.add('touch'); bl.textContent = 'drag to swim · hold burst · tap ◆'; }
   addEventListener('pointerdown', e => {
+    if (specimen.on) return;
     unlockAudio(); pressedAny();
+    if (photo) { if (MOBILE) photoPointer(e, 'down'); else photo.shot = true; return; }
     if (started && menu) { const cy = toCell(e.clientY), i = menu.rows.findIndex(([a, b]) => cy >= a && cy <= b); if (i >= 0) { menu.sel = i; menuKey('Enter'); } return; }
     if (!MOBILE && started) { if (needFull()) openMenu('main'); return; }   // desktop plays on the keyboard
     if (!started) { if (!portrait()) startGame(loadedSave); return; }
@@ -72,6 +87,7 @@ export function initTouch() {
     stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.style.display = 'block';
   });
   addEventListener('pointermove', e => {
+    if (photo && MOBILE) { photoPointer(e, 'move'); return; }
     if (started && menu) { const cy = toCell(e.clientY), i = menu.rows.findIndex(([a, b]) => cy >= a && cy <= b); if (i >= 0) menu.sel = i; return; }
     if (e.pointerId !== touch.id) return;
     const dx = e.clientX - touch.ox, dy = e.clientY - touch.oy, d = Math.hypot(dx, dy), k = Math.min(1, d / STICK_R) / Math.max(d, 1e-3);
@@ -79,12 +95,12 @@ export function initTouch() {
     if (Math.abs(touch.turn) < 0.12) touch.turn = 0; if (Math.abs(touch.climb) < 0.12) touch.climb = 0;
     touch.kx = dx * k * STICK_R; touch.ky = dy * k * STICK_R;
   });
-  addEventListener('pointerup', e => { unlockAudio(); if (menu?.kind === 'feedback') fbEl().focus({ preventScroll: true }); if (MOBILE) { goLandscape(); enableTilt(); } endStick(e); });   // a tap counts as a gesture on the way up: that is when phones allow full screen and motion addEventListener('pointercancel', endStick);
+  addEventListener('pointerup', e => { if (photo && MOBILE) { photoPointer(e, 'up'); return; } unlockAudio(); if (menu?.kind === 'feedback') fbEl().focus({ preventScroll: true }); if (MOBILE) { goLandscape(); enableTilt(); } endStick(e); });   // a tap counts as a gesture on the way up: that is when phones allow full screen and motion addEventListener('pointercancel', endStick);
   tbtn('tBurst', el => { keys.ShiftLeft = true; el.classList.add('on'); }, el => { keys.ShiftLeft = false; el.classList.remove('on'); });
   tbtn('tAct', () => { if (started) act(); });
   tbtn('tMap', () => { if (started) toggleMap(); });
   tbtn('tCreature', () => { if (started) cycleCreature(1); });
-  tbtn('tPause', () => { if (started && !menu) openMenu('main'); });
+  tbtn('tPause', () => { if (photo) endPhoto(); else if (started && !menu) openMenu('main'); });
   mapEl.addEventListener('pointerdown', e => { e.stopPropagation(); const li = e.target.closest('li'); if (li) { const i = [...li.parentNode.children].indexOf(li); travelTo(checkpoints[i]); } toggleMap(); });
   help.addEventListener('pointerdown', e => { e.stopPropagation(); setHelp(false); });
   addEventListener('blur', letGo);   // a SHIFT held while switching away would otherwise burst forever

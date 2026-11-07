@@ -56,7 +56,7 @@ the goal, a new place, rising or diving, the bottom close) and goes back down a 
 bay. Depth reads in the stereo's own seven-segment digits. Hunted or short of air, the edges of the screen close in. HUD in
 settings switches it to always on. Clams give a heart back, and a well-fed animal carries up to five. At a moment worth keeping
 (a wreck or landmark close by, inside the fever, a leap together, the surface at dawn) a prompt appears and O opens photo
-mode: the bay stops, the screen clears, and Enter saves a picture.
+mode (O works anywhere): the bay stops, the screen clears, and you can orbit, zoom, slide the lens and change it (Q E) before Enter saves a picture.
 
 Settings cover volume (with ambience and effects apart), every key (CONTROLS), mouse speed, invert Y, turn speed, large
 text, the HUD (quiet or always on), opt-in crash reports and sound captions, which show the sounds that matter (an engine, a shark's pressure wave, fish scattering)
@@ -73,6 +73,14 @@ shows. There is no build step and nothing loads from anyone else's servers: thre
 plays without them. On your own machine `?dev` opens every place and body, `?dev&clock=22` sets the hour, F3 shows the
 world's state and `[` `]` slow time down or speed it up; `?seed=7` replays a run exactly. The published site ignores all
 of that, and dev mode never touches your save. The page's security policy allows only this site and those data services.
+
+## Pictures and models
+
+`npm run shot` takes every scene (the title, swimming, a burst, the surface, night, the menus, photo mode, a phone) from the same seed into `.shots/`, with all of them on one `sheet.png`. `node tools/shot.mjs surface burst` takes just those, `--list` shows them, and `--at 27.62,-82.65,8 --clock 22 --js "P.hp = 1"` shoots any spot at any hour. It says so if the page logged an error or the canvas doesn't fit the window.
+
+[Every model in the game](models/README.md) is listed with its size and triangle count, and each opens in GitHub's 3D viewer. `npm run specimens` rewrites that page, its STL files, `models/specimens.json` and the picture below from the code that builds them for the bay, and flags any model far from its real size. To turn one over on the game's own display: `localhost:8000/?dev&specimens` (drag, wheel, ← →, F for the wires).
+
+<img src="screenshots/specimens.png" alt="Every model in the game on the dot-matrix display" width="100%">
 
 ## Testing
 
