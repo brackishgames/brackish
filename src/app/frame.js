@@ -9,7 +9,7 @@ import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { camera, cellCam, cellRT, cellScene, composer, dotPass, lowRT, renderer, scene, stepQuality } from '../render/display.js?v=__BUILD__';
 import { bubbleLife, bubbles, emitBubble, emitSpray, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
-import { WU, stepStrokes, strouhalRad } from '../render/materials.js?v=__BUILD__';
+import { WU, beatRad, stepStrokes } from '../render/materials.js?v=__BUILD__';
 import { Bay, floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
 import { grassCenter, rebuildGrass } from '../world/seabed.js?v=__BUILD__';
 import { updateClipmap } from '../world/seafloor.js?v=__BUILD__';
@@ -27,7 +27,7 @@ import { CHAPTERS, started, story } from '../systems/story.js?v=__BUILD__';
 import { $, mapOpen, say, sayTimer, stepGoalBeam, stepHud, stepTips, tip } from '../ui/hud.js?v=__BUILD__';
 import { logo, stepLogo } from '../ui/logo.js?v=__BUILD__';
 import { drawPanel } from '../ui/panel.js?v=__BUILD__';
-import { applySpecimen, specimen } from './specimens.js?v=__BUILD__';
+import { applySpecimen, renderSpecimenRaw, renderSpecimenViews, specimen } from './specimens.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
 // ═══════════════════════════════════════════════════════════════════
@@ -179,7 +179,7 @@ export function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
       P.glide = (P.glide || 0) + dt; const gliding = work < 0.25 && Math.sin(P.glide * 0.6) > 0.2;
       u.uFlap.value += ((gliding ? 0.12 : 0.3 + 0.7 * work) - u.uFlap.value) * Math.min(1, 2.5 * dt);
     } else u.uFlap.value = 0.35 + 0.65 * work; }
-  { const u = P.mesh.material.uniforms, target = sp.kind === 'ray' ? strouhalRad(sp, P.speed, u.uFlap.value) : sp.freq * (0.7 + 0.6 * THREE.MathUtils.clamp(thrust / sp.max, 0, 1.2)); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); }
+  { const u = P.mesh.material.uniforms, target = beatRad(sp, P.speed, u.uFlap.value, P.bursting ? 1.6 : 1); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); u.uBend.value += (THREE.MathUtils.clamp((P.yawRate || 0) / sp.turn, -1, 1) - u.uBend.value) * Math.min(1, 4 * dt); }   // tail beats follow speed; the spine follows the turn
   if (P.speed > sp.cruise * 1.3) for (let i = 0; i < 2; i++) if (rand() < 0.5) emitBubble(P.pos.x + (rand() - .5) * (sp.span ?? sp.len) * 0.8, P.pos.y - 0.1, P.pos.z + 0.3);
   else if (rand() < 0.04) emitBubble(P.pos.x, P.pos.y, P.pos.z);
 }
@@ -322,7 +322,8 @@ function frameInner() {
   if (!TEST) { const want = real * timeScale, n = Math.min(SIM_STEPS * Math.ceil(timeScale), Math.max(1, Math.ceil(want / SIM_MAX - 1e-9))); for (let i = 0; i < n; i++) simStep(Math.min(want, n * SIM_MAX) / n); }
   { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
-  renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
+  if (specimen.on && specimen.raw) { renderSpecimenRaw(); return; }
+  renderer.setRenderTarget(lowRT); if (specimen.on) renderSpecimenViews(); else renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
   if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; const name = `brackish-${(photo.spot || 'the-bay').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
     renderer.domElement.toBlob(b => { if (!b) return; emit('photo-saved', { name, size: b.size }); if (TEST) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the frame just drawn, before it is cleared. the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */
 }

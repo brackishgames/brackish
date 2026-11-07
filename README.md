@@ -78,9 +78,9 @@ of that, and dev mode never touches your save. The page's security policy allows
 
 `npm run shot` takes every scene (the title, swimming, a burst, the surface, night, the menus, photo mode, a phone) from the same seed into `.shots/`, with all of them on one `sheet.png`. `node tools/shot.mjs surface burst` takes just those, `--list` shows them, and `--at 27.62,-82.65,8 --clock 22 --js "P.hp = 1"` shoots any spot at any hour. It says so if the page logged an error or the canvas doesn't fit the window.
 
-[Every model in the game](models/README.md) is listed with its size and triangle count, and each opens in GitHub's 3D viewer. `npm run specimens` rewrites that page, its STL files, `models/specimens.json` and the picture below from the code that builds them for the bay, and flags any model far from its real size. To turn one over on the game's own display: `localhost:8000/?dev&specimens` (drag, wheel, ← →, F for the wires).
+[Every model in the game](models/README.md) is listed with its size and triangle count, and each opens in GitHub's 3D viewer. `npm run specimens` rewrites that page, its STL files, `models/specimens.json` and the picture below from the code that builds them for the bay, and flags any model far from its real size. To check any of them on the game's own display: `localhost:8000/?dev&specimens`. Pick a name (or ↑ ↓) and it shows from fixed angles chosen for that model, swimming, with its real size checked. The switches are raw (plain studio light) or in game (the dot matrix), wires, and a turn; add `&view=game` to open in game.
 
-<img src="screenshots/specimens.png" alt="Every model in the game on the dot-matrix display" width="100%">
+<img src="screenshots/specimens.png" alt="Every model in the game in plain studio light" width="100%">
 
 ## Testing
 

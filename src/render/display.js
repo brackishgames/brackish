@@ -23,6 +23,7 @@ scene.background = new THREE.Color(0x000000);
 export const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 30000);
 
 export let pitchCss = MOBILE ? 3 : 4;
+export const setDotPitch = px => { pitchCss = px; resize(); };   // the model page shows four views at once, so it needs finer dots than the game
 export const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
 // the cell pass: one fragment per dot, at grid resolution. contrast, depth and the OEL drive levels are the same for every
 // pixel of a dot, so they are worked out here once instead of at every screen pixel.

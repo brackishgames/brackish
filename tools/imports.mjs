@@ -7,7 +7,7 @@ const root = new URL('..', import.meta.url).pathname, check = process.argv.inclu
 const DIRS = ['lib', 'core', 'render', 'world', 'actors', 'systems', 'ui', 'app'];   // the module layers so far, lowest first
 const THREE_NAMES = { THREE: `import * as THREE from 'three';`, EffectComposer: `import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';`,
   ShaderPass: `import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';`, UnrealBloomPass: `import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';`,
-  mergeGeometries: `import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';` };
+  mergeGeometries: `import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';`, mergeVertices: `import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';` };
 const files = DIRS.flatMap(d => { try { return readdirSync(root + 'src/' + d).filter(f => f.endsWith('.js')).map(f => `${d}/${f}`); } catch { return []; } });
 const ast = text => parse(text, { ecmaVersion: 'latest', sourceType: 'module', range: true });
 const exportsOf = {}, owner = {};

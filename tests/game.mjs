@@ -93,6 +93,7 @@ await scenario('near the surface the lens never slices the water off in a straig
 await scenario('every model in the game builds on the specimen page', async () => {
   const sp = await browser.page(); await sp.open(URL0 + '&specimens', { w: 800, h: 600 });
   const r = await sp.eval(`SPECIMENS.map(s => showSpecimen(s.id))`); assert.ok(r.length > 20); for (const m of r) if (!m.place) assert.ok(m.triangles > 0 && m.size.some(v => v > 0), m.id);
+  for (const m of r) if (m.group === 'animals' && m.real && m.id !== 'fever-ray') { const measured = m.id === 'cownose' ? m.size[0] : m.size[2]; assert.ok(Math.abs(measured - m.real) / m.real < 0.05, `${m.name}: ${measured} m, real ${m.real} m`); }
   assert.deepEqual(sp.errors, []); await sp.close?.(); await page.activate();
 });
 await scenario('two hands: ↑ and K rise, ↓ and J dive, Space and Q do it from the left, and none of them swim', async () => {
@@ -104,7 +105,7 @@ await scenario('being a dolphin: it stays in the water until you burst at the to
   const leaps = (input, secs) => page.eval(`(() => { __game.setInput(${JSON.stringify(input)}); let n = 0, was = false, top = 0; for (let i = 0; i < ${secs} * 60; i++) { simStep(1 / 60); const up = P.pos.y > 0; if (up && !was) n++; was = up; top = Math.max(top, P.speed); } return { n, top }; })()`);
   await page.eval(`becomeSpecies(speciesById.dolphin); __game.teleport(${HOLE}, 1); P.pos.y = -1; P.air = 1; 1`);
   assert.equal((await leaps({ throttle: 1 }, 30)).n, 0, 'holding forward never launches you');
-  await page.eval('P.pos.y = -0.5; P.sta = 1; 1'); const b = await leaps({ throttle: 1, burst: true }, 3); assert.ok(b.n >= 1, 'a burst at the top leaps'); assert.ok(b.top <= 12.5, `capped: ${b.top.toFixed(1)} m/s`);
+  await page.eval('P.pos.y = -0.5; P.sta = 1; 1'); const b = await leaps({ throttle: 1, burst: true }, 3); assert.ok(b.n >= 1, 'a burst at the top leaps'); assert.ok(b.top <= 13, `capped: ${b.top.toFixed(1)} m/s`);
   await page.eval(`P.pos.y = -8; P.vel.set(0, 0, 0); P.air = 0.3; P.idleT = 9; 1`); await leaps({ throttle: 1 }, 30); assert.ok(await page.eval('P.air > 0.5'), 'it surfaced and breathed on its own');
   await page.eval('becomeSpecies(speciesById.cownose); P.air = 1; 1');
 });

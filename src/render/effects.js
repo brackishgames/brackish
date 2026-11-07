@@ -43,7 +43,7 @@ export const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 
         float near = 1.0 - smoothstep(0.6, 2.5, fwidth(vW.x) + fwidth(vW.z));   // far off at a low angle the pattern is finer than a dot, and can only alias into rows of dashes
         b = 0.12 + (0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5))) * near;
       }
-      gl_FragColor = vec4(applyFog(b, vD), 0.0, 0.0, alpha);
+      gl_FragColor = vec4(uRaw > 0.5 ? vec3(applyFog(b, vD)) : vec3(applyFog(b, vD), 0.0, 0.0), alpha);
     }` }));
 surface.rotation.x = -Math.PI / 2; surface.frustumCulled = false; scene.add(surface);
 

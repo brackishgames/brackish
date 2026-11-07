@@ -5,7 +5,7 @@ import { _f, fwdInto, fwdOf, orient } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
 import { emitBubble } from '../render/effects.js?v=__BUILD__';
-import { strouhalRad } from '../render/materials.js?v=__BUILD__';
+import { beatRad } from '../render/materials.js?v=__BUILD__';
 import { floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
 import { day } from '../world/time.js?v=__BUILD__';
 import { creatureMesh, speciesById } from './creatures.js?v=__BUILD__';
@@ -194,7 +194,7 @@ export function poseAnimal(w, f, d, dt) {
   w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, w.air ? 8 : -0.5);
   w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, w.roll);
   { const u = w.mesh.material.uniforms, work = Math.min(1, w.v / w.sp.max); w.mesh.userData.baseGlow ??= u.uGlow.value; u.uGlow.value = w.mesh.userData.baseGlow * (w.passing ? 0.5 : 1) * (1 + 0.9 * (P.reveal || 0) * (d < (P.revealRange || 50) ? 1 : 0)); u.uFlap.value += ((w.sp.kind === 'ray' ? 0.35 + 0.65 * work : 0.6 + 0.4 * work) - u.uFlap.value) * Math.min(1, 2 * dt);
-    const target = w.sp.kind === 'ray' ? strouhalRad(w.sp, w.v, u.uFlap.value) : w.sp.freq * (0.55 + 0.9 * work); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); }
+    const target = beatRad(w.sp, w.v, u.uFlap.value, w.hunting ? 1.6 : 1), turning = Math.atan2(Math.sin(w.yaw - (w.lastYaw ?? w.yaw)), Math.cos(w.yaw - (w.lastYaw ?? w.yaw))) / Math.max(dt, 1e-3); w.lastYaw = w.yaw; u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); u.uBend.value += (THREE.MathUtils.clamp(turning / w.sp.turn, -1, 1) - u.uBend.value) * Math.min(1, 3 * dt); }
 }
 
 

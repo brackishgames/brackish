@@ -21,7 +21,7 @@ import { feedbackLines } from './feedback.js?v=__BUILD__';
 import { $, LORE, bl, checkpoints, compassMarks, headingDeg, help, mapOpen, mapSel, mapXY, readouts, storyEl, warn } from './hud.js?v=__BUILD__';
 import { STICK_R, touch } from './touch.js?v=__BUILD__';
 import { _cur, _v, simTime } from '../app/frame.js?v=__BUILD__';
-import { specimen, specimenInfo } from '../app/specimens.js?v=__BUILD__';
+import { specimen } from '../app/specimens.js?v=__BUILD__';
 import { drawDebug } from '../app/testing.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  PANEL  —  the display draws its own type: a 5×7 dot font, the compass,
@@ -104,7 +104,7 @@ export function drawPanel() {
   const done = () => { panel.tex.needsUpdate = true; };
   if (oLoad > 0.01) { drawLoading(v, oLoad); return done(); }
   if (portrait()) { drawTurnPhone(v); return done(); }
-  if (specimen.on) { drawSpecimenLabel(v); return done(); }
+  if (specimen.on) return done();   // the model page labels itself, in type you can read
   if (photo) { drawPhotoHints(v); return done(); }
   if (oTitle > 0.01) drawTitle(v, oTitle);
   wakeHud(v);
@@ -129,10 +129,6 @@ export function drawTurnPhone(v) {   // held upright: a phone outline turning on
   for (let x = 0; x <= pw; x++) { pDot(cx - pw / 2 + x, py - ph / 2, 200); pDot(cx - pw / 2 + x, py + ph / 2, 200); }
   for (let y = 0; y <= ph; y++) { pDot(cx - pw / 2, py - ph / 2 + y, 200); pDot(cx + pw / 2, py - ph / 2 + y, 200); }
   wrap('turn your phone sideways', cols).forEach((l, i) => pText(l, cx, py + 22 + i * 10, 220, 'center'));
-}
-export function drawSpecimenLabel(v) {   // the specimen page: what this is, and its size
-  const { H, SL, SB, cx } = v, it = specimen.item; if (!it) return;
-  pText(it.name, cx, 4, 230, 'center'); pText(specimenInfo(), cx, 14, 150, 'center', 1, true);
 }
 export function drawPhotoHints(v) {   // photo mode: the bay and a small stamp, as the stereo would print it. the keys fade away, and are never in the picture
   const { W, H, SL, SB, cx } = v, since = photo.t - photo.savedT, hint = Math.max(0, Math.min(1, TUNE.photo.hint - photo.t));

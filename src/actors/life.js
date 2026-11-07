@@ -7,7 +7,7 @@ import { scene } from '../render/display.js?v=__BUILD__';
 import { emitBubble } from '../render/effects.js?v=__BUILD__';
 import { creatureMat } from '../render/materials.js?v=__BUILD__';
 import { floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
-import { birdGeometry } from './creatures.js?v=__BUILD__';
+import { birdGeometry, schoolFishGeometry } from './creatures.js?v=__BUILD__';
 import { ABILITY, HP_MAX, P, abilityName } from './player.js?v=__BUILD__';
 import { bloop, splash } from '../systems/audio.js?v=__BUILD__';
 import { kn } from '../systems/input.js?v=__BUILD__';
@@ -38,8 +38,11 @@ export function stepJellies(dt, t) {
 
 // food: clam beds on the bottom give a heart back, shrimp clouds in mid-water refill the burst.
 // they sit in fixed places (hashed by 60 m cell) so you can learn where they are; eaten ones stay eaten.
+// a clam: two ribbed, domed valves, hinged and just open
+export function clamGeometry(R = 0.18) { const valve = up => { const n = 54, m = 7, ribs = 9, pos = [], idx = [], uv = []; for (let j = 0; j <= m; j++) { const v = j / m; for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2, x = Math.cos(a), z = Math.sin(a), rib = Math.cos(a * ribs) * v; pos.push(x * v * R * (1 + 0.012 * rib), up * ((1 - v * v) * R * 0.36 + 0.006 * R * rib), z * v * R * 0.84 * (1 + 0.012 * rib)); uv.push(0, 0); } } for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) { const a = j * (n + 1) + i, c = a + n + 1; idx.push(a, c, a + 1, a + 1, c, c + 1); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g.translate(0, 0, R * 0.8).rotateX(up * -0.05).translate(0, 0, -R * 0.8).toNonIndexed(); }; return mergeGeometries([valve(1), valve(-1)], false); }
 export const FOOD_MAX = 60, eaten = new Set();
-export const foodMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.18, 1), creatureMat({ glow: 1.4 }), FOOD_MAX);
+export const foodMesh = new THREE.InstancedMesh(clamGeometry(), creatureMat({ glow: 1.4 }), FOOD_MAX);
 foodMesh.frustumCulled = false; foodMesh.count = 0; scene.add(foodMesh);
 export let foodList = [], foodCenter = new THREE.Vector2(1e9, 1e9);
 export function rebuildFood() {
@@ -71,9 +74,7 @@ export function stepFood(dt, t) {
 // mullet schools
 export const GONE = new THREE.Vector3(0.001, 0.001, 0.001);
 export function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
-export const fishGeo = new THREE.BufferGeometry();
-fishGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.14, 0, 0.045, 0.02, 0, -0.045, 0.02, 0, 0, 0.11, 0, 0.055, 0.17, 0, -0.055, 0.17], 3));
-fishGeo.setIndex([0, 1, 2, 1, 3, 2, 3, 4, 5]);
+export const fishGeo = schoolFishGeometry();
 export const SCHOOLS = 7, FISH_PER = 55;
 export const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMat({ glow: 0.8 }), SCHOOLS * FISH_PER);
 fishMesh.frustumCulled = false; scene.add(fishMesh);
