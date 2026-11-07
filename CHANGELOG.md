@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-beta.8](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.7...v0.1.0-beta.8) (2026-11-07)
+
+
+### Bug Fixes
+
+* dim words no longer punch black boxes in bright water, and a back in full sun keeps its shape ([bf32411](https://github.com/brackishgames/brackish/commit/bf32411d0d39cab556d3e9369c035478c54514de))
+* schools no longer look like a field of stars, and thin fins stay on the body ([bf32411](https://github.com/brackishgames/brackish/commit/bf32411d0d39cab556d3e9369c035478c54514de))
+
 ## [0.1.0-beta.7](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.6...v0.1.0-beta.7) (2026-11-07)
 
 
