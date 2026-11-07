@@ -266,7 +266,7 @@ export function stepAmbient(dt, t) {
     const pd = s.c.distanceTo(P.pos);
     { const H = TUNE.hunt, hunter = PREDATORS.has(P.sp.id), felt = (P.speed > P.sp.cruise * H.fastOver ? H.feelFast : H.feelSlow) * (P.pos.y < s.c.y - 0.5 ? H.under : 1); if (hunter ? pd < felt : pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3; }   // their flanks feel pressure in the water: rush and they are gone; come slowly from below and you may get close
     if (s.panic <= 0) for (const w of wild) if (w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(s.c) < 14) { s.panic = 3; if (pd < 50) flush(s.c.x, s.c.z, 1 - pd / 50); break; }   // sharks are silent; their prey is not
-    s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * 3 : s.base) - s.spread) * Math.min(1, 3 * dt);
+    s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * TUNE.school.scatter : s.base) - s.spread) * Math.min(1, 3 * dt);
     if (s.panic > 0) { steerToSchool(s, 2 * s.c.x - P.pos.x, 2 * s.c.z - P.pos.z); }
     s.turn += (rand() - 0.5) * dt * 2; s.turn *= 0.98; s.dir += s.turn * dt; const sv = s.v * (s.panic > 0 ? 4 : 1); s.c.x += -Math.sin(s.dir) * sv * dt; s.c.z += -Math.cos(s.dir) * sv * dt;
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);

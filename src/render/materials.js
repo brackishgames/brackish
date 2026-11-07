@@ -92,6 +92,7 @@ export const creatureFrag = GLSL_COMMON + /* glsl */`
     if (vFin > 0.5) { float edge = pow(1.0 - abs(dot(n, v)), 1.5); b = (0.05 + 0.08 * top + 0.75 * edge) * uGlow * light; }   // fins: a bright edge, a faint face   // hulls and decks are lit in the air
     if (uMode == 1.0) { float e = smoothstep(0.82, 1.0, vUv.x) + smoothstep(0.80, 0.86, vUv.y) * step(vUv.y, 0.87) + (1.0 - smoothstep(0.0, 0.07, vUv.y)); b = b * (1.0 - 0.35 * vUv.x) + 0.35 * clamp(e, 0.0, 1.0) * uGlow; }
     b = mix(b, 0.1 + 0.55 * max(dot(n, v), 0.0) + 0.35 * pow(1.0 - max(dot(n, v), 0.0), 3.0), uFill);   // the inspection light: lit from the lens, so every side of a model can be read
+    if (uRaw < 0.5 && b > 0.62) b = 0.62 + 0.38 * (1.0 - exp(-(b - 0.62) / 0.38 * 0.8));   /* a knee on the highlights, so a back in full sun keeps its shape instead of burning to white */
     gl_FragColor = outB(applyFog(min(b, 1.0), vD));
     if (uRaw > 0.5) {   // the raw view: a studio's key, fill and rim on a plain clay surface, so the shape is all you are judging
       vec3 key = normalize(vec3(0.5, 0.9, 0.6)), fill = normalize(vec3(-0.7, 0.2, 0.4)); float nl = max(dot(n, key), 0.0), fl = max(dot(n, fill), 0.0), sky = 0.5 + 0.5 * n.y, r = pow(1.0 - max(dot(n, v), 0.0), 3.0), s = pow(max(dot(n, normalize(key + v)), 0.0), 40.0);

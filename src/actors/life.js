@@ -4,6 +4,7 @@ import { bump, join, tube } from '../lib/shapes.js?v=__BUILD__';
 import { events } from '../core/events.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
 import { placeInstance } from '../core/space.js?v=__BUILD__';
+import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
 import { emitBubble } from '../render/effects.js?v=__BUILD__';
 import { creatureMat } from '../render/materials.js?v=__BUILD__';
@@ -84,10 +85,10 @@ export function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x)
 export const fishGeo = schoolFishGeometry();
 export const SCHOOLS = 7, FISH_PER = 55;
 events.addEventListener('predator-near', () => { for (const s of schools) s.panic = 3; });
-export const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMat({ glow: 0.8 }), SCHOOLS * FISH_PER);
+export const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMat({ glow: TUNE.school.glow }), SCHOOLS * FISH_PER);
 fishMesh.frustumCulled = false; scene.add(fishMesh);
 export const schools = Array.from({ length: SCHOOLS }, () => ({ c: new THREE.Vector3(), dir: rand() * 6.28, turn: 0, v: 0.6 + rand() * 0.6, spread: 2.5 + rand() * 3, base: 0, panic: 0,
-  fish: Array.from({ length: FISH_PER }, () => ({ off: new THREE.Vector3(rand() - .5, (rand() - .5) * 0.5, rand() - .5), ph: rand() * 6.28, w: 0.4 + rand() * 0.5, alive: true })) }));
+  fish: Array.from({ length: FISH_PER }, () => ({ off: new THREE.Vector3(rand() - .5, rand() - .5, rand() - .5).normalize().multiplyScalar(0.5 * Math.cbrt(rand())).multiply(new THREE.Vector3(1, TUNE.school.flat, 1)), ph: rand() * 6.28, w: 0.4 + rand() * 0.5, alive: true })) }));
 
 // birds: pelican lines and gull wheels, above the surface
 export const BIRDS = 96;   // 90 in flocks + 6 slots for diving pelicans

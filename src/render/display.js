@@ -24,7 +24,7 @@ export const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 
 
 export let pitchCss = MOBILE ? 3 : 4;
 export const setDotPitch = px => { pitchCss = px; resize(); };   // the model page shows four views at once, so it needs finer dots than the game
-export const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+export const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true, samples: 4 });   // a thing smaller than a dot lights it partly, rather than all or not at all: fins stay joined, far fish stay dim
 // the cell pass: one fragment per dot, at grid resolution. contrast, depth and the OEL drive levels are the same for every
 // pixel of a dot, so they are worked out here once instead of at every screen pixel.
 export const cellRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
@@ -67,7 +67,7 @@ export const DotShader = {
       vec2 vc = gl_FragCoord.xy / (uGrid * uPitch) - 0.5; float vig = (1.0 - 0.6 * smoothstep(0.2, 0.75, length(vc))) * (1.0 - uTunnel * smoothstep(0.18, 0.5, length(vc))) * (1.0 - uClose * smoothstep(0.22, 0.62, length(vc)));   // uClose: hunted, or out of air
       vec3 outc = (col * (1.0 - uDim) + unlit) * vig;
       float ptx = texture2D(tText, uv).r;   // the panel layer: every word and symbol is lit dots on the same matrix
-      if (ptx > 0.0) { float rt = 0.5 + 0.42 * ptx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = mix(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * ptx), mt); }
+      if (ptx > 0.0) { float rt = 0.5 + 0.42 * ptx, mt = 1.0 - smoothstep(rt - 0.3, rt + 0.05, d); outc = max(outc, vec3(0.80, 0.90, 1.0) * (0.3 + 0.7 * ptx) * mt); }   // light only ever adds: a dim word over bright water must never punch a hole in it
       gl_FragColor = vec4(outc, 1.0);
     }`,
 };
