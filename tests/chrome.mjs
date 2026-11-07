@@ -7,7 +7,7 @@ export const FAIL_AFTER_MS = 30000;     // and anything the page is asked that h
 export async function launch() {
   const bin = CANDIDATES.find(p => p && existsSync(p)); if (!bin) throw new Error('no Chrome found: set CHROME');
   const profile = mkdtempSync(join(tmpdir(), 'brackish-test-'));
-  const proc = spawn(bin, ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-first-run', '--no-sandbox', '--mute-audio', '--window-size=1280,720', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const proc = spawn(bin, ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-first-run', '--no-sandbox', '--mute-audio', '--autoplay-policy=no-user-gesture-required', '--window-size=1280,720', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   // Chrome says where it's listening once it is: that line is the signal, not a delay
   const wsBase = await new Promise((ok, fail) => { let buf = ''; proc.stderr.on('data', d => { buf += d; const m = buf.match(/DevTools listening on (ws:\/\/[^\s]+)/); if (m) ok(m[1]); }); proc.on('exit', c => fail(new Error('Chrome exited ' + c))); });
   const http = wsBase.replace(/^ws:/, 'http:').replace(/\/devtools\/.*$/, '');

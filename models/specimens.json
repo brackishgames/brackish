@@ -7,10 +7,10 @@
   "real": 0.9,
   "size": [
    0.897,
-   0.132,
+   0.158,
    1.423
   ],
-  "triangles": 4524,
+  "triangles": 16812,
   "stl": "cownose.stl"
  },
  {
@@ -24,7 +24,7 @@
    0.709,
    2.6
   ],
-  "triangles": 3720,
+  "triangles": 12800,
   "stl": "dolphin.stl"
  },
  {
@@ -34,11 +34,11 @@
   "place": false,
   "real": 3,
   "size": [
-   1.256,
-   0.801,
+   1.261,
+   0.802,
    3
   ],
-  "triangles": 4112,
+  "triangles": 13328,
   "stl": "manatee.stl"
  },
  {
@@ -52,7 +52,7 @@
    0.775,
    2.4
   ],
-  "triangles": 3756,
+  "triangles": 13088,
   "stl": "bull.stl"
  },
  {
@@ -62,11 +62,11 @@
   "place": false,
   "real": 3.4,
   "size": [
-   1.433,
-   1.084,
+   1.437,
+   1.087,
    3.4
   ],
-  "triangles": 4260,
+  "triangles": 13968,
   "stl": "hammer.stl"
  },
  {
@@ -80,7 +80,7 @@
    0.101,
    0.45
   ],
-  "triangles": 3748,
+  "triangles": 13208,
   "stl": "mullet.stl"
  },
  {
@@ -92,9 +92,9 @@
   "size": [
    0.85,
    0.132,
-   1.423
+   1.366
   ],
-  "triangles": 964,
+  "triangles": 304,
   "stl": "fever-ray.stl"
  },
  {
@@ -104,11 +104,11 @@
   "place": false,
   "real": null,
   "size": [
-   0.044,
+   0.04,
    0.08,
    0.341
   ],
-  "triangles": 104,
+  "triangles": 76,
   "stl": "school-fish.stl"
  },
  {
@@ -118,11 +118,11 @@
   "place": false,
   "real": null,
   "size": [
-   0.44,
-   0.642,
-   0.429
+   0.455,
+   0.493,
+   0.455
   ],
-  "triangles": 222,
+  "triangles": 1584,
   "stl": "jelly.stl"
  },
  {
@@ -133,10 +133,10 @@
   "real": null,
   "size": [
    2,
-   0.2,
-   1
+   0.46,
+   1.176
   ],
-  "triangles": 476,
+  "triangles": 572,
   "stl": "bird.stl"
  },
  {
@@ -146,11 +146,11 @@
   "place": false,
   "real": 180,
   "size": [
-   28,
-   46.557,
-   180
+   28.56,
+   48.972,
+   183.373
   ],
-  "triangles": 1060,
+  "triangles": 2851,
   "stl": "ship.stl"
  },
  {
@@ -161,10 +161,10 @@
   "real": 12,
   "size": [
    4,
-   3.966,
-   12.48
+   5.074,
+   12.18
   ],
-  "triangles": 932,
+  "triangles": 2377,
   "stl": "cruiser.stl"
  },
  {
@@ -175,10 +175,10 @@
   "real": 6,
   "size": [
    2.2,
-   1.578,
-   6.03
+   1.879,
+   6.074
   ],
-  "triangles": 932,
+  "triangles": 2465,
   "stl": "skiff.stl"
  },
  {
@@ -188,11 +188,11 @@
   "place": false,
   "real": null,
   "size": [
-   2.2,
+   2.46,
    12.17,
-   2.2
+   2.46
   ],
-  "triangles": 688,
+  "triangles": 1360,
   "stl": "buoy.stl"
  },
  {
@@ -202,11 +202,11 @@
   "place": false,
   "real": null,
   "size": [
-   0.36,
-   0.144,
-   0.303
+   0.362,
+   0.169,
+   0.302
   ],
-  "triangles": 1512,
+  "triangles": 1664,
   "stl": "clam.stl"
  },
  {
@@ -230,11 +230,11 @@
   "place": false,
   "real": null,
   "size": [
-   0.948,
-   0.789,
+   1.056,
+   0.822,
    0
   ],
-  "triangles": 126,
+  "triangles": 254,
   "stl": "sea-fan.stl"
  },
  {
@@ -244,11 +244,11 @@
   "place": false,
   "real": null,
   "size": [
-   1.682,
-   1.345,
-   1.756
+   1.706,
+   1.342,
+   1.723
   ],
-  "triangles": 320,
+  "triangles": 180,
   "stl": "rock.stl"
  },
  {

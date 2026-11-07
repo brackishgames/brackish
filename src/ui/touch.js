@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ramp, tiltAngles } from '../lib/tilt.js?v=__BUILD__';
-import { MOBILE } from '../core/env.js?v=__BUILD__';
+import { DEV, MOBILE } from '../core/env.js?v=__BUILD__';
 import { goLandscape, portrait } from '../core/screen.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { SPECIES } from '../actors/creatures.js?v=__BUILD__';
@@ -8,7 +8,7 @@ import { P, act, becomeSpecies, unlocked } from '../actors/player.js?v=__BUILD__
 import { audio, splash, startAudio } from '../systems/audio.js?v=__BUILD__';
 import { endPhoto, helpOpen, keys, menu, menuKey, needFull, openMenu, photo, setHelp } from '../systems/input.js?v=__BUILD__';
 import { loadedSave } from '../systems/save.js?v=__BUILD__';
-import { CHAPTERS, TITLE_HINT, pressedAny, startGame, started } from '../systems/story.js?v=__BUILD__';
+import { CHAPTERS, TITLE_HINT, pressedAny, startGame, started, story } from '../systems/story.js?v=__BUILD__';
 import { fbEl } from './feedback.js?v=__BUILD__';
 import { $, bl, checkpoints, help, mapEl, say, tip, toggleMap, travelTo } from './hud.js?v=__BUILD__';
 import { toCell } from './panel.js?v=__BUILD__';
@@ -40,7 +40,10 @@ export function onTilt(e) {
   tilt.climb = settings.tilt ? -ramp(tilt.pitch - tilt.zero, 0.1, 0.5) : 0;
 }
 export const stickEl = document.getElementById('stick'), knobEl = stickEl.querySelector('i'), STICK_R = 56;
+// changing body is the reward for the whole story: only in free swim, once you have been them all. inside the story each chapter chooses your body
+export const canChangeBody = () => DEV || !!CHAPTERS[story.ch]?.free;
 export function cycleCreature(dir = 1) {
+  if (!canChangeBody()) return;
   const list = SPECIES.filter(sp => unlocked.has(sp.id)); if (list.length < 2) { say('you have not yet become anyone else', 2); return; }
   const i = list.indexOf(P.sp); becomeSpecies(list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length]); say(`YOU ARE A ${P.sp.name.toUpperCase()}`, 2); splash(0.4);
 }

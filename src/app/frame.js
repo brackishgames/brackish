@@ -207,7 +207,7 @@ export function stepCamera(dt) {
   if (specimen.on) { applySpecimen(); return; }
   if (photo) { stepPhotoCam(dt); return; }
   P.burstMix = (P.burstMix || 0) + ((P.bursting ? 1 : 0) - (P.burstMix || 0)) * Math.min(1, (P.bursting ? 5 : 2) * dt);   // snaps in, eases out
-  const size = P.mesh.userData.size, dist = 2.4 + size * 2.5 + P.speed * 0.12 + P.burstMix * (1 + size), h = 1.0 + size * 0.6;
+  const size = P.mesh.userData.size, dist = TUNE.camera.near + size * TUNE.camera.perSize + P.speed * TUNE.camera.perSpeed + P.burstMix * (0.2 + 0.4 * size), h = 0.6 + size * 0.28;
   camera.fov = (camera.userData.baseFov || 60) + (settings.speedFx ? 14 : 0) * P.burstMix; camera.updateProjectionMatrix();   // the view widens at speed, unless that's turned off for comfort
   { const want = settings.vignette ? Math.min(0.85, 0.75 * P.burstMix + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) / 1.2) + 0.35 * Math.min(1, (P.speed || 0) / Math.max(1, P.sp.max))) : 0;
     dotPass.uniforms.uTunnel.value += (want - dotPass.uniforms.uTunnel.value) * Math.min(1, 4 * dt); }

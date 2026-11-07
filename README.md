@@ -25,7 +25,7 @@ the first time tells you one true thing about it: the Skyway in 1980, the Blackt
 Nine chapters across four bodies, each moving at the real animal's speed: a cownose ray finds the fever off Egmont and
 follows it into the Gulf; a bottlenose dolphin swims beside one of its pod and leaps with it; a bull shark feeds in
 Hillsborough Bay at night; a manatee makes for the warm water at Apollo Beach. Then you are the ray again, in the pass
-where you began, at dawn. After that you can swim anywhere as any of them.
+where you began, at dawn. After that you can swim anywhere as any of them, and Tab changes between them; until then, the story chooses who you are.
 
 The bay is not on your side. A shark that finds a ray alone, or at the ragged edge of the fever, stays on you until you
 lose it: get far away, or deep into the fever. Hammerheads follow the migration and pin rays to the sand. Hulls hit the
@@ -38,7 +38,7 @@ Press Enter or click and the game goes full screen and takes the mouse. Play wit
 faster and slower, A and D (or ← →) turn, ↑ rises and ↓ dives (K and J too). With a hand on the mouse, the mouse steers, Space rises, Q dives, and the right button looks around. Let go of a
 rise or a dive and the nose comes back level. Shift is a burst: five seconds flat out, at a little over twice the animal's
 real sprint, back in about two. Strong tide is something else: it carries you, and the readout says TIDE and which way. E is the ability: a ray senses clams buried in the sand, a dolphin
-echolocates, a shark lunges, a manatee takes a breath. Tab cycles the bodies you have been and M opens the map for fast
+echolocates, a shark lunges, a manatee takes a breath. M opens the map for fast
 travel. Esc or P pauses: fast travel, the journal of places you've found, how to swim, restart the chapter, and settings (sound, controls, comfort, feedback, a new game).
 
 A controller works over USB or Bluetooth (Xbox, PlayStation, Switch Pro): left stick steers, RT swims, A bursts, X is the
@@ -75,6 +75,8 @@ world's state and `[` `]` slow time down or speed it up; `?seed=7` replays a run
 of that, and dev mode never touches your save. The page's security policy allows only this site and those data services.
 
 ## Pictures and models
+
+`npm run check` is the first stop for tuning: it measures motion (tail beats and Strouhal numbers against published swimming studies), the camera's framing, the sound's spectrum (against ambient-ocean noise curves, and what fear should do to it), faults in the picture, and what a frame costs, and prints one line per fault. Change a number in `src/core/tune.js` and run it again; look at a picture only when a number can't say what is wrong.
 
 `npm run shot` takes every scene (the title, swimming, a burst, the surface, night, the menus, photo mode, a phone) from the same seed into `.shots/`, with all of them on one `sheet.png`. `node tools/shot.mjs surface burst` takes just those, `--list` shows them, and `--at 27.62,-82.65,8 --clock 22 --js "P.hp = 1"` shoots any spot at any hour. It says so if the page logged an error or the canvas doesn't fit the window.
 

@@ -14,7 +14,7 @@ import { huntHeat, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { chimeCheckpoint } from '../systems/audio.js?v=__BUILD__';
 import { B, keyLabel, keyboardHint, kn } from '../systems/input.js?v=__BUILD__';
 import { saveGame } from '../systems/save.js?v=__BUILD__';
-import { started, story } from '../systems/story.js?v=__BUILD__';
+import { CHAPTERS, started, story } from '../systems/story.js?v=__BUILD__';
 import { nudgeHud } from './panel.js?v=__BUILD__';
 import { camLook, camPos, lastFloor, paused, tideArrow } from '../app/frame.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
@@ -34,9 +34,9 @@ export function renderHelpKeys() {
   const L = a => keyLabel(B(a)), esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
   // each line short enough to fit on one row of a small screen (about 28 characters)
   const rows = MOBILE ? [['TILT', 'lean to turn · tip to dive'], ['HOLD', 'burst, while the dots last'], ['◆', 'sense or echo: finds clams'], ['M', 'map and fast travel'],
-    ['⇄', 'become a body you have been'], ['II', 'pause · settings · feedback']]
+    ...(CHAPTERS[story.ch]?.free ? [['⇄', 'become a body you have been']] : []), ['II', 'pause · settings · feedback']]
     : [['MOUSE', 'steer · right button looks'], [`${L('forward')} ${L('back')}`, 'forward · back'], [`${L('left')} ${L('right')}`, 'turn · ← → too'],
-    ['↑ ↓', 'rise · dive · K J too'], [`${L('rise')} ${L('dive')}`, 'rise · dive, by the left hand'], [L('burst'), 'burst, while the dots last. at the top, a dolphin leaps'], [L('ability'), 'sense or echo: finds clams'], [L('creature'), 'become a body you have been'],
+    ['↑ ↓', 'rise · dive · K J too'], [`${L('rise')} ${L('dive')}`, 'rise · dive, by the left hand'], [L('burst'), 'burst, while the dots last. at the top, a dolphin leaps'], [L('ability'), 'sense or echo: finds clams'], ...(CHAPTERS[story.ch]?.free ? [[L('creature'), 'become a body you have been']] : []),
     [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo mode, anywhere'], [L('feedback'), 'send us a note from here']];
   help.querySelector('.keys').innerHTML = rows.map(([k, d]) => `<b>${esc(k)}</b><span>${esc(d)}</span>`).join('');
 }
@@ -67,7 +67,7 @@ export const LORE = {
   'Old Skyway rubble': 'When the old bridge was taken down, some of it was dropped here. Now it is reef.',
 };
 export function restoreCheckpoints(list) { checkpoints.length = 0; checkpoints.push(...list); lastCheckpoint = checkpoints[checkpoints.length - 1] || checkpoints[0]; }   // from a save
-export function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); nudgeHud(); chimeCheckpoint(); if (LORE[name] && !world.wrecks.some(w => w.name === name)) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
+export function discover(name, x, z) { if (checkpoints.some(c => c.name === name)) return; checkpoints.push({ name, x, z }); nudgeHud(); chimeCheckpoint(); if (LORE[name] && !world.wrecks.some(w => w.name === name)) tip('lore:' + name, () => LORE[name], name.toUpperCase()); tip('map', () => `${kn('map')} opens the chart. travel to any place you have found.`); if (unlocked.size > 1 && CHAPTERS[story.ch]?.free) tip('tab', () => `${kn('tab')} becomes a creature you have been.`); lastCheckpoint = checkpoints[checkpoints.length - 1]; say(`CHECKPOINT · ${name.toUpperCase()}`, 2.5); saveGame(); }
 export function cameraBehind() { camPos.copy(P.pos).addScaledVector(fwdOf(P.yaw, 0), -6).add(new THREE.Vector3(0, 1.5, 0)); camLook.copy(P.pos); }   /* no swing on arrival */
 export function travelTo(cp) {
   let x = cp.x, z = cp.z; for (let r = 0; !isWater(x, z, 2.5) && r < 3000; r += 30) { x = cp.x + Math.cos(r * 0.4) * r; z = cp.z + Math.sin(r * 0.4) * r; }

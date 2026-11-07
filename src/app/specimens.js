@@ -68,7 +68,7 @@ function fitCamera(yaw, pitch, aspect) {
   const { at, half } = specimen, t = Math.tan(THREE.MathUtils.degToRad(FOV / 2)); _d.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
   camera.position.copy(at).addScaledVector(_d, 1); camera.up.set(0, 1, 0); camera.lookAt(at); camera.updateMatrixWorld(); _r.setFromMatrixColumn(camera.matrixWorld, 0); _u.setFromMatrixColumn(camera.matrixWorld, 1);
   let need = 0, deep = 0; for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) { _c.set(sx * half.x, sy * half.y, sz * half.z); need = Math.max(need, Math.abs(_c.dot(_r)) / (t * aspect), Math.abs(_c.dot(_u)) / t); deep = Math.max(deep, _c.dot(_d)); }
-  camera.position.copy(at).addScaledVector(_d, need * 1.08 + deep * 0.4); camera.lookAt(at);
+  const dist = Math.max(need * 1.08 + deep * 0.75, deep * 1.15); camera.near = Math.max(0.005, dist * 0.02); camera.far = Math.max(30000, dist * 4); camera.updateProjectionMatrix(); camera.position.copy(at).addScaledVector(_d, dist); camera.lookAt(at);   // the lens's near limit is for a bay; a clam is closer
 }
 // In game: the bay's own lighting, through the dot matrix. a little fill so the dark side of a model still shows
 export function renderSpecimenViews() {

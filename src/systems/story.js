@@ -16,7 +16,7 @@ import { WILD_ACTIVE, setWild, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { bell, chimeCheckpoint, chimeStart } from './audio.js?v=__BUILD__';
 import { lockPointer, sprinting } from './input.js?v=__BUILD__';
 import { saveGame } from './save.js?v=__BUILD__';
-import { $, cameraBehind, checkpoints, discover, say, sayTimer, travelTo } from '../ui/hud.js?v=__BUILD__';
+import { $, cameraBehind, checkpoints, discover, renderHelpKeys, say, sayTimer, travelTo } from '../ui/hud.js?v=__BUILD__';
 import { logo } from '../ui/logo.js?v=__BUILD__';
 import { whenFaded } from '../ui/panel.js?v=__BUILD__';
 import { tilt } from '../ui/touch.js?v=__BUILD__';
@@ -48,7 +48,7 @@ export const CHAPTERS = [
 ];
 export const story = { ch: 0, line: -1, surfaceT: 0, followT: 0, breaths: 0, wasUp: false, fed0: 0, goal: null,
   begin(i) {
-    this.ch = i; this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
+    this.ch = i; document.body.classList.toggle('free', !!CHAPTERS[i].free || DEV); renderHelpKeys(); this.line = 0; this.breaths = 0; this.surfaceT = 0; this.hammer = false; this.syncs = 0; for (const o of wild) o.partner = false; this.beganAt = WU.uTime.value; this.fed0 = P.fed || 0; P.hp = Math.max(P.hp || 0, 3); const c = CHAPTERS[i];
     const fade = $('fade'), card = $('chapter'), run = this.run = (this.run || 0) + 1, current = () => run === this.run;   // a newer start supersedes this one, and its leftovers do nothing
     const arrive = () => { if (!current()) return;
       if (c.feverAt === 'hole') { fever.seg = 0; fever.t = 0; fever.moving = false; fever.c.set(FEVER_PATH[0][0], fever.c.y, FEVER_PATH[0][1]); }   // the fever gathers in the hole off Egmont (III), and is back there in the spring (IX)
@@ -101,6 +101,7 @@ export function joinFever(name) { const back = fwdOf(fever.yaw, 0).multiplyScala
 export function startGame(save) { if (canFull && !DEV && !TEST) goFull(); tilt.zero = null; started = true; lockPointer(); document.body.classList.add('playing'); startedAt = WU.uTime.value; later(TUNE.timing.hintFor, () => document.body.classList.add('settled'));
   $('title').classList.add('gone');
   if (save && CHAPTERS[save.ch].withFever && Math.hypot(P.pos.x - fever.c.x, P.pos.z - fever.c.z) > TUNE.fever.rejoin) joinFever(CHAPTERS[save.ch].title);   // a save from far off: back with them
+  if (save) document.body.classList.toggle('free', !!CHAPTERS[save.ch].free || DEV);
   if (save) { logo.release(); if (CHAPTERS[save.ch].pair) story.spawnPartner(); story.ch = save.ch; story.line = 0; const c = CHAPTERS[save.ch]; const card = $('chapter'); card.textContent = c.title; card.style.opacity = 1; chimeStart(); later(TUNE.timing.resumeCard, () => { card.style.opacity = 0; say(c.lines[0], 7, c.title); }); if (CHAPTERS[save.ch].feverMoves && !save.fever) fever.moving = true; emit('chapter-begun', save.ch); return; }
   story.begin(0); }
 export function pressedAny() { P.titleIdle = 0; if (!started) { $('title').classList.remove('attract'); } }

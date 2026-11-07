@@ -151,7 +151,7 @@ export function wakeHud(v) {   // what each part of the HUD has to tell you this
   const goal = compassMarks.find(l => l.goal), off = goal ? Math.abs(((goal.bearing - headingDeg() + 540) % 360) - 180) : 0;
   const now = {
     hearts: P.hp < 3 || danger || began || changed('hp', P.hp) || changed('fed', P.fed || 0),
-    motion: P.bursting || (P.sta ?? 1) < 0.999 || changed('speed', Math.round(P.speed / H.speedStep)),
+    motion: began || P.bursting || (P.sta ?? 1) < 0.999 || changed('speed', Math.round(P.speed / H.speedStep)),
     ability: !ready || changed('ready', ready),
     nav: Math.abs(P.turnIn || 0) > 0.1 || (!!goal && (off > H.offGoal || began || changed('goal', story.goal.join()))),   // straight at the goal, its beam is enough
     place: began || changed('place', readouts.place),
@@ -294,7 +294,7 @@ export function drawKeyHint(v) {   // the key hints along the bottom, until they
 export function drawTouchControls(v) {   // the round buttons and the drag stick, as dots
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   if (document.body.classList.contains('touch')) {
-    for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature', 'tPause']) { const el = $(id), r = el.getBoundingClientRect(), bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
+    for (const id of ['tBurst', 'tAct', 'tMap', 'tCreature', 'tPause']) { const el = $(id), r = el.getBoundingClientRect(); if (!r.width) continue; const bx = toCell(r.left + r.width / 2), by = toCell(r.top + r.height / 2), on = el.classList.contains('on');
       pRing(bx, by, toCell(r.width / 2), on ? 220 : 90); pText({ tBurst: '►►', tAct: '◆', tMap: 'M', tCreature: '⇄', tPause: 'II' }[id], bx, by - 3, on ? 255 : 200, 'center'); }
     pGain = 1;
     if (touch.id !== null) { const sx = toCell(touch.ox), sy = toCell(touch.oy); pRing(sx, sy, toCell(STICK_R), 70); const kx = sx + toCell(touch.kx || 0), ky = sy + toCell(touch.ky || 0); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(kx + dx, ky + dy, 200); }

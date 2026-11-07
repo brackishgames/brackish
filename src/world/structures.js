@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeGrid } from '../lib/collide.js?v=__BUILD__';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { box, foil, join, pod, propeller, tube } from '../lib/shapes.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
 import { _E, _M, _s, fwdOf } from '../core/space.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
@@ -15,29 +15,47 @@ import { ANCHORAGE, CHANNEL, SKYWAY, WRECKS, floorAt } from './geo.js?v=__BUILD_
 export const structMat = creatureMat({ glow: 0.62 });
 export let bridges = [];   // [{ name, pts:[[x,z],...] }]: the built-in set, then OpenStreetMap's (18-boot.js)
 export function setBridges(list) { bridges = list; }
-// a hull you could believe: a real section (flat-bottomed and full for a freighter, a deep V for a small boat), a bow that narrows and lifts, and what sits on deck
+// a hull you could believe from any side, and in this game you mostly see them from below: a real section (flat and full for a freighter, a deep V for a small boat), a bow that narrows and lifts, a run that rises aft to clear the propeller and rudder, a keel, and what sits on deck
 export function hullGeometry(L, W, draft, free, kind = 'ship') {
-  const ship = kind === 'ship', vee = ship ? 0.35 : 0.85, entry = ship ? 0.2 : 0.42, along = 32, around = 13, pos = [], idx = [], uv = [];
-  for (let j = 0; j <= along; j++) { const s = j / along, w = W / 2 * Math.pow(Math.min(1, s / entry), ship ? 0.55 : 0.7) * Math.min(1, 0.72 + (1 - s) * 2.8), sheer = free * (1 + 0.55 * (1 - s) * (1 - s) * (1 - s)), deep = draft * Math.min(1, 0.25 + s * 3);
-    for (let i = 0; i <= around; i++) { const a = i / around * Math.PI, sa = Math.sin(a); pos.push(Math.cos(a) * w, sheer - (sheer + deep) * Math.pow(sa, vee), (s - 0.5) * L); uv.push(0, 0); } }
+  const ship = kind === 'ship', skiff = kind === 'skiff', vee = ship ? 0.3 : 0.85, entry = ship ? 0.22 : 0.42, along = 44, around = 15, pos = [], idx = [];
+  const rim = []; for (let j = 0; j <= along; j++) { const s = j / along, w = W / 2 * Math.pow(Math.min(1, s / entry), ship ? 0.55 : 0.7) * Math.min(1, 0.72 + (1 - s) * 2.8), sheer = free * (1 + 0.55 * (1 - s) * (1 - s) * (1 - s)), run = 1 - (ship ? 0.72 : 0.5) * THREE.MathUtils.smoothstep(s, 0.84, 0.985), deep = draft * Math.min(1, 0.25 + s * 3) * run, z = (s - 0.5) * L; rim.push([w, sheer, z]);
+    for (let i = 0; i <= around; i++) { const a = i / around * Math.PI, sa = Math.sin(a); pos.push(Math.cos(a) * w, sheer - (sheer + deep) * Math.pow(sa, vee), z); } }
   for (let j = 0; j < along; j++) for (let i = 0; i < around; i++) { const a = j * (around + 1) + i, c = a + around + 1; idx.push(a, c, a + 1, a + 1, c, c + 1); }
-  const hull = new THREE.BufferGeometry(); hull.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hull.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); hull.setIndex(idx); hull.computeVertexNormals();
-  const deck = []; for (let j = 0; j < along; j++) { const k = i => [pos[(j + i) * (around + 1) * 3], pos[(j + i) * (around + 1) * 3 + 1], pos[(j + i) * (around + 1) * 3 + 2]], a = k(0), b = k(1); deck.push(a[0], a[1], a[2], -a[0], a[1], a[2], b[0], b[1], b[2], b[0], b[1], b[2], -a[0], a[1], a[2], -b[0], b[1], b[2]); }
-  const top = new THREE.BufferGeometry(); top.setAttribute('position', new THREE.Float32BufferAttribute(deck, 3)); top.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(deck.length / 3 * 2).fill(0), 2)); top.computeVertexNormals();
-  const box = (x, y, z, cx, cy, cz) => new THREE.BoxGeometry(x, y, z).translate(cx, cy, cz), parts = [hull, top];
-  if (ship) {   // containers forward, the bridge and funnel aft
-    for (let i = 0; i < 7; i++) parts.push(box(W * 0.8, free * (1 + (i % 3) * 0.35), L * 0.085, 0, free + free * (1 + (i % 3) * 0.35) / 2, L * (-0.3 + i * 0.095)));
-    parts.push(box(W * 0.86, free * 2.6, L * 0.09, 0, free * 2.3, L * 0.38), box(W * 1, free * 0.3, L * 0.035, 0, free * 3.7, L * 0.35), new THREE.CylinderGeometry(W * 0.07, W * 0.09, free * 1.4, 14).translate(0, free * 4, L * 0.43));
-  } else if (kind === 'cruiser') {   // a cabin with a raked windscreen, and a flybridge
+  const hull = new THREE.BufferGeometry(); hull.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); hull.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(pos.length / 3 * 2).fill(0.5), 2)); hull.setIndex(idx); hull.computeVertexNormals();
+  const floorY = skiff ? free * 0.3 : null, wall = skiff ? 0.9 : 1, deck = [], quad = (a, b, c, d) => deck.push(...a, ...c, ...b, ...b, ...c, ...d); for (let j = 0; j < along; j++) { const p = rim[j], q = rim[j + 1];
+    if (skiff) for (const sx of [1, -1]) { quad([sx * p[0], p[1], p[2]], [sx * q[0], q[1], q[2]], [sx * p[0] * wall, p[1], p[2]], [sx * q[0] * wall, q[1], q[2]]); quad([sx * p[0] * wall, p[1], p[2]], [sx * q[0] * wall, q[1], q[2]], [sx * p[0] * wall, floorY, p[2]], [sx * q[0] * wall, floorY, q[2]]); }   // an open boat: a gunwale, sides you can see inside, and a sole
+    quad([p[0] * wall, floorY ?? p[1], p[2]], [q[0] * wall, floorY ?? q[1], q[2]], [-p[0] * wall, floorY ?? p[1], p[2]], [-q[0] * wall, floorY ?? q[1], q[2]]); }
+  const lid = new THREE.BufferGeometry(); lid.setAttribute('position', new THREE.Float32BufferAttribute(deck, 3)); lid.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(deck.length / 3 * 2).fill(0.5), 2)); lid.computeVertexNormals();
+  const parts = [hull, lid], sternZ = L * 0.5, bot = -draft;
+  // the transom, closing the stern
+  { const st = rim[along], tr = []; for (let i = 0; i < around; i++) { const a = pos.slice((along * (around + 1) + i) * 3, (along * (around + 1) + i) * 3 + 3), b = pos.slice((along * (around + 1) + i + 1) * 3, (along * (around + 1) + i + 1) * 3 + 3); tr.push(...a, ...b, 0, st[1], st[2]); } const t = new THREE.BufferGeometry(); t.setAttribute('position', new THREE.Float32BufferAttribute(tr, 3)); t.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(tr.length / 3 * 2).fill(0.5), 2)); t.computeVertexNormals(); parts.push(t); }
+  if (ship) {   // below: a bulbous bow, bilge keels, one great propeller and a rudder. above: hatch covers and container stacks, two cranes, a bridge with its wings, lifeboats, a funnel
+    parts.push(pod(W * 0.13, draft * 0.26, L * 0.05).translate(0, bot * 0.62, -L * 0.47));
+    for (const sx of [-1, 1]) parts.push(box(W * 0.02, draft * 0.08, L * 0.32, sx * W * 0.47, bot * 0.8, L * 0.02));
+    parts.push(propeller(draft * 0.42, 5, [0, bot * 0.55, L * 0.455]), tube([[0, bot * 0.55, L * 0.41], [0, bot * 0.55, L * 0.455]], [draft * 0.05], 8), foil([0, bot * 0.2, L * 0.475], [0, bot * 0.2, L * 0.497], [0, bot * 0.95, L * 0.49], { bow: 0, draw: 0, thick: 0.06, span: 3, chord: 2 }));
+    for (let i = 0; i < 7; i++) { const h = free * (1 + (i % 3) * 0.35), z = L * (-0.3 + i * 0.095); parts.push(box(W * 0.84, free * 0.2, L * 0.085, 0, free * 1.1, z), box(W * 0.8, h, L * 0.08, 0, free * 1.2 + h / 2, z)); }
+    for (const z of [-0.19, 0.0, 0.2]) parts.push(tube([[W * 0.42, free, L * z], [W * 0.42, free * 3.4, L * z]], [W * 0.018, W * 0.012], 6), tube([[W * 0.42, free * 3.2, L * z], [-W * 0.1, free * 2.9, L * (z + 0.02)]], [W * 0.01, W * 0.005], 5));
+    parts.push(box(W * 0.86, free * 2.6, L * 0.09, 0, free * 2.3, L * 0.38), box(W * 1.02, free * 0.26, L * 0.035, 0, free * 3.55, L * 0.345), box(W * 0.6, free * 0.5, L * 0.05, 0, free * 3.9, L * 0.37), new THREE.CylinderGeometry(W * 0.07, W * 0.09, free * 1.5, 16).translate(0, free * 4.1, L * 0.43), tube([[0, free * 4.2, L * 0.37], [0, free * 5, L * 0.37]], [W * 0.01], 5));
+    for (const sx of [-1, 1]) parts.push(pod(W * 0.035, W * 0.035, L * 0.018, 10, 7).translate(sx * W * 0.47, free * 2, L * 0.39));
+  } else if (kind === 'cruiser') {   // below: a keel, spray rails, twin shafts on struts with their propellers and rudders. above: a raked cabin, a flybridge with its screen, a bow rail, a radar arch, a swim platform
+    parts.push(box(W * 0.03, draft * 0.3, L * 0.62, 0, bot * 1.05, L * -0.02));
+    for (const sx of [-1, 1]) { parts.push(box(W * 0.02, draft * 0.05, L * 0.66, sx * W * 0.28, bot * 0.25, -L * 0.04)); const x = sx * W * 0.2, y = bot * 0.75; parts.push(tube([[x, bot * 0.5, L * 0.18], [x, y, L * 0.44]], [draft * 0.035], 6), propeller(draft * 0.24, 4, [x, y, L * 0.445]), foil([x, bot * 0.42, L * 0.462], [x, bot * 0.42, L * 0.49], [x, bot * 0.92, L * 0.48], { bow: 0, draw: 0, thick: 0.08, span: 2, chord: 2 }), box(W * 0.02, draft * 0.28, L * 0.012, x, bot * 0.62, L * 0.38)); }
     const cabin = box(W * 0.68, free * 1.1, L * 0.34, 0, free * 1.55, L * 0.02), q = cabin.attributes.position; for (let i = 0; i < q.count; i++) if (q.getY(i) > free * 1.8 && q.getZ(i) < 0) q.setZ(i, q.getZ(i) + L * 0.09); cabin.computeVertexNormals();
-    parts.push(cabin, box(W * 0.56, free * 0.1, L * 0.2, 0, free * 2.35, L * 0.06), box(W * 0.24, free * 0.5, L * 0.08, 0, free * 0.6, L * 0.5));
-  } else parts.push(box(W * 0.3, free * 0.9, L * 0.1, 0, free * 1.1, L * 0.08), box(W * 0.8, free * 0.12, L * 0.1, 0, free * 0.75, L * 0.3), box(W * 0.16, free * 1.5, L * 0.07, 0, free * 0.6, L * 0.47));   // a skiff: open, a console, a thwart, an outboard
-  return mergeGeometries(parts.map(p => { if (p.index) p = p.toNonIndexed(); return p; }), false);
+    parts.push(cabin, box(W * 0.56, free * 0.1, L * 0.2, 0, free * 2.14, L * 0.06), box(W * 0.3, free * 0.42, free * 0.02 + L * 0.004, 0, free * 2.35, -L * 0.03), box(W * 0.74, free * 0.08, L * 0.05, 0, free * 0.5, L * 0.49));
+    for (const sx of [-1, 1]) parts.push(tube([[sx * W * 0.28, free * 2.2, -L * 0.25], [sx * W * 0.18, free * 2, -L * 0.42], [0, free * 1.95, -L * 0.48]], [L * 0.0015], 5), tube([[sx * W * 0.2, free * 2.18, L * 0.14], [sx * W * 0.12, free * 3.1, L * 0.16]], [L * 0.003], 5));
+    parts.push(tube([[-W * 0.12, free * 3.1, L * 0.16], [W * 0.12, free * 3.1, L * 0.16]], [L * 0.003], 5));
+  } else {   // a skiff: open, with a keel, a thwart, a center console, a poling platform; and on the transom an outboard: cowling, shaft, lower unit, propeller
+    parts.push(box(W * 0.03, draft * 0.3, L * 0.7, 0, bot * 1.02, -L * 0.03));
+    parts.push(box(W * 0.84, free * 0.1, L * 0.08, 0, free * 0.8, -L * 0.2), box(W * 0.32, free * 0.75, L * 0.1, 0, free * 0.3 + free * 0.38, L * 0.05), box(W * 0.3, free * 0.45, L * 0.012, 0, free * 1.25, L * 0.005), box(W * 0.45, free * 0.1, L * 0.14, 0, free * 1.3, L * 0.34));
+    for (const sx of [-1, 1]) parts.push(tube([[sx * W * 0.2, free * 0.3, L * 0.34], [sx * W * 0.2, free * 1.3, L * 0.34]], [L * 0.004], 5));
+    const mz = L * 0.47, mh = bot * 1.2; parts.push(pod(W * 0.09, free * 0.42, L * 0.03, 12, 8).translate(0, free * 1.15, mz), tube([[0, free * 0.8, mz], [0, mh * 0.7, mz]], [L * 0.012, L * 0.009], 7), pod(L * 0.012, L * 0.012, L * 0.032, 10, 7).translate(0, mh * 0.8, mz), foil([0, mh * 0.82, mz + L * 0.01], [0, mh * 0.82, mz + L * 0.028], [0, mh * 1.3, mz + L * 0.024], { bow: 0, draw: 0, span: 2, chord: 1 }), propeller(draft * 0.5, 3, [0, mh * 0.8, mz + L * 0.03]));
+  }
+  return join(parts);
 }
 // a channel buoy: a float, a cone, and the open tower that carries its light
-export function buoyGeometry() { const parts = [new THREE.CylinderGeometry(1.1, 1.1, 1.4, 20).translate(0, -0.3, 0), new THREE.CylinderGeometry(0.72, 1.1, 0.7, 20).translate(0, 0.75, 0), new THREE.CylinderGeometry(0.12, 0.12, 0.3, 10).translate(0, 2.55, 0), new THREE.SphereGeometry(0.17, 12, 8).translate(0, 2.8, 0), new THREE.TorusGeometry(0.22, 0.03, 6, 16).rotateX(Math.PI / 2).translate(0, 2.5, 0)];
+export function buoyGeometry() { const parts = [new THREE.CylinderGeometry(1.1, 1.1, 1.4, 20).translate(0, -0.3, 0), new THREE.CylinderGeometry(0.3, 0.45, 0.8, 12).translate(0, -1.3, 0), new THREE.TorusGeometry(0.16, 0.04, 6, 12).translate(0, -1.75, 0), new THREE.TorusGeometry(1.14, 0.09, 6, 24).rotateX(Math.PI / 2).translate(0, -0.1, 0), new THREE.CylinderGeometry(0.72, 1.1, 0.7, 20).translate(0, 0.75, 0), new THREE.CylinderGeometry(0.12, 0.12, 0.3, 10).translate(0, 2.55, 0), new THREE.SphereGeometry(0.17, 12, 8).translate(0, 2.8, 0), new THREE.TorusGeometry(0.42, 0.03, 6, 16).rotateX(Math.PI / 2).translate(0, 1.55, 0), new THREE.TorusGeometry(0.22, 0.03, 6, 16).rotateX(Math.PI / 2).translate(0, 2.5, 0)];
   for (const [x, z] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) parts.push(new THREE.CylinderGeometry(0.035, 0.045, 1.6, 6).rotateZ(-x * 0.18).rotateX(z * 0.18).translate(x * 0.3, 1.8, z * 0.3));
-  return mergeGeometries(parts.map(p => p.toNonIndexed()), false); }
+  return join(parts); }
 export const boatMat = creatureMat({ glow: 0.45 });   // hulls afloat: a little dimmer than the wrecks' steel
 export const BOAT_TYPES = {
   ship: { L: 180, W: 28, draft: 9, free: 8, speed: 6.5, name: 'cargo ship' },

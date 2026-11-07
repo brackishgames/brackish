@@ -109,6 +109,11 @@ await scenario('being a dolphin: it stays in the water until you burst at the to
   await page.eval(`P.pos.y = -8; P.vel.set(0, 0, 0); P.air = 0.3; P.idleT = 9; 1`); await leaps({ throttle: 1 }, 30); assert.ok(await page.eval('P.air > 0.5'), 'it surfaced and breathed on its own');
   await page.eval('becomeSpecies(speciesById.cownose); P.air = 1; 1');
 });
+await scenario('changing body waits for free swim: inside the story Tab does nothing', async () => {
+  await page.eval(`unlocked.add('dolphin'); 1`); await page.key('Tab', 'Tab', 9); assert.equal(await page.eval('P.sp.id'), 'cownose', 'the story chooses who you are');
+  const free = await page.eval('CHAPTERS.findIndex(c => c.free)'); await page.eval(`__game.chapter(${free}); 1`); await page.key('Tab', 'Tab', 9); assert.notEqual(await page.eval('P.sp.id'), 'cownose', 'free swim lets you');
+  await page.eval(`becomeSpecies(speciesById.cownose); __game.chapter(0); 1`);
+});
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
     const decks = world.meshes.find(x => x.name === 'bridge decks'), centres = []; for (let i = 0; i < decks.count; i++) { const d = get('bridge decks', i); centres.push(d); }
