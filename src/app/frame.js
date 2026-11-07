@@ -39,6 +39,8 @@ export let above = false, aboveMix = 0, lastFloor = -5;
 export const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
 // ── the player, one step. each stage hands the next what it needs: what you're asking for, the seabed, whether you're
 //    bursting, how hard you're swimming. the body's lasting state is on P.
+// a bubble in your wake: from behind the body, whichever way you are facing
+export function wakeBubble(sp) { const f = fwdOf(P.yaw, P.pitch), side = (rand() - 0.5) * (sp.span ?? sp.len) * 0.5, back = sp.len * 0.55; emitBubble(P.pos.x - f.x * back + Math.cos(P.yaw) * side, P.pos.y - f.y * back + (rand() - 0.5) * 0.1, P.pos.z - f.z * back - Math.sin(P.yaw) * side); }
 export function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
@@ -86,7 +88,7 @@ export function steerBody(sp, { turn, climb }, { fAhead }, dt) {
 export function stepBurst(stunned, dt) {
   P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / TUNE.burst.secs); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / TUNE.burst.refill); if (P.sta > TUNE.burst.reuseAt) P.spent = false; }
-  if (wantBurst && !P.bursting) { whoosh(0.7); rumble(0.35, 0.25, 160); for (let i = 0; i < 16; i++) emitBubble(P.pos.x + (rand() - .5) * 1.2, P.pos.y + (rand() - .5) * 0.6, P.pos.z + (rand() - .5) * 1.2); }   // the kick: heard, felt, seen
+  if (wantBurst && !P.bursting) { whoosh(0.7); rumble(0.35, 0.25, 160); for (let i = 0; i < 10; i++) wakeBubble(P.sp); }   // the kick: heard, felt, seen
   P.bursting = wantBurst;
   return wantBurst;
 }
@@ -181,8 +183,7 @@ export function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
       u.uFlap.value += ((gliding ? 0.12 : 0.3 + 0.7 * work) - u.uFlap.value) * Math.min(1, 2.5 * dt);
     } else u.uFlap.value = 0.35 + 0.65 * work; }
   { const u = P.mesh.material.uniforms, target = beatRad(sp, P.speed, u.uFlap.value, P.bursting ? 1.6 : 1); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); u.uBend.value += (THREE.MathUtils.clamp((P.yawRate || 0) / sp.turn, -1, 1) - u.uBend.value) * Math.min(1, 4 * dt); }   // tail beats follow speed; the spine follows the turn
-  if (P.speed > sp.cruise * 1.3) for (let i = 0; i < 2; i++) if (rand() < 0.5) emitBubble(P.pos.x + (rand() - .5) * (sp.span ?? sp.len) * 0.8, P.pos.y - 0.1, P.pos.z + 0.3);
-  else if (rand() < 0.04) emitBubble(P.pos.x, P.pos.y, P.pos.z);
+    if (P.speed > sp.cruise * 1.3) { for (let i = 0; i < 2; i++) if (rand() < 0.5) wakeBubble(sp); } else if (rand() < 0.04) wakeBubble(sp);
 }
 // the lens draws nothing nearer than camera.near: just under the surface that sliced the water off in a dead straight line across the screen
 export function keepOffSurface() { const clear = camera.near * 1.25; if (Math.abs(camPos.y) < clear) camPos.y = camPos.y < 0 ? -clear : clear; }

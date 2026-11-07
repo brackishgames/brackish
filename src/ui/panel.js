@@ -190,7 +190,7 @@ export function drawYou(v) {
   const { SL, ST, t } = v, row = k => ST + 2 + k * YOU_ROW, slots = Math.max(3, P.hp), quiet = !settings.hudFull;
   part('hearts', () => { for (let i = 0; i < slots; i++) pText('♥', SL + i * 5, row(0), i < P.hp ? INK.value : INK.lost, 'left', 1, true);   // the hearts you have, and the ones you've lost
     if (P.fed) pText('+' + P.fed, SL + slots * 5 + 2, row(0), INK.label, 'left', 1, true); });
-  part('motion', () => { let x = SL; for (const [value, unit] of [[mph(P.speed), 'MPH'], [knots(P.speed), 'KT']]) { const n = value.toFixed(1); pText(n, x, row(1), INK.value, 'left', 1, true); x += n.length * 4 + 2; pText(unit, x, row(1), INK.label, 'left', 1, true); x += unit.length * 4 + 4; }   // the same speed, in the miles you know and the knots you are learning
+  part('motion', () => { let x = SL; for (const [value, unit, lvl] of [[mph(P.speed), 'MPH', INK.value], [knots(P.speed), 'KT', INK.label + 30]]) { const n = value.toFixed(1); pText(n, x, row(1), lvl, 'left', 1, true); x += n.length * 4 + 2; pText(unit, x, row(1), INK.label - 30, 'left', 1, true); x += unit.length * 4 + 5; }   // the same speed, in the miles you know and the knots you are learning
     const bx = SL + 38;
     const sta = P.sta ?? 1; for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 2; x++) pDot(bx + i * 3 + x, row(0) + 2, on ? 220 : 60); } });   // the burst left, beside your hearts
   part('ability', () => { const ready = (P.actReady || 0) <= simTime, key = document.body.classList.contains('touch') ? '◆' : kn('ability');
@@ -204,7 +204,7 @@ export function drawYou(v) {
 export function drawDepthGauge(v) {   // surface at the top, the bottom of the bay below, you between; rise and dive chevrons beside you
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   { const gx = SL, g0 = Math.round(H * 0.34), gh = Math.max(16, Math.min(Math.round(H * 0.3), chartBox(v).left ? H - chartBox(v).MS - SB - 30 - g0 : H)),   /* on a phone, clear of the chart below it */ floor = Math.max(1, -floorAt(P.pos.x, P.pos.z)), at = THREE.MathUtils.clamp(-P.pos.y / floor, 0, 1);   /* depth gauge: surface at the top, the bottom of the bay below, you between */
-    for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
+    for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let m = 5; m < floor; m += 5) { const ty = g0 + Math.round(m / floor * gh); pDot(gx + 1, ty, 110); pDot(gx + 2, ty, 80); }   // a tick every five metres, so a deep bottom reads deep for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
     const py = g0 + Math.round(at * gh); for (let x = -1; x <= 2; x++) { pDot(gx + x, py, 255); pDot(gx + x, py + 1, 255); }
     { const w = pSeg(Math.max(0, -P.pos.y).toFixed(1), gx + 5, py - 3, INK.value); pText('M', gx + 6 + w, py - 1, INK.label, 'left', 1, true); }   // how deep you are rides beside you, in the stereo's big digits
     pText('FLOOR', gx - 1, g0 + gh + 4, INK.label, 'left', 1, true); pText(P.pos.y - floorAt(P.pos.x, P.pos.z) > TUNE.water.bottomSeen ? '---' : readouts.floor + 'M', gx + 23, g0 + gh + 4, 190, 'left', 1, true);   // past where you can see it, you don't know   // and the bottom under you, at the bottom
@@ -246,21 +246,22 @@ export function drawBurstStreaks(v) {   // burst: streaks rushing out from the m
 export function drawCompassTape(v) {   // top middle, where you are going: the compass tape and the goal on it
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   const hdg = headingDeg(), half = Math.max(24, Math.floor(W * 0.17)), ppd = half / 60;   // compass
-  for (const [deg, name] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W'], [45, '·'], [135, '·'], [225, '·'], [315, '·']]) { const rel = ((deg - hdg + 540) % 360) - 180; if (Math.abs(rel) <= 60) pText(name, cx + Math.round(rel * ppd), ST + 9, name === '·' ? 110 : 190, 'center', 1, true); }
-  for (let y = ST + 7; y <= ST + 15; y += 8) { pDot(cx, y, 255); pDot(cx, y + 1, 255); }   // the lubber line above and below the cardinals
+  for (let deg = 0; deg < 360; deg += 15) { const rel = ((deg - hdg + 540) % 360) - 180; if (Math.abs(rel) > 60) continue; const x = cx + Math.round(rel * ppd), name = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[deg], fade = 1 - Math.abs(rel) / 75; if (name) pText(name, x, ST + 9, 200 * fade, 'center', 1, true); else { const major = deg % 45 === 0; for (let k = 0; k < (major ? 3 : 2); k++) pDot(x, ST + 15 - k, (major ? 130 : 80) * fade); } }   // a real tape: ticks every 15 degrees, fading at the ends
+  pText(String(Math.round(hdg) % 360).padStart(3, '0'), cx, ST + 18, 170, 'center', 1, true);   // your heading, as a number, where the eye rests
+  pDot(cx, ST + 7, 255); pDot(cx, ST + 8, 255);   // the lubber mark
   const goal = compassMarks.find(l => l.goal);
   if (goal) { const raw = ((goal.bearing - hdg + 540) % 360) - 180, off = Math.abs(raw) > 52, gx = cx + Math.round(THREE.MathUtils.clamp(raw, -52, 52) * ppd);
     const label = goal.dist > 999 ? (goal.dist / 1000).toFixed(1) + 'KM' : Math.round(goal.dist / 10) * 10 + 'M';
     pText(off ? (raw > 0 ? '►' : '◄') : '◆', gx, ST + 1, 255, 'center', 1, true); pText(label, gx + (raw > 0 ? -4 : 4), ST + 1, 190, raw > 0 ? 'right' : 'left', 1, true); }
 }
-export function drawPlace(v) { if (readouts.place) pText(readouts.place, v.cx, v.ST + 19, 150, 'center', 1, true); }   // where you are, under which way you are going
+export function drawPlace(v) { if (readouts.place) pText(readouts.place, v.cx, v.ST + 25, 150, 'center', 1, true); }   // where you are, under which way you are going
 export function drawPhotoPrompt(v, introK) {   // a moment worth keeping
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   { const spot = photoSpot(); if (spot) { pGain = 1; pText(`◆ ${kn('photo')} PHOTO`, W - SL, ST + 2 + ((performance.now() - lastSaved) / 1000 < 2 ? 8 : 0), 130 + 40 * Math.sin(t * 2), 'right', 1, true); pGain = introK; } }   /* a moment worth keeping */
 }
 export function drawWarning(v) {   // DIVE, or what is hunting you
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  const ow = opa(warn), failW = pFail; pFail = 0; if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, ST + 28, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center'); pFail = failW;
+  const ow = opa(warn), failW = pFail; pFail = 0; if (ow > 0.01 && warn.textContent) pText(warn.textContent, cx, ST + 33, 255 * ow * (0.65 + 0.35 * Math.sin(t * 8)), 'center'); pFail = failW;
 }
 export const chartBox = v => ({ MS: Math.max(22, Math.min(46, Math.floor(v.H * 0.2))), left: document.body.classList.contains('touch') });   // the chart's size, and which corner
 export function drawChart(v) {   // a bottom corner, the water around you: the chart, and the live NOAA readings over it. on a phone the buttons have the right, so it sits left
@@ -316,7 +317,7 @@ export function cardHead(title, ix, by, bx, bw, a = 1) { pText(title, ix, by + 6
 export const statusLine = () => `${clockText(day.hour)}${ENV.live ? '  ' + (ENV.rain > 0 ? 'RAIN' : ENV.cloud > 0.6 ? 'OVERCAST' : 'CLEAR') : ''}`;   // the clock on the stereo's glass
 export function drawHelp(v, oHelp) {   // how to swim: a card like every other, one thing a row
   const { W, H, cx } = v, ks = [...help.querySelectorAll('.keys > *')], pairs = []; for (let i = 0; i + 1 < ks.length; i += 2) pairs.push([ks[i].textContent, ks[i + 1].textContent]);
-  const keyW = Math.max(...pairs.map(p => [...p[0]].length)) * 6 + 8, descW = Math.max(...pairs.map(p => p[1].length)) * 6, bw = Math.min(W - 6, Math.max(keyW + descW + 16, 150)), bh = 28 + pairs.length * 10, bx = (W - bw) >> 1, by = Math.max(2, (H - bh - 10) >> 1), ix = bx + 8, a = oHelp;
+  const keyW = Math.max(...pairs.map(p => [...p[0]].length)) * 6 + 8, descW = Math.max(...pairs.map(p => p[1].length)) * 6, bw = Math.min(W - 6, Math.max(keyW + descW + 16, 32 * 6 + 15)), bh = 28 + pairs.length * 10, bx = (W - bw) >> 1, by = Math.max(2, (H - bh - 10) >> 1), ix = bx + 8, a = oHelp;
   dotPass.uniforms.uDim.value = Math.max(dotPass.uniforms.uDim.value, 0.96 * oHelp); cardFrame(bx, by, bw, bh, a); let y = cardHead('HOW TO SWIM', ix, by, bx, bw, a);
   for (const [k, d] of pairs) { pText(k, ix, y, 240 * a); pText(d, ix + keyW, y, 170 * a); y += 10; }
   pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, by + bh + 5, 105 * a, 'center', 1, true);
@@ -324,17 +325,19 @@ export function drawHelp(v, oHelp) {   // how to swim: a card like every other, 
 export function drawPauseCard(v) {   // paused: a small framed card, left-aligned, the bay almost gone behind it
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   dotPass.uniforms.uDim.value = 0.96;
-  const items = menuItems(), labels = items.map(it => it.label()), TITLE = { settings: 'SETTINGS', sound: 'SOUND', comfort: 'COMFORT', controls: 'CONTROLS', keys: 'KEYS', feedback: 'SEND FEEDBACK', journal: 'JOURNAL', confirm: 'START OVER?', note: (menu.note || '').toUpperCase() }[menu.kind] || 'PAUSED';
+  const items = menuItems(), labels = items.map(it => it.label()), TITLE = { settings: 'SETTINGS', sound: 'SETTINGS ► SOUND', comfort: 'SETTINGS ► COMFORT', controls: 'SETTINGS ► CONTROLS', keys: 'CONTROLS ► KEYS', feedback: 'SEND FEEDBACK', journal: 'JOURNAL', confirm: 'START OVER?', note: (menu.note || '').toUpperCase() }[menu.kind] || 'PAUSED';
   const note = menu.kind === 'note' ? wrap(LORE[menu.note] || '', Math.min(cols - 4, 46)) : menu.kind === 'confirm' ? ['your progress here will be wiped.'] : menu.kind === 'feedback' ? feedbackLines(Math.min(cols - 4, 46)) : [];
-  const chars = Math.max(TITLE.length, ...labels.map(l => [...l].length + 2), ...note.map(l => l.length)), bw = Math.min(W - 6, chars * 6 + 15), bx = (W - bw) >> 1, ix = bx + 8;
+  const CARD_CHARS = 32, chars = Math.max(CARD_CHARS, TITLE.length, ...labels.map(l => [...l].length + 3), ...note.map(l => l.length)), bw = Math.min(W - 6, chars * 6 + 15), bx = (W - bw) >> 1, ix = bx + 8;   // one width for every card, so nothing jumps as you go between them
   const fit = Math.max(3, Math.floor((H - 46 - note.length * 9) / 10)), shown = Math.min(fit, items.length), first = Math.max(0, Math.min(menu.sel - (fit >> 1), items.length - fit));   /* long lists scroll with the selection */
   const bh = 22 + (note.length ? note.length * 9 + 5 : 0) + shown * 10 + 3, by = Math.max(2, (H - bh - 10) >> 1);
   cardFrame(bx, by, bw, bh); let y = cardHead(TITLE, ix, by, bx, bw);
   for (const l of note) { pText(l, ix, y, 185); y += 9; } if (note.length) y += 5;
   menu.rows = [];
-  items.forEach((it, i) => { if (i < first || i >= first + fit) { menu.rows.push([-99, -99]); return; } const on = i === menu.sel; pText((on ? '► ' : '  ') + labels[i], ix, y, on ? 255 : 165); menu.rows.push([y - 2, y + 8]); y += 10; });
+  items.forEach((it, i) => { if (i < first || i >= first + fit) { menu.rows.push([-99, -99]); return; } const on = i === menu.sel, [name, value] = labels[i].split(/\s{2,}(.*)/), right = bx + bw - 8;
+    if (on) for (let yy = y - 2; yy < y + 8; yy++) for (let x = bx + 3; x <= bx + bw - 3; x++) pDot(x, yy, 46);   // the lit band of a head unit's list
+    pText(name, ix, y, on ? 255 : 165); if (value) pText(value, right, y, on ? 255 : 200, 'right'); else if (it.act && !/BACK|RESUME|NO,|YES,/.test(name)) pText('►', right, y + 1, on ? 220 : 90, 'right', 1, true); menu.rows.push([y - 2, y + 8]); y += 10; });
   if (first > 0) pText('▲', bx + bw - 6, by + 18, 120, 'center', 1, true); if (first + fit < items.length) pText('▼', bx + bw - 6, by + bh - 7, 120, 'center', 1, true);
-  pText(menu.kind === 'feedback' ? (MOBILE ? 'TYPE, THEN TAP SEND' : 'ENTER SEND  SHIFT+ENTER NEW LINE  ESC BACK') : menu.binding ? 'PRESS THE NEW KEY  ESC KEEP IT' : pad.active ? 'A CHOOSE  ◄► CHANGE  B BACK' : 'ENTER CHOOSE  ◄► CHANGE  ESC BACK', cx, by + bh + 5, 105, 'center', 1, true);
+  pText(menu.kind === 'feedback' ? (MOBILE ? 'TYPE, THEN TAP SEND' : 'ENTER SEND  SHIFT+ENTER NEW LINE  ESC BACK') : menu.binding ? 'PRESS THE NEW KEY  ESC KEEP IT' : pad.active ? 'A CHOOSE  ◄► CHANGE  B BACK' : 'ENTER CHOOSE   ◄► CHANGE   ESC BACK', cx, by + bh + 5, 105, 'center', 1, true);
 }
 export function drawFastTravel(v) {   // fast travel: the bay as dots, the places you have found
   const { W, H, ST, SL, SB, cx, t, cols } = v;

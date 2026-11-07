@@ -122,6 +122,9 @@ await scenario('at the surface, holding rise looks above the water; letting go c
 await scenario('the tide moves the water over the bottom, and the waves follow the wind', async () => {
   const a = await page.eval(`(() => { const [x, z] = toXZ(${HOLE}); const before = floorAt(x, z); ENV.tide = 1; applyEnv(); const up = floorAt(x, z); ENV.tide = 0; applyEnv(); return before - up; })()`); assert.ok(Math.abs(a - 1) < 0.01, `a metre of tide is a metre more water: ${a}`);
 });
+await scenario('your wake trails from behind you, whichever way you face', async () => {
+  for (const yaw of [0, 1.57, 3.14, -1.57]) { const b = await page.eval(`(() => { __game.teleport(${HOLE}, 8); P.yaw = ${yaw}; wakeBubble(P.sp); const n = (bubbleNext + 599) % 600, q = bubbles.geometry.attributes.position.array, f = fwdOf(P.yaw, P.pitch); return (q[n * 3] - P.pos.x) * f.x + (q[n * 3 + 2] - P.pos.z) * f.z; })()`); assert.ok(b < 0, `at yaw ${yaw} it appeared ${b.toFixed(2)} m ahead`); }
+});
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
     const decks = world.meshes.find(x => x.name === 'bridge decks'), centres = []; for (let i = 0; i < decks.count; i++) { const d = get('bridge decks', i); centres.push(d); }
