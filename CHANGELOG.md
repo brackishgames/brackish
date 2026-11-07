@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.1.0-beta.7](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.6...v0.1.0-beta.7) (2026-11-07)
+
+
+### Features
+
+* a bull shark swims by its tail and hunts by stealth ([06d4bf8](https://github.com/brackishgames/brackish/commit/06d4bf8dc5b558d821ec642d144fd85314e60352))
+* a dolphin that is easy to be, and rise and dive for two hands ([34a04eb](https://github.com/brackishgames/brackish/commit/34a04eb104a4babeeccae51461c14618a547b42b))
+* a shark attack with a shape to it ([ae5ebbb](https://github.com/brackishgames/brackish/commit/ae5ebbb510c5e0bdf9bc06dd9e6ab54e440716db))
+* a simpler menu and HUD, with speed in mph and knots ([e2ef3d7](https://github.com/brackishgames/brackish/commit/e2ef3d75290c15e212b00cdb8fa40816472c64a3))
+* animals with their own bodies, and swimming that follows the science ([cbefe25](https://github.com/brackishgames/brackish/commit/cbefe259874c51d170557097b1026258594871fb))
+* changing body waits for free swim, and the camera sits closer to every animal ([324da06](https://github.com/brackishgames/brackish/commit/324da0617534d128b6b382cd1759822f849e30e7))
+* every model built from its real parts, on every side ([324da06](https://github.com/brackishgames/brackish/commit/324da0617534d128b6b382cd1759822f849e30e7))
+* every model on its own page, and one command for screenshots ([58d060d](https://github.com/brackishgames/brackish/commit/58d060ddf4853b786affe7cf50b03718b9cd4475))
+* hold rise at the surface to look above the water ([ae5ebbb](https://github.com/brackishgames/brackish/commit/ae5ebbb510c5e0bdf9bc06dd9e6ab54e440716db))
+* menus with a lit selection band and a value column, and a compass tape ([adf7e51](https://github.com/brackishgames/brackish/commit/adf7e51ee552ea58743535788e90b5d8ea8649d6))
+* motion that flows ([e794e73](https://github.com/brackishgames/brackish/commit/e794e73ec83d31ab29861bb6a3771edba2d8b9fb))
+* npm run check measures motion, camera, sound, picture and frame cost against the real thing ([324da06](https://github.com/brackishgames/brackish/commit/324da0617534d128b6b382cd1759822f849e30e7))
+* one card for every menu surface ([fab372d](https://github.com/brackishgames/brackish/commit/fab372df5156fdaa8e42c6f8476955e3ebd4bbbc))
+* photo mode works anywhere, and frames you properly ([58d060d](https://github.com/brackishgames/brackish/commit/58d060ddf4853b786affe7cf50b03718b9cd4475))
+* sound from the science: brown sea, bubbles, dusk fish, and fear ([324da06](https://github.com/brackishgames/brackish/commit/324da0617534d128b6b382cd1759822f849e30e7))
+* the bay's real weather, one source of conditions, and a sea with waves ([ae5ebbb](https://github.com/brackishgames/brackish/commit/ae5ebbb510c5e0bdf9bc06dd9e6ab54e440716db))
+* the deck: a real spectrum analyzer, a seven-segment clock, feed lamps ([06d4bf8](https://github.com/brackishgames/brackish/commit/06d4bf8dc5b558d821ec642d144fd85314e60352))
+* the model page shows each model raw or in game, with nothing to operate ([cbefe25](https://github.com/brackishgames/brackish/commit/cbefe259874c51d170557097b1026258594871fb))
+
+
+### Bug Fixes
+
+* bull and hammerhead cruise at a sustained rate instead of what looked like standing still. ([324da06](https://github.com/brackishgames/brackish/commit/324da0617534d128b6b382cd1759822f849e30e7))
+* every model is closed, and a check keeps it that way ([e794e73](https://github.com/brackishgames/brackish/commit/e794e73ec83d31ab29861bb6a3771edba2d8b9fb))
+* no more lines on the seafloor ([e2ef3d7](https://github.com/brackishgames/brackish/commit/e2ef3d75290c15e212b00cdb8fa40816472c64a3))
+* replaying the Gulf no longer ends it at once; the follow timer resets with the chapter. Model frames fit exactly, and the viewer no longer blacks out wrecks and the bay map. ([06d4bf8](https://github.com/brackishgames/brackish/commit/06d4bf8dc5b558d821ec642d144fd85314e60352))
+* the beam can always be followed, and you can see up and out ([fab372d](https://github.com/brackishgames/brackish/commit/fab372df5156fdaa8e42c6f8476955e3ebd4bbbc))
+* the model page opens on in-game textures, and frames keep clear of its controls ([ae5ebbb](https://github.com/brackishgames/brackish/commit/ae5ebbb510c5e0bdf9bc06dd9e6ab54e440716db))
+* the surface no longer cuts off in a straight line, and burst streaks stay at the edges ([58d060d](https://github.com/brackishgames/brackish/commit/58d060ddf4853b786affe7cf50b03718b9cd4475))
+* your wake trails from behind you, and the look is near-black again ([adf7e51](https://github.com/brackishgames/brackish/commit/adf7e51ee552ea58743535788e90b5d8ea8649d6))
+
+
+### Performance Improvements
+
+* lighter on the GPU ([fab372d](https://github.com/brackishgames/brackish/commit/fab372df5156fdaa8e42c6f8476955e3ebd4bbbc))
+
 ## [0.1.0-beta.6](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.5...v0.1.0-beta.6) (2026-11-06)
 
 
