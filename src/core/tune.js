@@ -1,6 +1,7 @@
 // the numbers that decide how the game feels, in one place
 export const TUNE = {
-  burst: { secs: 5, refill: 6, boost: 2.2, reuseAt: 0.3 },   // seconds of turbo, seconds to refill from empty, top speed over the real sprint, fill needed to go again
+  burst: { secs: 5, refill: 6, boost: 2.2, top: 12, reuseAt: 0.3 },   // seconds of turbo, seconds to refill from empty, top speed over the real sprint, and the most that can ever be (m/s: fast animals would otherwise pass 40 mph), fill needed to go again
+  leap: { near: 1.4, every: 1.6, kick: 5 },                  // a dolphin's leap: how close to the top a burst lifts you out (m), how often while you hold it (s), how hard (m/s)
   shadow: { first: [50, 90], every: [70, 160], retry: 10 },  // seconds until something large crosses your path; sooner again if it couldn't
   fail: { from: 12, to: 26 },                                // metres down where the display starts, and finishes, losing segments
   hush: 0.88,                                                // how much of the sea goes quiet when a shark takes an interest

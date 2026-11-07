@@ -44,7 +44,7 @@ export function stepPlayer(dt) {
   const intent = steerIntent(dt, stunned), ground = terrainAround(sp, dt, intent.climb);
   steerBody(sp, intent, ground, dt);
   const wantBurst = stepBurst(stunned, dt), thrust = swim(sp, intent, wantBurst, stunned, dt);
-  porpoise(sp, intent, dt); breathe(sp, wantBurst, dt);
+  porpoise(sp, wantBurst, dt); breathe(sp, wantBurst, dt);
   moveThroughWater(sp, ground.fHere, dt);
   rippleAndSplash(sp, dt); const surf = surfacing(sp, dt); wake(sp, dt);
   poseBody(sp, thrust, surf, dt);
@@ -77,7 +77,7 @@ export function steerBody(sp, { turn, climb }, { fAhead }, dt) {
   let pitchWant = climb * 0.8;
   if (!climb) {
     if (fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = THREE.MathUtils.clamp((fAhead + sp.alt + 1.0 - P.pos.y) * 0.5, 0, 0.6);
-    else if (P.idleT > 3) { const prefer = sp.id === 'dolphin' ? Math.max(fAhead + sp.alt + 0.4, -0.8) : THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9);   /* a travelling dolphin keeps to the top */ pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
+    else if (P.idleT > 3) { const prefer = AIR.has(sp.id) && (P.air ?? 1) < TUNE.hud.airShow ? -0.08 : sp.id === 'dolphin' ? Math.max(fAhead + sp.alt + 0.4, -0.8) : THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9);   /* a travelling dolphin keeps to the top, and anything with lungs comes up for air when it runs short */ pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
   }
   P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
 }
@@ -91,7 +91,7 @@ export function stepBurst(stunned, dt) {
 }
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
 export function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? sp.max * TUNE.burst.boost : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? Math.min(sp.max * TUNE.burst.boost, TUNE.burst.top) : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
   const along = P.vel.dot(fwd), dragAt = v => 2.4 * sp.max * v * Math.abs(v) / (sp.max * sp.max);   // the same quadratic drag the water applies below
   // thrust = what holding that speed costs against the drag, plus a push toward it, so every speed is actually reached; a burst pushes hardest
   const thrust = THREE.MathUtils.clamp(dragAt(wantSpeed) / 0.85 + (wantSpeed - along) * (wantBurst ? 10.0 : 6.0), -0.6 * sp.max, wantBurst ? Math.max(4.5 * sp.max, 1.3 * dragAt(wantSpeed) / 0.85) : 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
@@ -110,15 +110,14 @@ export function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
   P.speed = Math.max(0, along);
   return thrust;
 }
-export function porpoise(sp, { climb, throttle }, dt) {
-  const inAir = P.pos.y > 0.0;
-  if (sp.id === 'dolphin' && !inAir && P.pos.y > -1.4 && throttle > 0 && !climb && Math.abs(P.yawRate) < 0.35 && P.speed > sp.cruise * 0.75) {   /* porpoising: at speed a dolphin travels in leaps, the cheaper way to go */
-    P.porpT = (P.porpT || 0) + dt; P.porpNext ??= 2 + rand() * 2.5;
-    if (P.porpT > P.porpNext) { P.porpT = 0; P.porpNext = 2.5 + rand() * 2.5; P.vel.y = 3.2 + Math.min(3, P.speed * 0.25); P.leapT = 0.9; P.pitch = Math.max(P.pitch, 0.35);
-      const mate = wild.find(o => o.partner && !o.air);   /* a companion close beside you leaps when you do */
-      if (mate && mate.pos.distanceTo(P.pos) < 12 && mate.pos.y > -2.5) { mate.air = true; mate.vy = P.vel.y * (0.95 + rand() * 0.1); mate.pos.y = Math.max(mate.pos.y, -0.4); story.together(); }
-      else if (mate && CHAPTERS[story.ch].pair) say('swim beside it', 1.5); }
-  } else P.porpT = Math.max(0, (P.porpT || 0) - dt * 2);
+// a dolphin leaps when you ask: burst at the top and you are out of the water, and again for as long as you hold it. it never leaves the water by itself
+export function porpoise(sp, wantBurst, dt) {
+  P.porpT = Math.max(0, (P.porpT || 0) - dt);
+  if (sp.id !== 'dolphin' || !wantBurst || P.porpT > 0 || P.pos.y > 0 || P.pos.y < -TUNE.leap.near) return;
+  P.porpT = TUNE.leap.every; P.vel.y = TUNE.leap.kick; P.leapT = 0.9; P.pitch = Math.max(P.pitch, 0.35);
+  const mate = wild.find(o => o.partner && !o.air);   /* a companion close beside you leaps when you do */
+  if (mate && mate.pos.distanceTo(P.pos) < 12 && mate.pos.y > -2.5) { mate.air = true; mate.vy = P.vel.y * (0.95 + rand() * 0.1); mate.pos.y = Math.max(mate.pos.y, -0.4); story.together(); }
+  else if (mate && CHAPTERS[story.ch].pair) say('swim beside it', 1.5);
 }
 export function breathe(sp, wantBurst, dt) {
   if (HOLD[sp.id]) {   // lungs: air drains under, comes back in a few breaths at the top, twice as fast when you burst

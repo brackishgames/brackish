@@ -51,12 +51,12 @@ export function rumble(strong, weak = strong * 0.6, ms = 220) {   // felt in the
   const v = pad.ref && pad.ref.vibrationActuator; if (!v || !pad.active || !settings.shake) return;
   try { v.playEffect('dual-rumble', { duration: ms, strongMagnitude: Math.min(1, strong), weakMagnitude: Math.min(1, weak) }); } catch {}
 }
-export const KEYNAME = { burst: ['SHIFT', 'A', '✕'], rise: ['SPACE', 'L STICK UP', 'L STICK UP'], dive: ['C', 'L STICK DOWN', 'L STICK DOWN'], ability: ['E', 'X', '□'], map: ['M', 'Y', '△'], tab: ['TAB', 'LB', 'L1'] };
-export const kn = n => pad.active ? KEYNAME[n][pad.sony ? 2 : 1] : keyLabel(B(n === 'tab' ? 'creature' : n));
+export const KEYNAME = { burst: ['SHIFT', 'A', '✕'], rise: ['SPACE', 'L STICK UP', 'L STICK UP'], dive: ['Q', 'L STICK DOWN', 'L STICK DOWN'], ability: ['E', 'X', '□'], map: ['M', 'Y', '△'], tab: ['TAB', 'LB', 'L1'] };
+export const kn = n => pad.active ? KEYNAME[n][pad.sony ? 2 : 1] : n === 'rise' ? '↑' : n === 'dive' ? '↓' : keyLabel(B(n === 'tab' ? 'creature' : n));
 export const keyLabel = code => ({ Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'R SHIFT', ControlLeft: 'CTRL', ControlRight: 'R CTRL', AltLeft: 'ALT', AltRight: 'R ALT', Tab: 'TAB', Enter: 'ENTER',
   Backspace: 'BACKSPACE', CapsLock: 'CAPS', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' })[code] || String(code || '?').replace(/^(Key|Digit|Numpad)/, '').toUpperCase();
-export const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${keyLabel(B('back'))}${keyLabel(B('right'))} swim   ${kn('burst')} burst   ${keyLabel(B('help'))} help`;   // only what you need to start: the rest is one key away, and tips teach it when it matters
+export const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${keyLabel(B('back'))}${keyLabel(B('right'))} swim   ↑↓ rise dive   ${kn('burst')} burst   ${keyLabel(B('help'))} help`;   // only what you need to start: the rest is one key away, and tips teach it when it matters
 
 // ── one snapshot of what the player is asking for, read once per step from every device: keyboard, controller, touch, tilt.
 //    nothing else reads the devices for swimming. a test sets it directly through __game.setInput().
@@ -69,8 +69,8 @@ export function readInput() {
   const o = inputOverride; input.forced = !!o;
   if (o) { input.turn = o.turn || 0; input.climb = o.climb || 0; input.throttle = o.throttle ?? 1; input.burst = !!o.burst; return input; }   // throttle 1 is a cruise
   input.turn = clamp1((held('left') || keys.ArrowLeft ? 1 : 0) - (held('right') || keys.ArrowRight ? 1 : 0) + touch.turn + pad.turn + tilt.turn);
-  input.climb = clamp1((held('rise') ? 1 : 0) - (held('dive') ? 1 : 0) + touch.climb + pad.climb + tilt.climb);
-  input.throttle = clamp1((held('forward') || keys.ArrowUp ? 1 : 0) - (held('back') || keys.ArrowDown ? 1 : 0) + pad.throttle + (touch.id !== null || !usingWASD() ? 1 : 0));   // touch players, and anyone who hasn't touched forward, cruise on their own
+  input.climb = clamp1((held('rise') || keys.ArrowUp || keys.KeyK ? 1 : 0) - (held('dive') || keys.ArrowDown || keys.KeyJ ? 1 : 0) +   /* two hands: WASD on the left, ↑ ↓ (or K J) on the right. a hand on the mouse leaves Space and Q */ touch.climb + pad.climb + tilt.climb);
+  input.throttle = clamp1((held('forward') ? 1 : 0) - (held('back') ? 1 : 0) + pad.throttle + (touch.id !== null || !usingWASD() ? 1 : 0));   // touch players, and anyone who hasn't touched forward, cruise on their own
   input.burst = held('burst') || pad.burst || touch.hold;
   return input;
 }
@@ -79,7 +79,7 @@ export const ACTIONS = [['forward', 'FORWARD'], ['back', 'BACK'], ['left', 'TURN
   ['map', 'MAP'], ['creature', 'CHANGE BODY'], ['photo', 'PHOTO'], ['help', 'HELP'], ['pause', 'PAUSE'], ['feedback', 'FEEDBACK']];
 export function bindKey(code) {
   const a = menu.binding; if (code === 'Escape') { menu.binding = null; return; }
-  if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) return;   // those always do their own thing
+  if (['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyJ', 'KeyK'].includes(code)) return;   // those always do their own thing
   const other = Object.keys(settings.binds).find(k => k !== a && settings.binds[k] === code); if (other) settings.binds[other] = settings.binds[a];
   settings.binds[a] = code; menu.binding = null; saveSettings(); refreshKeyHints();
 }
@@ -197,7 +197,7 @@ export function menuKey(code) {
 addEventListener('keydown', e => {
   if (menu?.kind === 'feedback') { feedbackKey(e); return; }   // typing a note: the keys are words, not swimming
   const is = a => e.code === B(a);
-  keys[e.code] = true; if ([B('forward'), B('back'), 'ArrowUp', 'ArrowDown'].includes(e.code)) wasdSeen = true; startAudio(); pressedAny();
+  keys[e.code] = true; if ([B('forward'), B('back')].includes(e.code)) wasdSeen = true; startAudio(); pressedAny();
   if (['Space', 'ArrowUp', 'ArrowDown', 'Tab', B('rise'), B('dive'), B('creature')].includes(e.code)) e.preventDefault();
   if (started && needFull() && !menu) openMenu('main');
   if (started && menu) { if (menu.binding) { e.preventDefault(); if (e.isTrusted) bindKey(e.code); } else menuKey(e.code); return; }

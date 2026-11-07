@@ -95,6 +95,19 @@ await scenario('every model in the game builds on the specimen page', async () =
   const r = await sp.eval(`SPECIMENS.map(s => showSpecimen(s.id))`); assert.ok(r.length > 20); for (const m of r) if (!m.place) assert.ok(m.triangles > 0 && m.size.some(v => v > 0), m.id);
   assert.deepEqual(sp.errors, []); await sp.close?.(); await page.activate();
 });
+await scenario('two hands: ↑ and K rise, ↓ and J dive, Space and Q do it from the left, and none of them swim', async () => {
+  for (const [code, key, want] of [['ArrowUp', 'ArrowUp', 1], ['KeyK', 'k', 1], ['Space', ' ', 1], ['ArrowDown', 'ArrowDown', -1], ['KeyJ', 'j', -1], ['KeyQ', 'q', -1]]) {
+    await page.keyDown(code, key); await page.until(`keys.${code}`, code); const s = await S(page, 1); assert.equal(s.input.climb, want, code); await page.keyUp(code, key); await page.until(`!keys.${code}`, code); }
+  assert.equal(await page.eval('keys.KeyC = true; const c = (readInput(), input.climb); keys.KeyC = false; c'), 0, 'C does nothing now');
+});
+await scenario('being a dolphin: it stays in the water until you burst at the top, never passes the speed cap, and comes up for air by itself', async () => {
+  const leaps = (input, secs) => page.eval(`(() => { __game.setInput(${JSON.stringify(input)}); let n = 0, was = false, top = 0; for (let i = 0; i < ${secs} * 60; i++) { simStep(1 / 60); const up = P.pos.y > 0; if (up && !was) n++; was = up; top = Math.max(top, P.speed); } return { n, top }; })()`);
+  await page.eval(`becomeSpecies(speciesById.dolphin); __game.teleport(${HOLE}, 1); P.pos.y = -1; P.air = 1; 1`);
+  assert.equal((await leaps({ throttle: 1 }, 30)).n, 0, 'holding forward never launches you');
+  await page.eval('P.pos.y = -0.5; P.sta = 1; 1'); const b = await leaps({ throttle: 1, burst: true }, 3); assert.ok(b.n >= 1, 'a burst at the top leaps'); assert.ok(b.top <= 12.5, `capped: ${b.top.toFixed(1)} m/s`);
+  await page.eval(`P.pos.y = -8; P.vel.set(0, 0, 0); P.air = 0.3; P.idleT = 9; 1`); await leaps({ throttle: 1 }, 30); assert.ok(await page.eval('P.air > 0.5'), 'it surfaced and breathed on its own');
+  await page.eval('becomeSpecies(speciesById.cownose); P.air = 1; 1');
+});
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
     const decks = world.meshes.find(x => x.name === 'bridge decks'), centres = []; for (let i = 0; i < decks.count; i++) { const d = get('bridge decks', i); centres.push(d); }

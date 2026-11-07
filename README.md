@@ -34,8 +34,8 @@ giggers pole the flats with a light on the bottom, and in the light you shine. D
 
 ## Playing
 
-Press Enter or click and the game goes full screen and takes the mouse. Move the mouse to steer, W and S (or ↑ ↓) swim
-faster and slower, A and D (or ← →) turn, Space rises and C dives, and hold the right button to look around. Let go of a
+Press Enter or click and the game goes full screen and takes the mouse. Play with two hands: W and S swim
+faster and slower, A and D (or ← →) turn, ↑ rises and ↓ dives (K and J too). With a hand on the mouse, the mouse steers, Space rises, Q dives, and the right button looks around. Let go of a
 rise or a dive and the nose comes back level. Shift is a burst: five seconds flat out, at a little over twice the animal's
 real sprint, back in about two. Strong tide is something else: it carries you, and the readout says TIDE and which way. E is the ability: a ray senses clams buried in the sand, a dolphin
 echolocates, a shark lunges, a manatee takes a breath. Tab cycles the bodies you have been and M opens the map for fast

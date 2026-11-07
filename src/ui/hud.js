@@ -35,8 +35,8 @@ export function renderHelpKeys() {
   // each line short enough to fit on one row of a small screen (about 28 characters)
   const rows = MOBILE ? [['TILT', 'lean to turn · tip to dive'], ['HOLD', 'burst, while the dots last'], ['◆', 'sense or echo: finds clams'], ['M', 'map and fast travel'],
     ['⇄', 'become a body you have been'], ['II', 'pause · settings · feedback']]
-    : [['MOUSE', 'steer · right button looks'], [`${L('forward')} ${L('back')}`, 'forward · back · ↑ ↓ too'], [`${L('left')} ${L('right')}`, 'turn · ← → too'],
-    [`${L('rise')} ${L('dive')}`, 'rise · dive'], [L('burst'), 'burst, while the dots last'], [L('ability'), 'sense or echo: finds clams'], [L('creature'), 'become a body you have been'],
+    : [['MOUSE', 'steer · right button looks'], [`${L('forward')} ${L('back')}`, 'forward · back'], [`${L('left')} ${L('right')}`, 'turn · ← → too'],
+    ['↑ ↓', 'rise · dive · K J too'], [`${L('rise')} ${L('dive')}`, 'rise · dive, by the left hand'], [L('burst'), 'burst, while the dots last. at the top, a dolphin leaps'], [L('ability'), 'sense or echo: finds clams'], [L('creature'), 'become a body you have been'],
     [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo mode, anywhere'], [L('feedback'), 'send us a note from here']];
   help.querySelector('.keys').innerHTML = rows.map(([k, d]) => `<b>${esc(k)}</b><span>${esc(d)}</span>`).join('');
 }

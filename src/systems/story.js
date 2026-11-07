@@ -36,7 +36,7 @@ export const CHAPTERS = [
   { title: 'V · THIRTY METRES', start: [27.52, -83.17], surface: true, clock: 17.5,
     lines: ['Three days west.', 'Thirty metres of water and no bottom in sight.', 'Rise. Break the surface. The pelicans go where the fever goes.'] },
   { title: 'VI · THE POD', species: 'dolphin', start: [27.6185, -82.66117], pair: true, goal: () => { const m = wild.find(o => o.partner); return m && m.pos.distanceTo(P.pos) > 25 ? [m.pos.x, m.pos.z] : null; },
-    lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and one of the pod has come to swim beside you.', 'Swim straight at the surface, close beside it. Leap together, three times.'] },
+    lines: ['The fever scatters. Something faster finds you.', 'You are a bottlenose dolphin now, and one of the pod has come to swim beside you.', 'Swim close beside it, near the top. Burst, and you leap together. Three times.'] },
   { title: 'VII · THE SHADOW', species: 'bull', clock: 21, start: [27.84, -82.47], feed: 8,
     lines: ['Hillsborough Bay. Warm, brown, shallow.', 'You are a bull shark now. The mullet know you before they see you.', 'Feed. E to lunge. They scatter. Eight will do.'] },
   { title: 'VIII · SLOW WATER', species: 'manatee', start: [27.80099, -82.41895], goal: () => toXZ(27.8005, -82.4145), radius: 90,
