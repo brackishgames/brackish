@@ -30,6 +30,7 @@ export function rayGeometry(sp, nu = 60, nv = 36) {
         let y = (1 - u * u) * 0.11 * sp.len * Math.pow(Math.sin(Math.PI * Math.min(t / 0.86, 1)), 0.6) * Math.max(0, 1 - Math.abs(u) * 1.2);
         if (!far && sideSign > 0) y += sp.len * (0.07 * bump(t, 0.13, 0.09) * bump(r, 0, 0.09) + 0.012 * bump(r, 0, 0.018) * (t > 0.12 ? 1 : 0));   // the head stands proud; the backbone shows
         if (!far && sideSign < 0) { let cut = 0.012 * bump(t, 0.1 + 0.2 * r, 0.006) * bump(r, 0, 0.05); for (let k = 0; k < 5; k++) cut += 0.006 * bump(t, 0.17 + k * 0.024, 0.0055) * bump(r, 0.075, 0.03); y = Math.max(0.001, y - cut * sp.len); }   // the mouth; the gills
+        y *= (Math.abs(u) < 1 ? 1 : 0) * Math.min(1, t / 0.03) * (t < 0.86 ? 1 : 0);   // top and bottom meet all the way round
         pos.push(x, sideSign * y, (t - 0.32) * sp.len); uv.push(Math.abs(u), t); } }
     for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = base + j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
       if (sideSign > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c); }
@@ -45,7 +46,7 @@ export function rayGeometry(sp, nu = 60, nv = 36) {
 // each animal's body, station by station from the nose (s = 0) to the base of the tail (s = 1): half width, height above the centre line, depth below it, all
 // as parts of its length. shaped by hand from the proportions in field guides and published side views: faithful in outline, not a scan
 export const BODIES = {
-  dolphin: [[0, .004, .004, .006], [.05, .015, .014, .016], [.1, .02, .018, .019], [.118, .03, .04, .024], [.15, .055, .068, .042], [.22, .083, .088, .066], [.35, .098, .098, .09], [.5, .084, .09, .078], [.65, .058, .068, .05], [.8, .03, .043, .029], [.9, .013, .027, .017], [1, .005, .009, .006]],   // the beak, the melon behind it, a tall narrow peduncle
+  dolphin: [[0, .006, .006, .008], [.035, .016, .015, .017], [.07, .021, .018, .022], [.085, .033, .042, .028], [.12, .06, .074, .05], [.2, .09, .098, .082], [.35, .108, .11, .106], [.5, .094, .1, .092], [.65, .066, .078, .06], [.8, .036, .05, .034], [.92, .016, .03, .018], [1, .006, .01, .007]],   // a short beak, the melon rising straight from it, a deep chest, a tail stock that stays strong
   manatee: [[0, .028, .03, .042], [.03, .062, .06, .072], [.08, .08, .072, .08], [.14, .095, .085, .09], [.25, .155, .13, .14], [.45, .195, .16, .165], [.65, .165, .13, .135], [.82, .115, .08, .08], [.95, .085, .04, .04], [1, .07, .022, .022]],   // a blunt muzzle that hangs down, no neck, a great barrel
   bull: [[0, .004, .003, .003], [.02, .03, .018, .02], [.06, .058, .038, .038], [.14, .082, .062, .058], [.25, .098, .08, .086], [.36, .1, .088, .095], [.5, .08, .075, .076], [.65, .052, .052, .046], [.8, .03, .032, .026], [.92, .016, .02, .018], [1, .008, .012, .012]],   // the blunt snout and heavy belly it is known for
   hammer: [[0, .018, .008, .008], [.05, .03, .022, .024], [.12, .044, .04, .042], [.25, .058, .058, .06], [.38, .062, .066, .068], [.52, .052, .056, .054], [.68, .036, .04, .034], [.82, .021, .026, .02], [.93, .011, .016, .012], [1, .006, .009, .008]],   // long and slim behind the head
@@ -60,9 +61,9 @@ export const SKIN = {
     c -= 0.004 * bump(s, 0.075, 0.009) * bump(sa, 0.3, 0.2);   // the eye sits in a socket
     return c; },
   hammer(s, a, ca, sa) { let c = 0; for (let k = 0; k < 5; k++) c -= 0.0035 * bump(s, 0.19 + k * 0.014, 0.0035) * sideOn(sa); return c - 0.005 * bump(s, 0.055 + 0.03 * Math.abs(ca), 0.004) * bump(sa, -0.95, 0.5); },
-  dolphin(s, a, ca, sa) { let c = -0.0045 * bump(sa, -0.1 - Math.max(0, s - 0.1) * 0.6, 0.09) * (s < 0.17 ? 1 : 0) * (s > 0.005 ? 1 : 0);   // the line of the mouth, along the beak to the corner of a smile
-    c -= 0.006 * bump(s, 0.2, 0.007) * bump(ca, 0, 0.13) * (sa > 0 ? 1 : 0);   // the blowhole, on top of the head
-    return c - 0.002 * bump(s, 0.14, 0.008) * bump(sa, 0.05, 0.2); },
+  dolphin(s, a, ca, sa) { let c = -0.0045 * bump(sa, -0.1 - Math.max(0, s - 0.07) * 0.6, 0.09) * (s < 0.135 ? 1 : 0) * (s > 0.005 ? 1 : 0);   // the line of the mouth, along the beak to the corner of a smile
+    c -= 0.006 * bump(s, 0.175, 0.007) * bump(ca, 0, 0.13) * (sa > 0 ? 1 : 0);   // the blowhole, on top of the head
+    return c - 0.002 * bump(s, 0.125, 0.008) * bump(sa, 0.05, 0.2); },
   manatee(s, a, ca, sa) { let c = s > 0.1 ? 0.0003 * Math.sin(s * 120) : 0;   // the folds of its skin
     c -= 0.007 * bump(s, 0.015, 0.008) * bump(Math.abs(ca), 0.35, 0.16) * (sa > 0 ? 1 : 0);   // two nostrils on top of the muzzle, that close when it dives
     c -= 0.004 * bump(s, 0.03, 0.006) * bump(sa, -0.35, 0.16);   // the mouth under the heavy lip
@@ -72,7 +73,7 @@ export const SKIN = {
     return c - 0.003 * bump(s, 0.012, 0.006) * bump(sa, -0.15, 0.2); },
 };
 export function fishGeometry(sp) {
-  const L = sp.len, rows = BODIES[sp.id] || BODIES.mullet, at = s => bodyAt(rows, Math.min(1, s)), z = s => (s - 0.5) * L, parts = [loft(rows, L, { along: 90, around: 32, carve: SKIN[sp.id], crowd: 1.5 })];
+  const L = sp.len, rows = BODIES[sp.id] || BODIES.mullet, at = s => bodyAt(rows, Math.min(1, s)), z = s => (s - 0.5) * L, parts = [loft(rows, L, { along: 80, around: 30, carve: SKIN[sp.id], crowd: 1.5 })];
   const up = s => at(s)[1] * L, dn = s => at(s)[2] * L, wd = s => at(s)[0] * L, F = (...a) => parts.push(foil(...a));
   const back = (a, b, h, tipS = b + (b - a) * 0.25, o = {}) => F([0, up(a) * 0.95, z(a)], [0, up(b) * 0.95, z(b)], [0, up((a + b) / 2) + h * L, z(tipS)], { bow: 0.25, draw: -0.2, ...o });   // a fin along the back
   const belly = (a, b, h, tipS = b + (b - a) * 0.3) => F([0, -dn(a) * 0.95, z(a)], [0, -dn(b) * 0.95, z(b)], [0, -dn((a + b) / 2) - h * L, z(tipS)], { bow: 0.2, draw: -0.15, span: 6, chord: 4 });
@@ -81,8 +82,8 @@ export function fishGeometry(sp) {
     back(0.36, 0.5, sp.hammer ? 0.2 : 0.14, 0.53); back(0.72, 0.78, 0.035); belly(0.58, 0.63, 0.04); belly(0.74, 0.79, 0.035); paired(0.24, 0.33, 0.2, 0.09, 0.38);
     F([0, up(0.93), z(0.93)], [0, up(1), z(1)], [0, 0.25 * L, z(1.18)], { bow: 0.12, draw: -0.22 }); F([0, -dn(0.95), z(0.95)], [0, -dn(1), z(1)], [0, -0.11 * L, z(1.07)], { bow: 0.2, draw: -0.12, span: 6, chord: 4 });
   } else if (sp.fluke === 'h') {   // a hooked dorsal, flippers, and flukes lying flat with the notch between them
-    back(0.44, 0.58, 0.11, 0.62, { draw: -0.3, thick: 0.13 }); paired(0.22, 0.29, 0.16, 0.06, 0.37, { thick: 0.12 });
-    for (const sx of [-1, 1]) F([0, 0, z(0.965)], [sx * 0.005 * L, 0, z(1.02)], [sx * 0.13 * L, 0, z(1.07)], { bow: 0.5, draw: -0.35, thick: 0.09 });
+    back(0.43, 0.57, 0.105, 0.6, { draw: -0.3, thick: 0.13 }); paired(0.2, 0.27, 0.17, 0.07, 0.35, { thick: 0.12 });
+    for (const sx of [-1, 1]) F([0, 0, z(0.965)], [sx * 0.005 * L, 0, z(1.02)], [sx * 0.135 * L, 0, z(1.05)], { bow: 0.5, draw: -0.35, thick: 0.09 });
   } else if (sp.fluke === 'paddle') {   // rounded flippers with their nails; the great flat tail
     paired(0.15, 0.22, 0.15, 0.09, 0.25, { bow: 0.4, draw: 0.2, thick: 0.14 });
     for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) parts.push(pod(0.006 * L, 0.003 * L, 0.009 * L, 8, 6).translate(sx * (wd(0.18) * 0.88 + (0.125 + k * 0.012) * L), -dn(0.18) * 0.45 - (0.07 + k * 0.006) * L, z(0.2 + k * 0.012)));
@@ -92,8 +93,8 @@ export function fishGeometry(sp) {
     back(0.42, 0.5, 0.06, 0.52); back(0.66, 0.74, 0.05); belly(0.68, 0.74, 0.04); belly(0.46, 0.52, 0.03); paired(0.24, 0.3, 0.1, 0.01, 0.38);
     for (const u of [1, -1]) F([0, u * up(0.97) * 0.8, z(0.97)], [0, 0, z(1.03)], [0, u * 0.11 * L, z(1.14)], { bow: 0.1, draw: -0.15 });
   }
-  if (sp.hammer) { const foilHead = new THREE.SphereGeometry(1, 40, 12).scale(0.15 * L, 0.014 * L, 0.04 * L), q = foilHead.attributes.position; for (let i = 0; i < q.count; i++) { const x = q.getX(i) / (0.15 * L), front = q.getZ(i) < 0 ? 1 : 0.6; q.setZ(i, q.getZ(i) * (1 - 0.35 * x * x) * front + 0.05 * L * x * x + (q.getZ(i) < 0 ? 0.012 * L * bump(Math.abs(x), 0.55, 0.14) + 0.012 * L * bump(x, 0, 0.1) : 0)); } foilHead.computeVertexNormals(); parts.push(foilHead.translate(0, 0, z(0.02))); }   // the cephalofoil: a thin wing with the notches of a great hammerhead's straight front edge, swept at the tips
-  const eye = sp.hammer ? [0.145 * L, 0, z(0.05)] : [wd(sp.fluke === 'paddle' ? 0.08 : sp.fluke === 'h' ? 0.14 : 0.075) * 0.94, up(0.1) * (sp.fluke === 'shark' ? 0.32 : 0.2), z(sp.fluke === 'paddle' ? 0.08 : sp.fluke === 'h' ? 0.14 : 0.075)];   // eyes: a hammerhead's out at the tips, the rest in their sockets
+  if (sp.hammer) { const foilHead = new THREE.SphereGeometry(1, 40, 12).scale(0.15 * L, 0.014 * L, 0.04 * L), q = foilHead.attributes.position; for (let i = 0; i < q.count; i++) { const x = q.getX(i) / (0.15 * L), zz = q.getZ(i), f = Math.max(0, -zz / (0.04 * L)); q.setZ(i, zz * (1 - 0.35 * x * x) * (zz < 0 ? 1 : 0.6) + 0.05 * L * x * x + f * (0.012 * L * bump(Math.abs(x), 0.55, 0.14) + 0.012 * L * bump(x, 0, 0.1))); } foilHead.computeVertexNormals(); parts.push(foilHead.translate(0, 0, z(0.02))); }   // the cephalofoil: a thin wing with the notches of a great hammerhead's straight front edge, swept at the tips
+  const eye = sp.hammer ? [0.145 * L, 0, z(0.05)] : [wd(sp.fluke === 'paddle' ? 0.08 : sp.fluke === 'h' ? 0.125 : 0.075) * 0.94, up(0.1) * (sp.fluke === 'shark' ? 0.32 : 0.2), z(sp.fluke === 'paddle' ? 0.08 : sp.fluke === 'h' ? 0.125 : 0.075)];   // eyes: a hammerhead's out at the tips, the rest in their sockets
   for (const sx of [-1, 1]) parts.push(pod(0.009 * L + 0.002, 0.009 * L + 0.002, 0.009 * L + 0.002, 10, 8).translate(sx * eye[0], eye[1], eye[2]));
   const g = join(parts);
   g.computeBoundingBox(); const k = L / (g.boundingBox.max.z - g.boundingBox.min.z); g.translate(0, 0, -(g.boundingBox.max.z + g.boundingBox.min.z) / 2).scale(k, k, k);   // the whole animal, fins and all, is as long as the real one

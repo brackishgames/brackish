@@ -1,5 +1,7 @@
 [
  {
+  "open": 0,
+  "sheet": false,
   "id": "cownose",
   "name": "Cownose Ray",
   "group": "animals",
@@ -10,24 +12,28 @@
    0.158,
    1.423
   ],
-  "triangles": 10092,
+  "triangles": 10120,
   "stl": "cownose.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "dolphin",
   "name": "Bottlenose Dolphin",
   "group": "animals",
   "place": false,
   "real": 2.6,
   "size": [
-   1.157,
-   0.709,
+   1.253,
+   0.777,
    2.6
   ],
-  "triangles": 7120,
+  "triangles": 6280,
   "stl": "dolphin.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "manatee",
   "name": "West Indian Manatee",
   "group": "animals",
@@ -35,27 +41,31 @@
   "real": 3,
   "size": [
    1.261,
-   0.802,
+   0.798,
    3
   ],
-  "triangles": 7648,
+  "triangles": 6772,
   "stl": "manatee.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "bull",
   "name": "Bull Shark",
   "group": "animals",
   "place": false,
   "real": 2.4,
   "size": [
-   1.173,
-   0.775,
+   1.169,
+   0.772,
    2.4
   ],
-  "triangles": 7408,
+  "triangles": 6592,
   "stl": "bull.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "hammer",
   "name": "Great Hammerhead",
   "group": "animals",
@@ -66,24 +76,28 @@
    1.087,
    3.4
   ],
-  "triangles": 8288,
+  "triangles": 7472,
   "stl": "hammer.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "mullet",
   "name": "Striped Mullet",
   "group": "animals",
   "place": false,
   "real": 0.45,
   "size": [
-   0.129,
+   0.128,
    0.101,
    0.45
   ],
-  "triangles": 7528,
+  "triangles": 6716,
   "stl": "mullet.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "fever-ray",
   "name": "Cownose Ray, in the fever",
   "group": "animals",
@@ -94,10 +108,12 @@
    0.129,
    1.366
   ],
-  "triangles": 216,
+  "triangles": 222,
   "stl": "fever-ray.stl"
  },
  {
+  "open": 0,
+  "sheet": true,
   "id": "school-fish",
   "name": "Schooling mullet",
   "group": "animals",
@@ -106,12 +122,14 @@
   "size": [
    0.04,
    0.08,
-   0.341
+   0.342
   ],
-  "triangles": 76,
+  "triangles": 90,
   "stl": "school-fish.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "jelly",
   "name": "Jellyfish",
   "group": "animals",
@@ -122,10 +140,12 @@
    0.493,
    0.455
   ],
-  "triangles": 2168,
+  "triangles": 2912,
   "stl": "jelly.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "bird",
   "name": "Seabird",
   "group": "animals",
@@ -136,10 +156,12 @@
    0.46,
    1.176
   ],
-  "triangles": 524,
+  "triangles": 552,
   "stl": "bird.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "ship",
   "name": "cargo ship",
   "group": "boats",
@@ -150,10 +172,12 @@
    48.972,
    183.373
   ],
-  "triangles": 2851,
+  "triangles": 2977,
   "stl": "ship.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "cruiser",
   "name": "cruiser",
   "group": "boats",
@@ -164,10 +188,12 @@
    5.074,
    12.18
   ],
-  "triangles": 2377,
+  "triangles": 2507,
   "stl": "cruiser.stl"
  },
  {
+  "open": 6,
+  "sheet": true,
   "id": "skiff",
   "name": "skiff",
   "group": "boats",
@@ -178,10 +204,12 @@
    1.879,
    6.074
   ],
-  "triangles": 2465,
+  "triangles": 2519,
   "stl": "skiff.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "buoy",
   "name": "Channel buoy, chain and sinker",
   "group": "structures",
@@ -196,6 +224,8 @@
   "stl": "buoy.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "clam",
   "name": "Clam",
   "group": "plants and the bottom",
@@ -203,13 +233,15 @@
   "real": null,
   "size": [
    0.362,
-   0.169,
-   0.302
+   0.168,
+   0.299
   ],
-  "triangles": 1664,
+  "triangles": 748,
   "stl": "clam.stl"
  },
  {
+  "open": 24,
+  "sheet": true,
   "id": "seagrass",
   "name": "Seagrass tuft",
   "group": "plants and the bottom",
@@ -224,6 +256,8 @@
   "stl": "seagrass.stl"
  },
  {
+  "open": 159,
+  "sheet": true,
   "id": "sea-fan",
   "name": "Sea fan",
   "group": "plants and the bottom",
@@ -238,6 +272,8 @@
   "stl": "sea-fan.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "rock",
   "name": "Rock",
   "group": "plants and the bottom",
@@ -252,6 +288,8 @@
   "stl": "rock.stl"
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "surface-above",
   "name": "The surface, from above",
   "group": "weather",
@@ -265,6 +303,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "surface-below",
   "name": "The surface, from below",
   "group": "weather",
@@ -278,6 +318,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "the-bay",
   "name": "Tampa Bay, from above",
   "group": "maps and places",
@@ -291,6 +333,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "skyway",
   "name": "Sunshine Skyway main span",
   "group": "maps and places",
@@ -304,6 +348,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "the-barge",
   "name": "The Barge",
   "group": "maps and places",
@@ -317,6 +363,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "egmont-wreck",
   "name": "Egmont wreck",
   "group": "maps and places",
@@ -330,6 +378,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "old-skyway-rubble",
   "name": "Old Skyway rubble",
   "group": "maps and places",
@@ -343,6 +393,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "shelf-wreck",
   "name": "Shelf wreck",
   "group": "maps and places",
@@ -356,6 +408,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "deep-reef",
   "name": "Deep reef",
   "group": "maps and places",
@@ -369,6 +423,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "hillsborough-hulk",
   "name": "Hillsborough hulk",
   "group": "maps and places",
@@ -382,6 +438,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "old-tampa-bay-skiff",
   "name": "Old Tampa Bay skiff",
   "group": "maps and places",
@@ -395,6 +453,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "uscgc-blackthorn",
   "name": "USCGC Blackthorn",
   "group": "maps and places",
@@ -408,6 +468,8 @@
   "triangles": 0
  },
  {
+  "open": 0,
+  "sheet": false,
   "id": "fort-dade-ruins",
   "name": "Fort Dade ruins",
   "group": "maps and places",

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
 import { seaState } from '../lib/sea.js?v=__BUILD__';
+import { openEdges } from '../lib/shapes.js?v=__BUILD__';
 import { DEV, TEST } from '../core/env.js?v=__BUILD__';
 import { camera, lowRT, renderer, scene, setDotPitch } from '../render/display.js?v=__BUILD__';
 import { rainFall, surface } from '../render/effects.js?v=__BUILD__';
@@ -99,7 +100,8 @@ function renderLabels() { if (!headEl) return; const names = viewsOf(specimen.it
 export function setTurning(on) { specimen.turning = on; if (specimen.obj) specimen.obj.traverse(o => { if (o.material?.uniforms?.uBend) o.material.uniforms.uBend.value = on ? 1 : 0; }); }
 export function setWire(on) { specimen.wire = on; const walk = o => { if (o.material) o.material.wireframe = on; }; if (specimen.obj) specimen.obj.traverse(walk); }
 export const specimenInfo = () => { const { item, size, tris } = specimen; if (!item || item.place) return item ? 'THE REAL PLACE, AS BUILT IN THE BAY' : ''; const measured = item.id === 'cownose' || item.id === 'fever-ray' ? size.x : size.z; return `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)} M · ${tris.toLocaleString('en-US')} TRIS${item.real ? ` · REAL ${item.real} M ${Math.abs(measured - item.real) / item.real < 0.05 ? 'OK' : 'OFF'}` : ''}`; };
-export const specimenReport = item => ({ id: item.id, name: item.name, group: item.group, place: !!item.place, real: item.real ?? null, size: specimen.size.toArray().map(v => +v.toFixed(3)), triangles: specimen.tris });
+export const SHEETS = new Set(['seagrass', 'sea-fan', 'school-fish', 'skiff']);   // thin or open by nature: a blade of grass has no inside, and a skiff is an open boat
+export const specimenReport = item => ({ open: specimen.obj ? (() => { let n = 0; specimen.obj.traverse(m => { if (m.geometry) n += openEdges(m.geometry); }); return n; })() : 0, sheet: SHEETS.has(item.id), id: item.id, name: item.name, group: item.group, place: !!item.place, real: item.real ?? null, size: specimen.size.toArray().map(v => +v.toFixed(3)), triangles: specimen.tris });
 // a binary STL of what is on show, for GitHub's 3D viewer: it shows geometry, at rest
 export function specimenStl() {
   const tris = [], M = new THREE.Matrix4(), I = new THREE.Matrix4(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), base = specimen.at;

@@ -207,7 +207,7 @@ export function drawDepthGauge(v) {   // surface at the top, the bottom of the b
     for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
     const py = g0 + Math.round(at * gh); for (let x = -1; x <= 2; x++) { pDot(gx + x, py, 255); pDot(gx + x, py + 1, 255); }
     { const w = pSeg(Math.max(0, -P.pos.y).toFixed(1), gx + 5, py - 3, INK.value); pText('M', gx + 6 + w, py - 1, INK.label, 'left', 1, true); }   // how deep you are rides beside you, in the stereo's big digits
-    pText('FLOOR', gx - 1, g0 + gh + 4, INK.label, 'left', 1, true); pText(readouts.floor + 'M', gx + 23, g0 + gh + 4, 190, 'left', 1, true);   // and the bottom under you, at the bottom
+    pText('FLOOR', gx - 1, g0 + gh + 4, INK.label, 'left', 1, true); pText(P.pos.y - floorAt(P.pos.x, P.pos.z) > TUNE.water.bottomSeen ? '---' : readouts.floor + 'M', gx + 23, g0 + gh + 4, 190, 'left', 1, true);   // past where you can see it, you don't know   // and the bottom under you, at the bottom
     const climbIn = P.climbIn || 0, fl = (t * 2.2) % 1;   // rise and dive: chevrons flowing up or down the gauge, beside you
     if (Math.abs(climbIn) > 0.1) for (let k = 0; k < 2; k++) { const up = climbIn > 0, d = 9 + (k + fl) * 5; pText(up ? '▲' : '▼', gx + 8, up ? py - 6 - d : py - 2 + d, 240 * Math.min(1, Math.abs(climbIn) * 1.5) * (1 - 0.7 * (k + fl) / 2), 'center'); } }
 }

@@ -40,6 +40,7 @@ export const creatureVert = GLSL_COMMON + /* glsl */`
   uniform float uMode, uHalf, uLen, uFreq, uAmp, uFlap, uPhase, uBend, uWave;
   varying vec3 vW, vN; varying float vD, vFin; varying vec2 vUv;
   vec3 swim(vec3 p, float ph) {
+    ph += 0.28 * sin(ph * 0.137) + 0.16 * sin(ph * 0.061);   // no living thing keeps perfect time
     if (uMode == 1.0) {   // rays (mobuliform): oscillatory pectoral flapping
       float s = abs(p.x) / uHalf, c = clamp(p.z / uLen + 0.32, 0.0, 1.0);
       float phw = ph + 0.32 * sin(ph);                         // quicker power downstroke, slower recovery
@@ -53,12 +54,15 @@ export const creatureVert = GLSL_COMMON + /* glsl */`
     else if (uMode == 2.0) {   // fish and sharks: side to side, the head barely, the tail most
       float s = clamp(p.z / uLen + 0.5, 0.0, 1.0), t = (s - 0.45) * 2.0;
       p.x += sin(ph - s * uWave) * (0.06 + 0.24 * s + 0.7 * s * s) * uAmp * uLen * mix(0.6, 1.0, uFlap) - sin(ph) * (1.0 - s) * (1.0 - s) * 0.05 * uAmp * uLen;
-      p.x -= uBend * t * t * 0.16 * uLen; }
+      p.x -= uBend * t * t * 0.16 * uLen;
+      float fin = max(0.0, abs(p.x) - 0.1 * uLen) / uLen; p.y += fin * (sin(ph * 0.5 - s * 2.0) * 0.28 - 0.5 * uBend * sign(p.x)) * uLen * 0.5; }   // pectorals give a little, and tilt to steer
     else if (uMode == 6.0) {   // dolphins, manatees: the stroke is up and down, from a stiff front
       float s = clamp(p.z / uLen + 0.5, 0.0, 1.0), t = (s - 0.45) * 2.0;
       p.y += sin(ph - s * uWave) * (0.02 + 0.98 * pow(s, 2.6)) * uAmp * uLen * 1.3 * mix(0.6, 1.0, uFlap) - sin(ph) * (1.0 - s) * 0.04 * uAmp * uLen;
-      p.x -= uBend * t * t * 0.1 * uLen; }
-    else if (uMode == 4.0) { p.y += sin(ph) * abs(p.x) * uAmp; }
+      p.x -= uBend * t * t * 0.1 * uLen;
+      float fin = max(0.0, abs(p.x) - 0.12 * uLen) / uLen, fluke = smoothstep(0.92, 1.0, s); p.y += fin * (1.0 - fluke) * (sin(ph * 0.5) * 0.25 - 0.5 * uBend * sign(p.x)) * uLen * 0.5; }
+    else if (uMode == 4.0) {   // a big soaring bird: long glides, then a few slow beats, the wingtips trailing the arm and the body answering each stroke
+      float s = abs(p.x), gate = smoothstep(-0.2, 0.5, sin(ph * 0.18)), beat = sin(ph - s * 1.1); p.y += (beat * s * (0.35 + 0.65 * s) * uAmp * gate + 0.05 * s * s) ; p.y -= sin(ph) * 0.04 * gate * (1.0 - min(s, 1.0)); p.z += cos(ph - s * 1.1) * s * s * 0.05 * gate; }
     else if (uMode == 5.0) { float q = 1.0 + 0.14 * sin(ph); p.xz *= mix(q, 1.0, step(p.y, -0.01)); p.y *= mix(2.0 - q, 1.0, step(p.y, -0.01)); if (p.y < -0.01) p.x += sin(ph * 0.7 + p.y * 3.0) * 0.04 * -p.y; }
     return p;
   }

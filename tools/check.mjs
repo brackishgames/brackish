@@ -1,25 +1,30 @@
 // Is it right? Numbers against what the real thing does, in very few words, so a person or an agent can tune without looking or listening.
 //   npm run check           one line per fault, one summary line. nothing else unless something is off
-//   node tools/check.mjs --all          every measurement          --only motion,camera,sound,picture,frame
+//   node tools/check.mjs --all          every measurement          --only models,motion,camera,sound,picture,frame
 // to tune: change a number in src/core/tune.js, run this again. look at a picture (npm run shot) only when a number can't say what is wrong.
 import { launch } from '../tests/chrome.mjs';
 import { serve } from './serve.mjs';
 const args = process.argv.slice(2), all = args.includes('--all'), only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null, want = d => !only || only.includes(d);
 const server = await serve(0), browser = await launch(), URL0 = `http://localhost:${server.address().port}/?test&seed=1`; let bad = 0, n = 0;
 const report = (domain, name, v, [lo, hi], unit = '', why = '') => { n++; const ok = v >= lo && v <= hi; if (!ok) bad++; if (all || !ok) console.log(`${ok ? 'ok  ' : 'FAIL'} ${domain} ${name}: ${typeof v === 'number' ? +v.toFixed(2) : v}${unit} (want ${lo}..${hi})${why && !ok ? ' ' + why : ''}`); };
-const fresh = async () => { const p = await browser.page(); await p.open(URL0, { w: 1288, h: 810 }); await p.eval('__game.start()'); await p.until('WU.uTime.value > startedAt + TUNE.timing.hudIn[1]', 'eased in'); return p; };
+const pages = [], fresh = async () => { const p = await browser.page(); pages.push(p); await p.open(URL0, { w: 1288, h: 810 }); await p.eval('__game.start()'); await p.until('WU.uTime.value > startedAt + TUNE.timing.hudIn[1]', 'eased in'); return p; };
 const frames = (p, secs) => p.eval('performance.now()').then(t => p.until(`performance.now() > ${t} + ${secs * 1000}`, 'time'));
 const HOLE = '27.60636, -82.74974', SHALLOW = '27.603, -82.762';
+if (want('models')) {   // every model closed, so nothing can be seen into from any side; sized like the real thing
+  const p = await browser.page(); pages.push(p); await p.open(URL0 + '&specimens', { w: 800, h: 600 }); const list = await p.eval('SPECIMENS.map(s => showSpecimen(s.id))');
+  for (const m of list) { if (m.place) continue; if (!m.sheet) report('models', `${m.id} open edges`, m.open, [0, 0], '', 'it has a hole you can see through'); if (m.real && m.id !== 'fever-ray') { const big = /ray/i.test(m.name) ? m.size[0] : m.size[2]; report('models', `${m.id} size`, big / m.real, [0.95, 1.05], ' of real'); } }
+  
+}
 if (want('motion')) {   // tail beats (Hz) from field and flume studies, and the Strouhal number St = f A / U, which efficient swimmers keep near 0.2-0.4 (Triantafyllou et al. 1993; Taylor et al. 2003)
   const REAL = { cownose: [0.4, 1.6], dolphin: [0.8, 3], manatee: [0.25, 1.2], bull: [0.5, 1.6], hammer: [0.4, 1.4], mullet: [1, 6] }, p = await fresh();
   for (const [id, hz] of Object.entries(REAL)) { const m = await p.eval(`(() => { becomeSpecies(speciesById.${id}); __game.teleport(${HOLE}, 8); __game.setInput({ throttle: 1 }); __game.step(600); const u = P.mesh.material.uniforms, sp = P.sp, f = u.uFreq.value / (Math.PI * 2), A = 2 * sp.amp * (sp.kind === 'ray' ? (sp.span / 2) * u.uFlap.value : sp.len * (sp.fluke === 'h' || sp.fluke === 'paddle' ? 1.3 : 1) * (0.6 + 0.4 * u.uFlap.value));   /* peak to peak at the tip, as the shader moves it */ return { f, St: f * A / Math.max(P.speed, 0.05), mph: P.speed * 2.237 }; })()`);
     report('motion', `${id} tail beat`, m.f, hz, ' Hz'); report('motion', `${id} Strouhal`, m.St, [0.12, 0.5], '', 'tail beat, amplitude and speed disagree'); }
-  await p.close();
+  
 }
 if (want('camera')) {   // how much of the screen's width the animal fills, swimming and bursting: near enough to read its body, far enough to see what is coming
   const p = await fresh();
   for (const id of ['cownose', 'dolphin', 'manatee', 'bull', 'hammer', 'mullet']) for (const [how, input, range] of [['cruising', { throttle: 1 }, [0.12, 0.42]], ['bursting', { throttle: 1, burst: true }, [0.045, 0.42]]]) { const fill = await p.eval(`(() => { becomeSpecies(speciesById.${id}); P.sta = 1; __game.teleport(${HOLE}, 10); __game.setInput(${JSON.stringify(input)}); __game.step(${how === 'cruising' ? 240 : 120}); const d = camera.position.distanceTo(P.pos), w = 2 * d * Math.tan(camera.fov * Math.PI / 360) * camera.aspect, sp = P.sp; return (sp.span ?? sp.len) / w; })()`); report('camera', `${id} ${how} fills`, fill, range, ' of the width', 'the camera is the wrong distance for this body'); }
-  await p.close();
+  
 }
 if (want('sound')) {   // ambient ocean noise falls about 5 dB an octave (Wenz 1962; Knudsen 1948); a cozy mix stays well under full scale, and fear takes away the middle while adding weight below
   const p = await fresh(); await p.eval('startAudio(); audio.ac.resume(); settings.volume = 10; settings.amb = 10; settings.fx = 10; 1');
@@ -38,7 +43,7 @@ if (want('sound')) {   // ambient ocean noise falls about 5 dB an octave (Wenz 1
   const held = await hear(`audio.testDread = 1; audio.hush = 1; audio.testHeld = true`); report('sound', 'the held breath: everything drops before the strike', fear.rms - held.rms, [6, 80], ' dB', 'the silence before it comes is the scariest beat');
   const struck = await hear(`audio.testHeld = null; audio.testDread = 0; audio.hush = 0; P.stun = 99; `, 2); report('sound', 'struck: the world goes thick (1-4 kHz under calm)', calm.hi - struck.hi, [4, 60], ' dB'); await p.eval('P.stun = 0; 1');
   { const engines = await p.eval(`(() => { audio.testDread = 0; __game.teleport(${HOLE}, 8); __game.setInput({ throttle: 1 }); __game.step(120); return audio.engines.filter(v => v.src.pos.distanceTo(P.pos) > 150 && v.e !== ENGINE_SHIP && v.out.gain.value > 0.01).length; })()`); report('sound', 'small boats heard from far off (the constant chug)', engines, [0, 0], '', 'a boat should arrive as an event, not hum all the time'); }
-  await p.eval('audio.testDread = 0; 1'); if (all) console.log('     ' + JSON.stringify({ calm, shallow, deep, fear }, (k, v) => typeof v === 'number' ? +v.toFixed(1) : v)); await p.close();
+  await p.eval('audio.testDread = 0; 1'); if (all) console.log('     ' + JSON.stringify({ calm, shallow, deep, fear }, (k, v) => typeof v === 'number' ? +v.toFixed(1) : v)); 
 }
 if (want('picture') || want('frame')) {   // faults a number can see: a dead-black line across the water, a screen with nothing on it. and what a frame costs
   const p = await fresh();
@@ -47,7 +52,8 @@ if (want('picture') || want('frame')) {   // faults a number can see: a dead-bla
     const m = await p.eval(`new Promise(ok => { requestAnimationFrame(() => { renderer.info.autoReset = false; renderer.info.reset(); requestAnimationFrame(() => { const tris = renderer.info.render.triangles; renderer.info.autoReset = true; const w = cellRT.width, h = cellRT.height, a = new Uint8Array(4 * w * h); renderer.readRenderTargetPixels(cellRT, 0, 0, w, h, a); const row = y => { let d = 0, s = 0; for (let x = 0; x < w; x++) { const v = a[(y * w + x) * 4]; s += v; if (v === 0) d++; } return [d / w, s / w]; }; let lit = 0; for (let i = 0; i < w * h; i++) if (a[i * 4] > 0) lit++; let lines = 0; for (let y = 2; y < h - 2; y++) { const [d] = row(y), [, up] = row(y + 2), [, dn] = row(y - 2); if (d > 0.5 && up > 8 && dn > 8) lines++; } ok({ tris, lit: 100 * lit / (w * h), lines }); }); }); })`);
     if (want('picture')) { report('picture', `${name} dots lit`, m.lit, lit, '%'); report('picture', `${name} black lines across the water`, m.lines, [0, 0]); }
     if (want('frame')) report('frame', `${name} triangles`, m.tris, [1000, 1100000]); }
-  await p.close();
+  
 }
+for (const p of pages) report('page', 'errors', p.errors.length, [0, 0], '', p.errors[0] && String(p.errors[0]).replace(/\s+/g, ' ').slice(0, 300));
 console.log(`${n - bad}/${n} checks ok${bad ? `, ${bad} off` : ''}`);
 browser.close(); server.close(); process.exit(bad ? 1 : 0);
