@@ -32,7 +32,7 @@ export const pad = { turn: 0, throttle: 0, climb: 0, burst: false, lookX: 0, loo
 export const B = action => settings.binds[action];   // the key an action is bound to
 export const PAD_KEYS = { 0: () => (menu || mapOpen || !started || photo) ? 'Enter' : null, 1: () => photo ? B('photo') : menu ? 'Escape' : helpOpen ? B('help') : mapOpen ? B('map') : null, 2: () => started && !menu && !mapOpen ? B('ability') : null,
   3: () => B('map'), 4: () => B('creature'), 11: () => started && !menu ? B('photo') : null, 8: () => B('help'), 9: () => B('pause'), 12: () => 'ArrowUp', 13: () => 'ArrowDown', 14: () => 'ArrowLeft', 15: () => 'ArrowRight' };
-export const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst   □ ability   R STICK look   △ map   OPTIONS pause' : 'L STICK steer   RT swim   A burst   X ability   R STICK look   Y map   START pause';
+export const PAD_HINT = () => pad.sony ? 'L STICK steer   R2 swim   ✕ burst' : 'L STICK steer   RT swim   A burst';
 addEventListener('gamepadconnected', e => { pad.sony = /054c|dualsense|dualshock|playstation|wireless controller/i.test(e.gamepad.id); if (started) say('CONTROLLER CONNECTED', 2); });
 addEventListener('gamepaddisconnected', () => { pad.active = false; pad.ref = null; bl.textContent = keyboardHint(); if (started) say('CONTROLLER DISCONNECTED', 2); });
 export function pollPad() {
@@ -55,7 +55,7 @@ export const kn = n => pad.active ? KEYNAME[n][pad.sony ? 2 : 1] : keyLabel(B(n 
 export const keyLabel = code => ({ Space: 'SPACE', ShiftLeft: 'SHIFT', ShiftRight: 'R SHIFT', ControlLeft: 'CTRL', ControlRight: 'R CTRL', AltLeft: 'ALT', AltRight: 'R ALT', Tab: 'TAB', Enter: 'ENTER',
   Backspace: 'BACKSPACE', CapsLock: 'CAPS', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' })[code] || String(code || '?').replace(/^(Key|Digit|Numpad)/, '').toUpperCase();
-export const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${keyLabel(B('back'))}${keyLabel(B('right'))} swim   ${kn('rise')} rise   ${kn('dive')} dive   ${kn('burst')} burst   ${kn('ability')} ability   ${kn('map')} map   ${keyLabel(B('help'))} help`;
+export const keyboardHint = () => `${keyLabel(B('forward'))}${keyLabel(B('left'))}${keyLabel(B('back'))}${keyLabel(B('right'))} swim   ${kn('burst')} burst   ${keyLabel(B('help'))} help`;   // only what you need to start: the rest is one key away, and tips teach it when it matters
 
 // ── one snapshot of what the player is asking for, read once per step from every device: keyboard, controller, touch, tilt.
 //    nothing else reads the devices for swimming. a test sets it directly through __game.setInput().
@@ -123,26 +123,33 @@ export function closeMenu() { menu = null; }
 export function resume() { closeMenu(); tilt.zero = null; if (canFull && !DEV && !TEST && !isFull() && !pad.active) goFull(); lockPointer(); }
 export function restartChapter() { closeMenu(); story.begin(story.ch); resume(); }   // the chapter puts you where it begins
 export function menuItems() {
+  // three questions, and only what they lead to: what you hear, how you steer, what is easy on you
   if (menu.kind === 'settings') return [
+    { label: () => 'SOUND', act: () => goMenu('sound') },
+    { label: () => 'CONTROLS', act: () => goMenu('controls') },
+    { label: () => 'COMFORT', act: () => goMenu('comfort') },
+    { label: () => 'SEND FEEDBACK', act: () => openFeedback() },
+    { label: () => `SEND CRASH REPORTS  ${onOff(settings.crashReports)}`, adj: () => settings.crashReports = !settings.crashReports },
+    { label: () => 'NEW GAME', act: () => { menu.kind = 'confirm'; menu.sel = 0; } },
+    { label: () => 'BACK', act: menuBack }];
+  if (menu.kind === 'sound') return [
     { label: () => 'VOLUME  ' + '◆'.repeat(settings.volume) + '·'.repeat(10 - settings.volume), adj: d => settings.volume = d === 'cycle' ? (settings.volume + 1) % 11 : clampI(settings.volume + d, 0, 10) },
     { label: () => 'AMBIENCE  ' + '◆'.repeat(settings.amb) + '·'.repeat(10 - settings.amb), adj: d => settings.amb = d === 'cycle' ? (settings.amb + 1) % 11 : clampI(settings.amb + d, 0, 10) },
     { label: () => 'EFFECTS  ' + '◆'.repeat(settings.fx) + '·'.repeat(10 - settings.fx), adj: d => settings.fx = d === 'cycle' ? (settings.fx + 1) % 11 : clampI(settings.fx + d, 0, 10) },
     { label: () => `SOUND CAPTIONS  ${onOff(settings.captions)}`, adj: () => settings.captions = !settings.captions },
-    { label: () => `TURN SPEED  ${(settings.turn / 100).toFixed(1)}X`, adj: d => settings.turn = d === 'cycle' ? (settings.turn >= 150 ? 50 : settings.turn + 10) : clampI(settings.turn + d * 10, 50, 150) },
-    { label: () => 'COMFORT', act: () => { menu.kind = 'comfort'; menu.sel = 0; } },
+    { label: () => 'BACK', act: menuBack }];
+  if (menu.kind === 'controls') return [
     { label: () => `MOUSE STEERING  ${onOff(settings.mouseSteer)}`, adj: () => settings.mouseSteer = !settings.mouseSteer },
     { label: () => `MOUSE SPEED  ${settings.mouse.toFixed(1)}X`, adj: d => settings.mouse = d === 'cycle' ? (settings.mouse >= 3 ? 0.3 : Math.round(settings.mouse * 10 + 1) / 10) : Math.round(clampI(settings.mouse * 10 + d, 3, 30)) / 10 },
+    { label: () => `TURN SPEED  ${(settings.turn / 100).toFixed(1)}X`, adj: d => settings.turn = d === 'cycle' ? (settings.turn >= 150 ? 50 : settings.turn + 10) : clampI(settings.turn + d * 10, 50, 150) },
     ...(MOBILE ? [{ label: () => `TILT STEERING  ${onOff(settings.tilt)}`, adj: () => { settings.tilt = !settings.tilt; tilt.turn = tilt.climb = 0; tilt.zero = null; if (settings.tilt && !tilt.ok) tilt.asked = false; bl.textContent = touchHint(); } }] : []),
     { label: () => `INVERT Y  ${onOff(settings.invertY)}`, adj: () => settings.invertY = !settings.invertY },
-    { label: () => `LARGE TEXT  ${onOff(settings.bigText)}`, adj: () => settings.bigText = !settings.bigText },
-    { label: () => `HUD  ${settings.hudFull ? 'ALWAYS ON' : 'QUIET'}`, adj: () => settings.hudFull = !settings.hudFull },   // quiet: each readout only while it matters
-    ...(MOBILE ? [] : [{ label: () => 'CONTROLS', act: () => { menu.kind = 'controls'; menu.sel = 0; } }]),
-    { label: () => `SEND CRASH REPORTS  ${onOff(settings.crashReports)}`, adj: () => settings.crashReports = !settings.crashReports },
+    ...(MOBILE ? [] : [{ label: () => 'KEYS', act: () => goMenu('keys') }]),
     { label: () => 'SHOW TIPS AGAIN', act: () => { settings.tips = {}; say('tips will show again', 1.5); } },
-    { label: () => 'BACK', act: () => { menu.kind = 'main'; menu.sel = 1; } }];
-  if (menu.kind === 'controls') return [...ACTIONS.map(([a, name]) => ({ label: () => `${name}  ${menu.binding === a ? '· press a key ·' : keyLabel(B(a))}`, act: () => { menu.binding = a; } })),
+    { label: () => 'BACK', act: menuBack }];
+  if (menu.kind === 'keys') return [...ACTIONS.map(([a, name]) => ({ label: () => `${name}  ${menu.binding === a ? '· press a key ·' : keyLabel(B(a))}`, act: () => { menu.binding = a; } })),
     { label: () => 'RESET TO DEFAULTS', act: () => { settings.binds = { ...DEFAULT_BINDS }; saveSettings(); refreshKeyHints(); } },
-    { label: () => 'BACK', act: () => { menu.kind = 'settings'; menu.sel = menuSettingsIndex('CONTROLS'); } }];
+    { label: () => 'BACK', act: menuBack }];
   if (menu.kind === 'comfort') return [   // what game makers offer so the camera never makes anyone feel sick
     { label: () => `FIELD OF VIEW  ${settings.fov}°`, adj: d => { settings.fov = d === 'cycle' ? (settings.fov >= 90 ? 50 : settings.fov + 5) : clampI(settings.fov + d * 5, 50, 90); resize(); } },
     { label: () => `HORIZON TILT  ${onOff(settings.horizonTilt)}`, adj: () => settings.horizonTilt = !settings.horizonTilt },
@@ -152,25 +159,28 @@ export function menuItems() {
     { label: () => `SCREEN SHAKE  ${onOff(settings.shake)}`, adj: () => settings.shake = !settings.shake },
     { label: () => `HIT FLASH  ${onOff(settings.flash)}`, adj: () => settings.flash = !settings.flash },
     { label: () => `FLICKER  ${onOff(settings.flicker)}`, adj: () => settings.flicker = !settings.flicker },
-    { label: () => 'BACK', act: () => { menu.kind = 'settings'; menu.sel = menuSettingsIndex('COMFORT'); } }];
+    { label: () => `LARGE TEXT  ${onOff(settings.bigText)}`, adj: () => settings.bigText = !settings.bigText },
+    { label: () => `HUD  ${settings.hudFull ? 'ALWAYS ON' : 'QUIET'}`, adj: () => settings.hudFull = !settings.hudFull },   // quiet: each readout only while it matters
+    { label: () => 'BACK', act: menuBack }];
   if (menu.kind === 'feedback') return feedbackItems();
   if (menu.kind === 'journal') return [...checkpoints.filter(c => LORE[c.name]).map(c => ({ label: () => c.name.toUpperCase(), act: () => { menu.kind = 'note'; menu.note = c.name; menu.back = menu.sel; menu.sel = 0; } })),
-    { label: () => 'BACK', act: () => { menu.kind = 'main'; menu.sel = 4; } }];
+    { label: () => 'BACK', act: menuBack }];
   if (menu.kind === 'note') return [{ label: () => 'BACK', act: () => { menu.kind = 'journal'; menu.sel = menu.back || 0; } }];
-  if (menu.kind === 'confirm') return [{ label: () => 'NO, KEEP SWIMMING', act: () => { menu.kind = 'main'; menu.sel = 0; } },
+  if (menu.kind === 'confirm') return [{ label: () => 'NO, KEEP SWIMMING', act: menuBack },
     { label: () => 'YES, START OVER', act: () => { try { localStorage.removeItem(SAVE_KEY); } catch {} location.reload(); } }];
   return [
     { label: () => 'RESUME', act: resume },
-    { label: () => 'SETTINGS', act: () => { menu.kind = 'settings'; menu.sel = 0; } },
-    { label: () => 'HOW TO SWIM', act: () => { closeMenu(); setHelp(true); } },
     { label: () => 'FAST TRAVEL', act: () => { closeMenu(); toggleMap(); } },
-    { label: () => 'JOURNAL', act: () => { menu.kind = 'journal'; menu.sel = 0; } },
-    { label: () => 'SEND FEEDBACK', act: () => openFeedback() },
+    { label: () => 'JOURNAL', act: () => goMenu('journal') },
+    { label: () => 'HOW TO SWIM', act: () => { closeMenu(); setHelp(true); } },
     ...(photoSpot() ? [{ label: () => 'PHOTO MODE · ' + photoSpot().toUpperCase(), act: startPhoto }] : []),
     { label: () => 'RESTART CHAPTER', act: restartChapter },
-    { label: () => 'NEW GAME', act: () => { menu.kind = 'confirm'; menu.sel = 0; } }];
+    { label: () => 'SETTINGS', act: () => goMenu('settings') }];
 }
-export const menuSettingsIndex = label => { const k = menu.kind; menu.kind = 'settings'; const i = menuItems().findIndex(it => it.label() === label); menu.kind = k; return Math.max(0, i); };
+// where each card goes back to, and going back lands on the row you came from
+export const MENU_PARENT = { settings: 'main', journal: 'main', confirm: 'settings', feedback: 'settings', sound: 'settings', controls: 'settings', comfort: 'settings', keys: 'controls' };
+export const goMenu = kind => { menu.from = { ...menu.from, [kind]: menu.sel }; menu.kind = kind; menu.sel = 0; };
+export function menuBack() { const kind = menu.kind; menu.kind = MENU_PARENT[kind] || 'main'; menu.sel = menu.from?.[kind] ?? 0; }
 export function menuKey(code) {
   const items = menuItems(), it = items[menu.sel];
   if (code === 'ArrowUp' || code === 'KeyW') menu.sel = (menu.sel + items.length - 1) % items.length;
@@ -179,7 +189,7 @@ export function menuKey(code) {
   else if ((code === 'ArrowRight' || code === 'KeyD') && it.adj) it.adj(1);
   else if (code === 'Enter' || code === 'Space') { if (it.act) it.act(); else if (it.adj) it.adj('cycle'); }   /* a tap or Enter steps a slider round, so touch can reach every value */
   else if (code === 'Escape' || code === 'Backspace' || code === B('pause')) {
-    if (menu.kind === 'note') { menu.kind = 'journal'; menu.sel = menu.back || 0; } else if (menu.kind === 'controls' || menu.kind === 'comfort') { const back = menu.kind.toUpperCase(); menu.kind = 'settings'; menu.sel = menuSettingsIndex(back); } else if (menu.kind !== 'main') { menu.kind = 'main'; menu.sel = 0; } else if (code !== 'Escape' || !needFull()) resume(); }
+    if (menu.kind === 'note') { menu.kind = 'journal'; menu.sel = menu.back || 0; } else if (menu.kind !== 'main') menuBack(); else if (code !== 'Escape' || !needFull()) resume(); }
   saveSettings();
 }
 addEventListener('keydown', e => {

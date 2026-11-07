@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { hash2 } from '../lib/rng.js?v=__BUILD__';
 import { wrap } from '../lib/text.js?v=__BUILD__';
+import { knots, mph } from '../lib/units.js?v=__BUILD__';
 import { MOBILE } from '../core/env.js?v=__BUILD__';
 import { portrait } from '../core/screen.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
@@ -60,7 +61,6 @@ export function pSeg(str, x, y, v) {
   }
   return at - x;
 }
-export function pBracket(x0, y0, x1, y1, v) { for (const [x, y, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) for (let i = 0; i < 3; i++) { pDot(x + sx * i, y, v); pDot(x, y + sy * i, v); } }   // the corners of a window on the glass
 export let pGain = 1;   // the HUD draws through this so it can fade when the water is quiet
 export let pFail = 0, pFailK = 0;   // and this, so it can lose segments in deep water, like a stereo going under
 export function pDot(x, y, v) { x |= 0; y |= 0; v *= pGain; if (pFail > 0 && hash2(x * 73 + (y >> 2) * 9, pFailK) < pFail) return; if (x < 0 || y < 0 || x >= panel.w || y >= panel.h || v <= 0) return; const i = (panel.h - 1 - y) * panel.w + x; if (v > panel.data[i]) panel.data[i] = Math.min(255, v); }
@@ -185,13 +185,12 @@ export function drawYou(v) {
   const { SL, ST, t } = v, row = k => ST + 2 + k * YOU_ROW, slots = Math.max(3, P.hp), quiet = !settings.hudFull;
   part('hearts', () => { for (let i = 0; i < slots; i++) pText('♥', SL + i * 5, row(0), i < P.hp ? INK.value : INK.lost, 'left', 1, true);   // the hearts you have, and the ones you've lost
     if (P.fed) pText('+' + P.fed, SL + slots * 5 + 2, row(0), INK.label, 'left', 1, true); });
-  part('motion', () => { const spd = P.speed.toFixed(1), bx = SL + 32; pText(spd, SL, row(1), INK.value, 'left', 1, true); pText('M/S', SL + spd.length * 4 + 2, row(1), INK.label, 'left', 1, true);
-    const sta = P.sta ?? 1; for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 2; x++) pDot(bx + i * 3 + x, row(1) + 2, on ? 220 : 60); } });   // the burst left
+  part('motion', () => { let x = SL; for (const [value, unit] of [[mph(P.speed), 'MPH'], [knots(P.speed), 'KT']]) { const n = value.toFixed(1); pText(n, x, row(1), INK.value, 'left', 1, true); x += n.length * 4 + 2; pText(unit, x, row(1), INK.label, 'left', 1, true); x += unit.length * 4 + 4; }   // the same speed, in the miles you know and the knots you are learning
+    const bx = SL + 38;
+    const sta = P.sta ?? 1; for (let i = 0; i < 8; i++) { const on = i < Math.round(sta * 8); for (let x = 0; x < 2; x++) pDot(bx + i * 3 + x, row(0) + 2, on ? 220 : 60); } });   // the burst left, beside your hearts
   part('ability', () => { const ready = (P.actReady || 0) <= simTime, key = document.body.classList.contains('touch') ? '◆' : kn('ability');
     pText(key, SL, row(2), ready ? INK.value : 80, 'left', 1, true); pText(abilityName(), SL + [...key].length * 4 + 4, row(2), ready ? 170 : 70, 'left', 1, true); });
-  const win = Math.max(hudParts.hearts.k, hudParts.motion.k, hudParts.ability.k);
-  if (win > 0.01) { const g = pGain; pGain = g * win; pBracket(SL - 3, ST - 1, SL + 58, row(3) - 2, 70); pGain = g; }   // the window these sit in
-  // below the window, only when they matter. quiet, the tide is the silt drifting past and the hunt is the edges closing in, with the warning naming it
+  // below them, only when they matter. quiet, the tide is the silt drifting past and the hunt is the edges closing in, with the warning naming it
   let k = 3;
   if (readouts.tide && !quiet) pText(readouts.tide, SL, row(k++), 200, 'left', 1, true);
   if ((P.air ?? 1) < (quiet ? TUNE.hud.airShow : 0.999)) { const low = P.air < 0.25, y = row(k++); pText('AIR', SL, y, low ? 150 + 105 * (0.5 + 0.5 * Math.sin(t * 8)) : 170, 'left', 1, true); for (let i = 0; i < 8; i++) { const on = i < Math.ceil(P.air * 8); for (let x = 0; x < 2; x++) pDot(SL + 14 + i * 3 + x, y + 2, on ? 220 : 60); } }   // lungs
@@ -321,7 +320,7 @@ export function drawHelp(v, oHelp) {   // how to swim: measured first, centred w
 export function drawPauseCard(v) {   // paused: a small framed card, left-aligned, the bay almost gone behind it
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   dotPass.uniforms.uDim.value = 0.96;
-  const items = menuItems(), labels = items.map(it => it.label()), TITLE = { settings: 'SETTINGS', comfort: 'COMFORT', controls: 'CONTROLS', feedback: 'SEND FEEDBACK', journal: 'JOURNAL', confirm: 'START OVER?', note: (menu.note || '').toUpperCase() }[menu.kind] || 'PAUSED';
+  const items = menuItems(), labels = items.map(it => it.label()), TITLE = { settings: 'SETTINGS', sound: 'SOUND', comfort: 'COMFORT', controls: 'CONTROLS', keys: 'KEYS', feedback: 'SEND FEEDBACK', journal: 'JOURNAL', confirm: 'START OVER?', note: (menu.note || '').toUpperCase() }[menu.kind] || 'PAUSED';
   const note = menu.kind === 'note' ? wrap(LORE[menu.note] || '', Math.min(cols - 4, 46)) : menu.kind === 'confirm' ? ['your progress here will be wiped.'] : menu.kind === 'feedback' ? feedbackLines(Math.min(cols - 4, 46)) : [];
   const chars = Math.max(TITLE.length, ...labels.map(l => [...l].length + 2), ...note.map(l => l.length)), bw = Math.min(W - 6, chars * 6 + 15), bx = (W - bw) >> 1, ix = bx + 8;
   const fit = Math.max(3, Math.floor((H - 46 - note.length * 9) / 10)), shown = Math.min(fit, items.length), first = Math.max(0, Math.min(menu.sel - (fit >> 1), items.length - fit));   /* long lists scroll with the selection */

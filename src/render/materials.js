@@ -3,7 +3,7 @@ import { rand } from '../core/random.js?v=__BUILD__';
 import { TILES } from '../world/geo.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  SHARED GLSL  —  brightness-only shading, fog to a target brightness
-//  (black under water, haze above), sunlight fading with depth.
+//  (the water's own dim glow below, haze above), sunlight fading with depth.
 // ═══════════════════════════════════════════════════════════════════
 export const WU = { uTime: { value: 0 }, uFogD: { value: 0.014 }, uFogB: { value: 0 }, uSun: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) } };
 export const GLSL_COMMON = /* glsl */`

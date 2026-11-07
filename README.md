@@ -39,14 +39,14 @@ faster and slower, A and D (or ← →) turn, Space rises and C dives, and hold 
 rise or a dive and the nose comes back level. Shift is a burst: five seconds flat out, at a little over twice the animal's
 real sprint, back in about two. Strong tide is something else: it carries you, and the readout says TIDE and which way. E is the ability: a ray senses clams buried in the sand, a dolphin
 echolocates, a shark lunges, a manatee takes a breath. Tab cycles the bodies you have been and M opens the map for fast
-travel. Esc or P pauses: settings, the journal of places you've found, restart the chapter, or start a new game.
+travel. Esc or P pauses: fast travel, the journal of places you've found, how to swim, restart the chapter, and settings (sound, controls, comfort, feedback, a new game).
 
 A controller works over USB or Bluetooth (Xbox, PlayStation, Switch Pro): left stick steers, RT swims, A bursts, X is the
 ability, the right stick looks around, START pauses. A phone plays sideways: tilt it like a wheel to turn, tip the top away
 to dive or toward you to rise, and hold a thumb anywhere to burst (TILT STEERING in settings turns tilt off for a drag
-stick). F, or *Send feedback* in the pause menu, sends us a note from where you are.
+stick). F, or *Send feedback* in settings, sends us a note from where you are.
 
-The screen is laid out by what each thing is about. Top left is you: your hearts, your speed and the burst you have left,
+The screen is laid out by what each thing is about. Top left is you: your hearts and the burst you have left, your speed in mph with the knots beside it,
 your ability on its key, then the tide on you, air and the hunt when they matter. Top middle is where you're going: the
 compass, the goal and its distance on it, and the place you're in. The left edge is the depth: the surface at the top, the
 bottom under you at the foot, and how deep you are riding beside you. A bottom corner holds the chart and the live NOAA

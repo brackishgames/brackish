@@ -1,12 +1,12 @@
 // Fetch the bay's bathymetry from NOAA NCEI once and write it into data/, so the game never needs NOAA to start.
-//   node tools/fetch-dem.mjs          (run again only if the tile bounds in src/01-geo.js change)
+//   node tools/fetch-dem.mjs          (run again only if the tile bounds in src/world/geo.js change)
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { parseTiffF32 } from '../src/lib/tiff.js';
 import { encodeDem, decodeDem } from '../src/lib/dem.js';
 // the tile bounds live in the game; read them from there so the two can never disagree
-const src = readFileSync(new URL('../src/01-geo.js', import.meta.url), 'utf8');
+const src = readFileSync(new URL('../src/world/geo.js', import.meta.url), 'utf8');
 const TILES = Object.fromEntries([...src.matchAll(/(\w+): \{ lon0: ([-\d.]+), lat0: ([-\d.]+), lon1: ([-\d.]+), lat1: ([-\d.]+), n: (\d+) \}/g)].map(m => [m[1], { lon0: +m[2], lat0: +m[3], lon1: +m[4], lat1: +m[5], n: +m[6] }]));
-if (!TILES.outer || !TILES.inner) throw new Error('could not find TILES in src/01-geo.js');
+if (!TILES.outer || !TILES.inner) throw new Error('could not find TILES in src/world/geo.js');
 const url = t => `https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer/exportImage?bbox=${t.lon0},${t.lat0},${t.lon1},${t.lat1}&bboxSR=4326&imageSR=4326&size=${t.n},${t.n}&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=image`;
 mkdirSync(new URL('../data/', import.meta.url), { recursive: true });
 for (const [name, t] of Object.entries(TILES)) {

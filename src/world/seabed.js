@@ -10,12 +10,12 @@ import { structMat } from './structures.js?v=__BUILD__';
 export const grassCenter = new THREE.Vector2(1e9, 1e9);   // where the last rebuild was centred
 const _sc = new THREE.Vector3(), _e = new THREE.Euler();   // scratch for the rebuild
 // seagrass (instanced blades in the shallows)
-export const GRASS_MAX = MOBILE ? 5000 : 14000;
+export const GRASS_MAX = MOBILE ? 5000 : 14000, GRASS_R = 70, GRASS_FADE = [38, 62];   // metres: how far the patch reaches, and where blades shrink away well inside it, so its edge never lines up into rows of dashes or pops in as you swim
 export const tuftGeo = mergeGeometries([0, 1, 2].map(i => new THREE.PlaneGeometry(0.045, 0.45 + i * 0.08).translate(0, 0.25 + i * 0.04, 0).rotateZ(0.18).rotateY(i * 2.09).toNonIndexed()), false);
 export const grass = new THREE.InstancedMesh(tuftGeo, mat({ side: THREE.DoubleSide,
   vertexShader: GLSL_COMMON + `varying float vD, vY, vU;
-    void main(){ vec3 p = position; vec3 o = (instanceMatrix * vec4(0,0,0,1)).xyz; p.x += sin(uTime * 1.1 + o.x * 0.7 + o.z * 0.4) * uv.y * uv.y * 0.22; p.z += cos(uTime * 0.9 + o.x * 0.3) * uv.y * uv.y * 0.12;
-      vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0); vY = w.y; vU = uv.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
+    void main(){ vec3 p = position; vec3 o = (instanceMatrix * vec4(0,0,0,1)).xyz; float keep = 1.0 - smoothstep(${GRASS_FADE[0].toFixed(1)}, ${GRASS_FADE[1].toFixed(1)}, length((viewMatrix * vec4(o, 1.0)).xyz)); p.x += sin(uTime * 1.1 + o.x * 0.7 + o.z * 0.4) * uv.y * uv.y * 0.22; p.z += cos(uTime * 0.9 + o.x * 0.3) * uv.y * uv.y * 0.12;
+      vec4 w = modelMatrix * instanceMatrix * vec4(p * keep, 1.0); vY = w.y; vU = uv.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
   uniforms: { uLift: { value: 0 } },
   fragmentShader: GLSL_COMMON + `uniform float uLift; varying float vD, vY, vU; void main(){ float b = (0.06 + uLift + 0.3 * vU * vU) * mix(0.4, 1.0, depthLight(vY)); gl_FragColor = outB(applyFog(b, vD)); }` }), GRASS_MAX);
 grass.frustumCulled = false; grass.count = 0; scene.add(grass);
@@ -25,7 +25,7 @@ export const fanGeo = mergeGeometries([new THREE.CircleGeometry(0.55, 12, 0, Mat
 export const fanMat = grass.material.clone(); fanMat.uniforms.uTime = WU.uTime; fanMat.uniforms.uFogD = WU.uFogD; fanMat.uniforms.uFogB = WU.uFogB; fanMat.uniforms.uSun = WU.uSun; fanMat.uniforms.uSunDir = WU.uSunDir; fanMat.uniforms.uLift = { value: 0.14 };
 export const fans = new THREE.InstancedMesh(fanGeo, fanMat, FAN_MAX); fans.frustumCulled = false; fans.count = 0; scene.add(fans);
 export function rebuildGrass(px, pz) {
-  const m = new THREE.Matrix4(), R = 70, step = 1.4; let k = 0; const cx = Math.round(px / step) * step, cz = Math.round(pz / step) * step;
+  const m = new THREE.Matrix4(), R = GRASS_R, step = 1.4; let k = 0; const cx = Math.round(px / step) * step, cz = Math.round(pz / step) * step;
   for (let z = cz - R; z <= cz + R && k < GRASS_MAX; z += step) for (let x = cx - R; x <= cx + R && k < GRASS_MAX; x += step) {
     if (hash2(x * 7, z * 13) > 0.2) continue; const f = floorAt(x, z); if (f > -0.4 || f < -5.5) continue;
     const jx = (hash2(x, z) - 0.5) * step, jz = (hash2(z, x) - 0.5) * step, s = 0.6 + hash2(x + 1, z + 1) * 0.9;

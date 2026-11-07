@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { knots, mph } from '../lib/units.js?v=__BUILD__';
 import { MOBILE } from '../core/env.js?v=__BUILD__';
 import { saveSettings, settings } from '../core/settings.js?v=__BUILD__';
 import { fwdOf } from '../core/space.js?v=__BUILD__';
@@ -94,7 +95,7 @@ export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0
 export const readouts = { place: '', floor: '0', tide: '' };   // worked out here, laid out by the panel (src/ui/panel.js)
 export let nearestPoi = '', poiTimer = 0;
 export function stepHud(dt) {
-  readouts.floor = (-lastFloor / vex).toFixed(0); readouts.tide = (P.current || 0) > 0.15 ? `TIDE ${P.current.toFixed(1)}${tideArrow()}` : '';
+  readouts.floor = (-lastFloor / vex).toFixed(0); readouts.tide = (P.current || 0) > 0.15 ? `TIDE ${mph(P.current).toFixed(1)} MPH ${knots(P.current).toFixed(1)} KT ${tideArrow()}` : '';
   poiTimer -= dt;
   if (poiTimer < 0) { poiTimer = 0.5; let best = 'Gulf of Mexico', bd = 1e12;
     for (const [plat, plon, name] of POIS) { const [x, z] = toXZ(plat, plon), d = (x - P.pos.x) ** 2 + (z - P.pos.z) ** 2; if (d < bd && d < 2500 ** 2) { bd = d; best = name; } if (d < 350 ** 2 && started) discover(name, x, z); }

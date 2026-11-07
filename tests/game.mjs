@@ -60,13 +60,24 @@ await scenario('the current is drift, not thrust: it carries you while your own 
   const a = await S(page, SECOND / 2, { throttle: 0 }), b = await S(page, 2 * SECOND, { throttle: 0 });
   const dx = b.pos[0] - a.pos[0]; assert.ok(dx > 2.8 && dx < 4.6, `carried ${dx.toFixed(2)} m east in 2 s`); assert.ok(b.speed < 0.5, `own speed ${b.speed}`); assert.equal(b.bursting, false);
   assert.ok(Math.abs(b.current - 1) < 0.05, `current ${b.current}`);
-  await page.until(`readouts.tide.includes('TIDE 1.0→')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
+  await page.until(`readouts.tide.includes('TIDE 2.2 MPH 1.9 KT →')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
 });
 await scenario('structures are solid: a burst into a Skyway pier stops at its face, and you feel it', async () => {
   const pier = await page.eval(`world.solids.find(c => c.tag === 'skyway pier')`); assert.ok(pier, 'the Skyway piers are colliders');
   await page.eval(`P.pos.set(${pier.x} + 20, -5, ${pier.z}); P.yaw = Math.PI / 2; P.vel.set(0, 0, 0); P.bumps = 0; 1`);
   for (let i = 0; i < 30; i++) { await S(page, 10, { burst: true }); assert.equal(await page.eval(`pushOut(world.solids.find(c => c.tag === 'skyway pier'), P.pos.x, P.pos.y, P.pos.z, 0.1)`), null, 'never inside the pier'); }
   const s = await page.eval('__game.state()'); assert.ok(s.bumps >= 1, 'a hard hit is felt'); assert.ok(Math.hypot(s.pos[0] - pier.x, s.pos[2] - pier.z) > 4.4, 'stopped outside it');
+});
+await scenario('the seafloor has no gaps: every ring reaches into the hole of the ring around it, wherever you swim', async () => {
+  const gaps = await page.eval(`(() => { const bad = [];
+    for (let p = -5000; p < 5000; p += 0.73) for (let L = 1; L < CLIP_LEVELS; L++) { const fine = 2 ** (L - 1), coarse = 2 ** L, half = CLIP_N / 2 * fine, hole = ringHole(L) * coarse, oF = clipOrigin(p, fine), oC = clipOrigin(p, coarse);
+      if (oC - hole < oF - half || oC + hole > oF + half) bad.push([p, L]); } return bad.slice(0, 3); })()`);
+  assert.deepEqual(gaps, []);
+});
+await scenario('the title logo lets go when you turn away, instead of hanging there edge-on as a row of dots', async () => {
+  await page.eval(`logo.m.uniforms.uGo.value = -1; logo.held = 0; logo.m.uniforms.uOrigin.value.copy(P.pos).add(new THREE.Vector3(0, 50, 0)); const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); logo.m.uniforms.uUp.value.set(0, 1, 0); logo.m.uniforms.uRight.value.copy(fwd).setY(0).normalize(); stepLogo(0); 1`);
+  assert.ok(await page.eval('logo.m.uniforms.uGo.value >= 0'), 'released');
+  await page.eval('logo.mesh.visible = false; logo.m.uniforms.uGo.value = 6; 1');
 });
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
@@ -118,11 +129,21 @@ await scenario('feedback: F opens a note; Enter sends it as a filled-in GitHub i
   await browser.closeWhere(u => u.startsWith('https://github.com/')); await page.activate();   // the issue tab would sit in front of the game
   const s = await page.eval('__game.state()'); assert.equal(s.menu, null); assert.match(s.said, /THANK YOU/);
 });
+await scenario('the menu is short: every card fits at a glance, and back lands where you came from', async () => {
+  await page.key('KeyP', 'p', 80); await page.until(`menu?.kind === 'main'`, 'the pause card');
+  for (const kind of ['main', 'settings', 'sound', 'controls']) { await page.eval(`menu.kind = '${kind}'; 1`); const rows = await page.eval('menuItems().length'); assert.ok(rows <= 8, `${kind}: ${rows} rows`); }
+  await page.eval(`menu.kind = 'main'; menu.sel = menuItems().findIndex(i => i.label() === 'SETTINGS'); 1`); const from = await page.eval('menu.sel');
+  await page.key('Enter', 'Enter', 13); await page.until(`menu.kind === 'settings'`, 'into settings');
+  await page.key('Enter', 'Enter', 13); await page.until(`menu.kind === 'sound'`, 'into sound');
+  await page.key('Escape', 'Escape', 27); await page.until(`menu.kind === 'settings' && menu.sel === 0`, 'back on SOUND');
+  await page.key('Escape', 'Escape', 27); await page.until(`menu.kind === 'main' && menu.sel === ${from}`, 'back on SETTINGS');
+  await page.key('Escape', 'Escape', 27); await page.until('!menu && !paused', 'resumed');
+});
 await scenario('rebinding: pick BURST, press B, and B bursts; a key already in use swaps over', async () => {
-  await page.eval(`openMenu('controls'); menu.binding = 'burst'; 1`); await page.key('KeyB', 'b', 66);
+  await page.eval(`openMenu('keys'); menu.binding = 'burst'; 1`); await page.key('KeyB', 'b', 66);
   assert.equal(await page.eval('settings.binds.burst'), 'KeyB'); await page.eval('closeMenu(); 1');
   await page.keyDown('KeyB', 'b', 66); let s = await S(page, 1); assert.equal(s.input.burst, true, 'B bursts'); await page.keyUp('KeyB', 'b', 66); s = await S(page, 1); assert.equal(s.input.burst, false);
-  await page.eval(`openMenu('controls'); menu.binding = 'burst'; 1`); await page.key('KeyE', 'e', 69);
+  await page.eval(`openMenu('keys'); menu.binding = 'burst'; 1`); await page.key('KeyE', 'e', 69);
   assert.equal(await page.eval('settings.binds.burst'), 'KeyE'); assert.equal(await page.eval('settings.binds.ability'), 'KeyB', 'the ability took the old key');
   await page.eval(`settings.binds = { ...DEFAULT_BINDS }; closeMenu(); 1`);
 });

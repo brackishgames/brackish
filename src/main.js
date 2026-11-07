@@ -1,6 +1,6 @@
 // The game: every file is an ES module, imported in layer order, lowest first; then the bay is booted.
 // Each module imports what it uses (tools/imports.mjs writes those lines from what the code reads).
-const MODULES = ['lib/rng', 'lib/geo', 'lib/text', 'lib/tiff', 'lib/dem', 'lib/tilt', 'lib/save', 'lib/collide', 'lib/feedback',   // pure logic: no game state, unit-tested
+const MODULES = ['lib/rng', 'lib/units', 'lib/geo', 'lib/text', 'lib/tiff', 'lib/dem', 'lib/tilt', 'lib/save', 'lib/collide', 'lib/feedback',   // pure logic: no game state, unit-tested
   'core/env', 'core/random', 'core/tune', 'core/events', 'core/settings', 'core/screen', 'core/space',   // what everything stands on
   'render/display', 'render/materials', 'render/effects',                                 // the dot-matrix display and what draws on it
   'world/time', 'world/geo', 'world/seafloor', 'world/bridges', 'world/structures', 'world/seabed',        // the bay: its hour, depths and data, floor, what is built in it, what grows on it

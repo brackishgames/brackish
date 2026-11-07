@@ -53,11 +53,13 @@ export const logo = (() => {
   const mesh = new THREE.Points(g, m); mesh.frustumCulled = false; mesh.renderOrder = 10; scene.add(mesh);
   return { mesh, m, release: () => { if (m.uniforms.uGo.value < 0) m.uniforms.uGo.value = 0; } };
 })();
+export const LOGO_FACING = 0.8; const _n = new THREE.Vector3();   // cos of how far you can turn from the logo before it lets go
 export function stepLogo(dt) {
   const u = logo.m.uniforms; if (u.uGo.value >= 0) { u.uGo.value += dt; if (u.uGo.value > 5) { logo.mesh.visible = false; return; } }
   const dist = 7.5, fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
   if (u.uGo.value < 0 && !started) { u.uOrigin.value.copy(camPos).addScaledVector(fwd, dist).addScaledVector(up, 1.1); u.uRight.value.copy(right); u.uUp.value.copy(up);
     const gh = dotPass.uniforms.uGrid.value.y || 300; u.uSpacing.value = 3.0 * (2 * dist * Math.tan(camera.fov * Math.PI / 360)) / gh; }
   u.uSize.value = 3.4;
-  if (u.uGo.value < 0 && started) { logo.held = (logo.held || 0) + dt; if (P.pos.distanceTo(u.uOrigin.value) < 3.0 || logo.held > 14) logo.release(); }
+  // it hangs in the water where you started, and lets go when you reach it, wait it out, or turn away: flat bubbles seen from the side are only a row of dots
+  if (u.uGo.value < 0 && started) { logo.held = (logo.held || 0) + dt; const facing = Math.abs(fwd.dot(_n.crossVectors(u.uRight.value, u.uUp.value))); if (P.pos.distanceTo(u.uOrigin.value) < 3.0 || logo.held > 14 || facing < LOGO_FACING) logo.release(); }
 }

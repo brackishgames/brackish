@@ -40,7 +40,8 @@ export const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 
         // from below: crests drawn as moving lines, the way the deck drew its sea
         float w = sin(vW.x * 0.11 + vW.z * 0.04 + uTime * 0.22) * 0.6 + sin(vW.z * 0.08 - vW.x * 0.03 - uTime * 0.16) * 0.4;
         float crest = smoothstep(0.86, 0.97, w);   // a few thin crests, far apart, drifting
-        b = 0.12 + 0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5));
+        float near = 1.0 - smoothstep(0.6, 2.5, fwidth(vW.x) + fwidth(vW.z));   // far off at a low angle the pattern is finer than a dot, and can only alias into rows of dashes
+        b = 0.12 + (0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5))) * near;
       }
       gl_FragColor = vec4(applyFog(b, vD), 0.0, 0.0, alpha);
     }` }));

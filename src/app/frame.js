@@ -190,8 +190,12 @@ export function stepPhotoCam(dt) {   // photo mode: orbit and zoom around the bo
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.3);
   camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(P.pos);
   above = camPos.y > 0; aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+  setFog(1);
 }
+// how far you can see, and what distance fades to. under water that is the water itself, lit from above: a dim glow in the sunlit shallows, black in the deep and at night.
+// fading to black here left a black strip between the lit floor and the lit surface, squeezed to a hard line by the low angle
+export function setFog(reach) { const sun = 0.12 + 0.88 * WU.uSun.value, water = TUNE.water.glow * sun * Math.exp(Math.min(camPos.y, 0) * TUNE.water.fade);
+  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * reach; WU.uFogB.value = THREE.MathUtils.lerp(water, 0.05 + 0.3 * WU.uSun.value, aboveMix); }
 export function stepCamera(dt) {
   if (photo) { stepPhotoCam(dt); return; }
   P.burstMix = (P.burstMix || 0) + ((P.bursting ? 1 : 0) - (P.burstMix || 0)) * Math.min(1, (P.bursting ? 5 : 2) * dt);   // snaps in, eases out
@@ -221,7 +225,7 @@ export function stepCamera(dt) {
   camera.position.copy(camPos); { const k = settings.horizonTilt ? P.roll * 0.15 : 0; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(_sc.set(fxRand() - .5, fxRand() - .5, fxRand() - .5).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * (1 - 0.55 * (P.reveal || 0)); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+  setFog(1 - 0.55 * (P.reveal || 0));
 }
 export function stepAmbient(dt, t) {
   updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
