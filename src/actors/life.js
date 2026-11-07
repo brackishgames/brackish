@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { hash2 } from '../lib/rng.js?v=__BUILD__';
 import { bump, join, tube } from '../lib/shapes.js?v=__BUILD__';
+import { events } from '../core/events.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
 import { placeInstance } from '../core/space.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
@@ -20,7 +21,7 @@ import { _xz } from '../app/frame.js?v=__BUILD__';
 export function jellyGeometry() {
   const bell = new THREE.SphereGeometry(0.22, 40, 12, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.55, 1), q = bell.attributes.position;
   for (let i = 0; i < q.count; i++) { const x = q.getX(i), z = q.getZ(i), y = q.getY(i), a = Math.atan2(z, x), r = Math.hypot(x, z) / 0.22; const k = 1 + 0.035 * Math.cos(a * 16) * r * r * r; q.setXYZ(i, x * k, y + 0.007 * bump(r, 0.5, 0.12) * Math.max(0, Math.cos(a * 4)), z * k); } bell.computeVertexNormals();
-  const parts = [bell]; for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4, pts = [], rad = []; for (let k = 0; k <= 7; k++) { const t = k / 7; pts.push([Math.cos(a) * 0.05 + 0.018 * Math.sin(k * 2.4 + i), -0.015 - t * 0.28, Math.sin(a) * 0.05 + 0.018 * Math.cos(k * 2.4 + i)]); rad.push(0.018 * (1 - t * 0.8)); } parts.push(tube(pts, rad, 5)); }
+  const parts = [bell]; for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4, pts = [], rad = []; for (let k = 0; k <= 18; k++) { const t = k / 18; pts.push([Math.cos(a) * 0.05 + 0.012 * Math.sin(t * 7 + i * 1.7), -0.015 - t * 0.28, Math.sin(a) * 0.05 + 0.012 * Math.cos(t * 6 + i * 1.7)]); rad.push(0.016 * (1 - t * 0.85)); } parts.push(tube(pts, rad, 6)); }
   for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, x = Math.cos(a) * 0.215, z = Math.sin(a) * 0.215, pts = []; for (let k = 0; k <= 4; k++) pts.push([x * (1 - k * 0.03), -0.012 - k * 0.09, z * (1 - k * 0.03)]); parts.push(tube(pts, [0.0025, 0.002, 0.0015, 0.001, 0.0006], 3)); }
   return join(parts);
 }
@@ -80,6 +81,7 @@ export const GONE = new THREE.Vector3(0.001, 0.001, 0.001);
 export function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
 export const fishGeo = schoolFishGeometry();
 export const SCHOOLS = 7, FISH_PER = 55;
+events.addEventListener('predator-near', () => { for (const s of schools) s.panic = 3; });
 export const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMat({ glow: 0.8 }), SCHOOLS * FISH_PER);
 fishMesh.frustumCulled = false; scene.add(fishMesh);
 export const schools = Array.from({ length: SCHOOLS }, () => ({ c: new THREE.Vector3(), dir: rand() * 6.28, turn: 0, v: 0.6 + rand() * 0.6, spread: 2.5 + rand() * 3, base: 0, panic: 0,

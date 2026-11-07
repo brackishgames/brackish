@@ -10,7 +10,7 @@ import { P } from './player.js?v=__BUILD__';
 import { PREDATORS, wild } from './wildlife.js?v=__BUILD__';
 // the fever: ~1200 cownose rays, instanced, phase-offset flapping
 export const FEVER_N = MOBILE ? 500 : 1200;
-export const feverMesh = new THREE.InstancedMesh(rayGeometry(speciesById.cownose, 10, 7), creatureMat({ mode: 1, half: 0.45, len: 0.6, freq: 2.6, amp: 0.55, glow: 0.9 }), FEVER_N);
+export const feverMesh = new THREE.InstancedMesh(rayGeometry(speciesById.cownose, 8, 6), creatureMat({ mode: 1, half: 0.45, len: 0.6, freq: 2.6, amp: 0.55, glow: 0.9 }), FEVER_N);
 { const ph = new Float32Array(FEVER_N); for (let i = 0; i < FEVER_N; i++) ph[i] = rand() * 6.28; feverMesh.geometry.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1)); }
 feverMesh.frustumCulled = false; scene.add(feverMesh);
 export const fever = { c: new THREE.Vector3(FEVER_PATH[0][0], -3, FEVER_PATH[0][1]), seg: 0, t: 0, moving: false, yaw: 0, speed: 1.0,

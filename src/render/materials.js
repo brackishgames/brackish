@@ -5,9 +5,9 @@ import { TILES } from '../world/geo.js?v=__BUILD__';
 //  SHARED GLSL  —  brightness-only shading, fog to a target brightness
 //  (the water's own dim glow below, haze above), sunlight fading with depth.
 // ═══════════════════════════════════════════════════════════════════
-export const WU = { uTime: { value: 0 }, uFogD: { value: 0.014 }, uFogB: { value: 0 }, uSun: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uFill: { value: 0 }, uRaw: { value: 0 } };   // the model page: uFill lifts the dark sides in the dot view, uRaw draws plain images with no dots. both always 0 in the game
+export const WU = { uTime: { value: 0 }, uFogD: { value: 0.014 }, uFogB: { value: 0 }, uSun: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uFill: { value: 0 }, uRaw: { value: 0 }, uChop: { value: 0.1 }, uWavePeriod: { value: 2 }, uWindDir: { value: new THREE.Vector2(1, 0) }, uRain: { value: 0 }, uTide: { value: 0 }, uCloud: { value: 0 } };   // the model page: uFill lifts the dark sides in the dot view, uRaw draws plain images with no dots. both always 0 in the game
 export const GLSL_COMMON = /* glsl */`
-  uniform float uTime, uFogD, uFogB, uSun, uFill, uRaw; uniform vec3 uSunDir;
+  uniform float uTime, uFogD, uFogB, uSun, uFill, uRaw, uChop, uWavePeriod, uRain, uTide, uCloud; uniform vec2 uWindDir; uniform vec3 uSunDir;
   float fogF(float d) { float k = d * uFogD; return 1.0 - exp(-k * k); }
   float applyFog(float b, float d) { return mix(b, uFogB, fogF(d)); }
   float depthLight(float y) { return exp(min(y, 0.0) * 0.06) * (0.12 + 0.88 * uSun + 0.12 * smoothstep(0.0, 0.15, -uSunDir.y)); }
@@ -19,9 +19,9 @@ export const DEM_GLSL = /* glsl */`
   uniform sampler2D uDemO, uDemI; uniform vec4 uBoxO, uBoxI; uniform float uVex;
   float demAt(vec2 p) {
     vec2 uvI = (p - uBoxI.xy) / (uBoxI.zw - uBoxI.xy);
-    if (all(greaterThan(uvI, vec2(0.015))) && all(lessThan(uvI, vec2(0.985)))) return texture2D(uDemI, uvI).r * uVex;
+    if (all(greaterThan(uvI, vec2(0.015))) && all(lessThan(uvI, vec2(0.985)))) return texture2D(uDemI, uvI).r * uVex - uTide;
     vec2 uvO = clamp((p - uBoxO.xy) / (uBoxO.zw - uBoxO.xy), 0.0, 1.0);
-    return texture2D(uDemO, uvO).r * uVex;
+    return texture2D(uDemO, uvO).r * uVex - uTide;
   }`;
 export const demUniforms = {
   uDemO: { value: null }, uDemI: { value: null }, uVex: { value: 1 },

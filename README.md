@@ -16,7 +16,7 @@ their dolphin screensaver: cyan and blue dots on black, pale readouts lit on the
 The bay is real and to scale. One unit is one metre. Depths come from the NOAA NCEI DEM mosaic, which the page
 downloads the first time it runs and keeps in the browser after that. The ship channel is 12.5 m, the hole off the
 north tip of Egmont Key is 25 m, and the Gulf reaches 30 m about 50 km out. Tide, water temperature and tidal currents
-come live from NOAA CO-OPS (St. Petersburg and 15 current stations). Bridges are pulled from OpenStreetMap, with the
+come live from NOAA CO-OPS (St. Petersburg and 15 current stations), and the real weather (rain, cloud, wind, and the waves that wind makes across the bay) from the National Weather Service at St. Pete-Clearwater; `src/world/conditions.js` is the one place all of it lands. Bridges are pulled from OpenStreetMap, with the
 Skyway, Gandy, Howard Frankland and Courtney Campbell built in for when that request fails. Each place you reach for
 the first time tells you one true thing about it: the Skyway in 1980, the Blackthorn, Fort Dade, Big Bend's warm water.
 
@@ -35,7 +35,7 @@ giggers pole the flats with a light on the bottom, and in the light you shine. D
 ## Playing
 
 Press Enter or click and the game goes full screen and takes the mouse. Play with two hands: W and S swim
-faster and slower, A and D (or ← →) turn, ↑ rises and ↓ dives (K and J too). With a hand on the mouse, the mouse steers, Space rises, Q dives, and the right button looks around. Let go of a
+faster and slower, A and D (or ← →) turn, ↑ rises and ↓ dives (K and J too). With a hand on the mouse, the mouse steers, Space rises, Q dives, and the right button looks around. Hold rise at the surface to look above the water. Let go of a
 rise or a dive and the nose comes back level. Shift is a burst: five seconds flat out, at a little over twice the animal's
 real sprint, back in about two. Strong tide is something else: it carries you, and the readout says TIDE and which way. E is the ability: a ray senses clams buried in the sand, a dolphin
 echolocates, a shark lunges, a manatee takes a breath. M opens the map for fast
@@ -80,7 +80,7 @@ of that, and dev mode never touches your save. The page's security policy allows
 
 `npm run shot` takes every scene (the title, swimming, a burst, the surface, night, the menus, photo mode, a phone) from the same seed into `.shots/`, with all of them on one `sheet.png`. `node tools/shot.mjs surface burst` takes just those, `--list` shows them, and `--at 27.62,-82.65,8 --clock 22 --js "P.hp = 1"` shoots any spot at any hour. It says so if the page logged an error or the canvas doesn't fit the window.
 
-[Every model in the game](models/README.md) is listed with its size and triangle count, and each opens in GitHub's 3D viewer. `npm run specimens` rewrites that page, its STL files, `models/specimens.json` and the picture below from the code that builds them for the bay, and flags any model far from its real size. To check any of them on the game's own display: `localhost:8000/?dev&specimens`. Pick a name (or ↑ ↓) and it shows from fixed angles chosen for that model, swimming, with its real size checked. The switches are raw (plain studio light) or in game (the dot matrix), wires, and a turn; add `&view=game` to open in game.
+[Every model in the game](models/README.md) is listed with its size and triangle count, and each opens in GitHub's 3D viewer. `npm run specimens` rewrites that page, its STL files, `models/specimens.json` and the picture below from the code that builds them for the bay, and flags any model far from its real size. To check any of them on the game's own display: `localhost:8000/?dev&specimens`. Pick a name (or ↑ ↓) and it shows from fixed angles chosen for that model, swimming, with its real size checked. The switches are in game (the dot matrix, the default) or raw (plain studio light), wires, and a turn. Conditions (hour, rain, cloud, wind and its waves, the tide, the murk) start from the real weather and can be set for all frames or, after clicking one, for just that frame; try them on *The surface*. add `&view=raw` to open raw.
 
 <img src="screenshots/specimens.png" alt="Every model in the game in plain studio light" width="100%">
 

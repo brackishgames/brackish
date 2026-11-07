@@ -94,6 +94,7 @@ await scenario('every model in the game builds on the specimen page', async () =
   const sp = await browser.page(); await sp.open(URL0 + '&specimens', { w: 800, h: 600 });
   const r = await sp.eval(`SPECIMENS.map(s => showSpecimen(s.id))`); assert.ok(r.length > 20); for (const m of r) if (!m.place) assert.ok(m.triangles > 0 && m.size.some(v => v > 0), m.id);
   for (const m of r) if (m.group === 'animals' && m.real && m.id !== 'fever-ray') { const measured = m.id === 'cownose' ? m.size[0] : m.size[2]; assert.ok(Math.abs(measured - m.real) / m.real < 0.05, `${m.name}: ${measured} m, real ${m.real} m`); }
+  await sp.eval(`specimen.on = false; enterSpecimens(); showSpecimen('surface-above'); specimen.all.rain = 1; specimen.frames[0] = { wind: 25 }; 1`); const w = await sp.eval('frameEnv(0)'); assert.equal(w.rain, 1); assert.equal(w.wind, 25, 'a frame can overrule all of them');
   assert.deepEqual(sp.errors, []); await sp.close?.(); await page.activate();
 });
 await scenario('two hands: ↑ and K rise, ↓ and J dive, Space and Q do it from the left, and none of them swim', async () => {
@@ -113,6 +114,13 @@ await scenario('changing body waits for free swim: inside the story Tab does not
   await page.eval(`unlocked.add('dolphin'); 1`); await page.key('Tab', 'Tab', 9); assert.equal(await page.eval('P.sp.id'), 'cownose', 'the story chooses who you are');
   const free = await page.eval('CHAPTERS.findIndex(c => c.free)'); await page.eval(`__game.chapter(${free}); 1`); await page.key('Tab', 'Tab', 9); assert.notEqual(await page.eval('P.sp.id'), 'cownose', 'free swim lets you');
   await page.eval(`becomeSpecies(speciesById.cownose); __game.chapter(0); 1`);
+});
+await scenario('at the surface, holding rise looks above the water; letting go comes back down', async () => {
+  await page.eval(`__game.teleport(${HOLE}, 0.3); P.pos.y = -0.2; P.camUp = false; __game.setInput({ throttle: 0.2, climb: 1 }); __game.step(60); 1`); assert.ok(await page.eval('P.camUp'), 'peeking');
+  await page.eval(`__game.setInput({ throttle: 0.2 }); __game.step(30); 1`); assert.ok(!(await page.eval('P.camUp')), 'back under');
+});
+await scenario('the tide moves the water over the bottom, and the waves follow the wind', async () => {
+  const a = await page.eval(`(() => { const [x, z] = toXZ(${HOLE}); const before = floorAt(x, z); ENV.tide = 1; applyEnv(); const up = floorAt(x, z); ENV.tide = 0; applyEnv(); return before - up; })()`); assert.ok(Math.abs(a - 1) < 0.01, `a metre of tide is a metre more water: ${a}`);
 });
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };

@@ -6,11 +6,11 @@
   "place": false,
   "real": 0.9,
   "size": [
-   0.897,
+   0.876,
    0.158,
    1.423
   ],
-  "triangles": 16812,
+  "triangles": 10092,
   "stl": "cownose.stl"
  },
  {
@@ -24,7 +24,7 @@
    0.709,
    2.6
   ],
-  "triangles": 12800,
+  "triangles": 7120,
   "stl": "dolphin.stl"
  },
  {
@@ -38,7 +38,7 @@
    0.802,
    3
   ],
-  "triangles": 13328,
+  "triangles": 7648,
   "stl": "manatee.stl"
  },
  {
@@ -52,7 +52,7 @@
    0.775,
    2.4
   ],
-  "triangles": 13088,
+  "triangles": 7408,
   "stl": "bull.stl"
  },
  {
@@ -66,7 +66,7 @@
    1.087,
    3.4
   ],
-  "triangles": 13968,
+  "triangles": 8288,
   "stl": "hammer.stl"
  },
  {
@@ -80,7 +80,7 @@
    0.101,
    0.45
   ],
-  "triangles": 13208,
+  "triangles": 7528,
   "stl": "mullet.stl"
  },
  {
@@ -90,11 +90,11 @@
   "place": false,
   "real": 0.9,
   "size": [
-   0.85,
-   0.132,
+   0.789,
+   0.129,
    1.366
   ],
-  "triangles": 304,
+  "triangles": 216,
   "stl": "fever-ray.stl"
  },
  {
@@ -122,7 +122,7 @@
    0.493,
    0.455
   ],
-  "triangles": 1584,
+  "triangles": 2168,
   "stl": "jelly.stl"
  },
  {
@@ -136,7 +136,7 @@
    0.46,
    1.176
   ],
-  "triangles": 572,
+  "triangles": 524,
   "stl": "bird.stl"
  },
  {
@@ -230,11 +230,11 @@
   "place": false,
   "real": null,
   "size": [
-   1.056,
-   0.822,
+   0.948,
+   0.789,
    0
   ],
-  "triangles": 254,
+  "triangles": 126,
   "stl": "sea-fan.stl"
  },
  {
@@ -250,6 +250,32 @@
   ],
   "triangles": 180,
   "stl": "rock.stl"
+ },
+ {
+  "id": "surface-above",
+  "name": "The surface, from above",
+  "group": "weather",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
+ },
+ {
+  "id": "surface-below",
+  "name": "The surface, from below",
+  "group": "weather",
+  "place": true,
+  "real": null,
+  "size": [
+   0,
+   0,
+   0
+  ],
+  "triangles": 0
  },
  {
   "id": "the-bay",

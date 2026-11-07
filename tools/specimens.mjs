@@ -9,8 +9,8 @@ const ids = await page.eval('SPECIMENS.map(s => s.id)'), report = [], tiles = []
 await page.eval(`document.querySelector('nav').style.display = 'none'; 1`);
 for (const id of ids) {
   const r = await page.eval(`showSpecimen(${JSON.stringify(id)})`); await settled(page, 0.25);
-  tiles.push({ png: await png(page), caption: r.name });
-  await page.eval('specimen.raw = false; 1'); await settled(page, 0.25); game.push({ png: await png(page), caption: r.name }); await page.eval('specimen.raw = true; 1');
+  game.push({ png: await png(page), caption: r.name });
+  await page.eval('specimen.raw = true; 1'); await settled(page, 0.25); tiles.push({ png: await png(page), caption: r.name }); await page.eval('specimen.raw = false; 1');
   if (!r.place) { const b64 = await page.eval('specimenStl()'); writeFileSync(`models/${id}.stl`, Buffer.from(b64, 'base64')); r.stl = `${id}.stl`; }
   report.push(r);
 }

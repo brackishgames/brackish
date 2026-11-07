@@ -9,6 +9,7 @@ import { fwdOf } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { camera, dotPass, renderer, whenResized } from '../render/display.js?v=__BUILD__';
 import { WU } from '../render/materials.js?v=__BUILD__';
+import { ENV, weatherLine } from '../world/conditions.js?v=__BUILD__';
 import { Bay, TILES, floorAt, loadmsg } from '../world/geo.js?v=__BUILD__';
 import { clockText, day } from '../world/time.js?v=__BUILD__';
 import { P, abilityName, pulses } from '../actors/player.js?v=__BUILD__';
@@ -274,7 +275,7 @@ export function drawChart(v) {   // a bottom corner, the water around you: the c
     if (Math.sin(t * 6) > -0.4) { pDot(mx + px2, my + py2, 255); pDot(mx + px2 + 1, my + py2, 255); pDot(mx + px2, my + py2 + 1, 255); pDot(mx + px2 + 1, my + py2 + 1, 255); }
     for (let k = 2; k <= 4; k++) pDot(mx + px2 + 0.5 + hx * k, my + py2 + 0.5 + hz * k, 200);
     const L = Bay.live; if (L.ok) { const level = L.level != null ? 'WATER ' + (L.level >= 0 ? '+' : '') + L.level.toFixed(1) + 'M' + (L.rising == null ? '' : L.rising ? '▲' : '▼') : '';   // the current on you is in your own readout, in M/S, once
-      pText('NOAA LIVE', ax, my - 15, 110, al, 1, true); pText([level, L.temp != null ? L.temp.toFixed(0) + 'C' : ''].filter(Boolean).join('  '), ax, my - 8, 190, al, 1, true); } }
+      pText(ENV.live ? weatherLine() : 'NOAA LIVE', ax, my - 15, 110, al, 1, true); pText([level, L.temp != null ? L.temp.toFixed(0) + 'C' : ''].filter(Boolean).join('  '), ax, my - 8, 190, al, 1, true); } }
 }
 export function drawCaptions(v, introK) {   // what you would hear, above the story line, leaning to the side it came from
   const { W, H, ST, SL, SB, cx, t, cols } = v;

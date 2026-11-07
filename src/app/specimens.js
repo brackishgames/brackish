@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { seaState } from '../lib/sea.js?v=__BUILD__';
 import { DEV, TEST } from '../core/env.js?v=__BUILD__';
 import { camera, lowRT, renderer, scene, setDotPitch } from '../render/display.js?v=__BUILD__';
+import { rainFall, surface } from '../render/effects.js?v=__BUILD__';
 import { WU } from '../render/materials.js?v=__BUILD__';
+import { ENV, applyEnv, fogReach } from '../world/conditions.js?v=__BUILD__';
 import { WRECKS, floorAt } from '../world/geo.js?v=__BUILD__';
 import { fans, grass, rocks } from '../world/seabed.js?v=__BUILD__';
 import { updateClipmap } from '../world/seafloor.js?v=__BUILD__';
 import { BOAT_TYPES, boatMat, skywayFrame, structMat, world } from '../world/structures.js?v=__BUILD__';
-import { day } from '../world/time.js?v=__BUILD__';
 import { SPECIES, creatureMesh, speciesById } from '../actors/creatures.js?v=__BUILD__';
 import { feverMesh } from '../actors/fever.js?v=__BUILD__';
 import { birdMesh, fishMesh, foodMesh, jellyMesh } from '../actors/life.js?v=__BUILD__';
@@ -19,9 +21,9 @@ import { $ } from '../ui/hud.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 const SEARCH = new URLSearchParams(location.search);
 export const SPECIMENS_PAGE = (DEV || TEST) && SEARCH.has('specimens');
-export const specimen = { on: false, item: null, obj: null, dist: 5, at: new THREE.Vector3(), radius: 1, wire: false, turning: false, raw: SEARCH.get('view') !== 'game', size: new THREE.Vector3(), half: new THREE.Vector3(1, 1, 1), tris: 0 };
+export const specimen = { on: false, item: null, obj: null, dist: 5, at: new THREE.Vector3(), radius: 1, wire: false, turning: false, all: {}, frames: {}, sel: null, raw: SEARCH.get('view') === 'raw', size: new THREE.Vector3(), half: new THREE.Vector3(1, 1, 1), tris: 0 };
 const _tiny = new THREE.Vector3(0.01, 0.01, 0.01), _d = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3(), _c = new THREE.Vector3();
-const VIEW = { '3/4': [Math.PI - 0.75, 0.3], SIDE: [Math.PI / 2, 0.02], TOP: [Math.PI, 1.5], FRONT: [Math.PI, 0.03], ABOVE: [Math.PI, 1.45], LOW: [Math.PI - 0.75, 0.22] };   // around (the nose is toward -z), up
+const VIEW = { '3/4': [Math.PI - 0.75, 0.3], SIDE: [Math.PI / 2, 0.02], TOP: [Math.PI, 1.5], FRONT: [Math.PI, 0.03], ABOVE: [Math.PI, 1.45], LOW: [Math.PI - 0.75, 0.22], UNDER: [Math.PI - 0.75, -0.2] };   // around (the nose is toward -z), up
 const ALL_FOUR = ['3/4', 'SIDE', 'TOP', 'FRONT'], PLACE = ['ABOVE', 'LOW'];   // what a model needs to be judged: a flat thing has no use for its edge, a map needs room
 const WORK_Y = -3;   // a specimen hangs just under the surface, where the light is good
 const SPEC_LAYER = 1;   // the camera sees this layer alone, so nothing the bay does can wander into the picture
@@ -40,6 +42,8 @@ export const SPECIMENS = [
   { id: 'seagrass', name: 'Seagrass tuft', group: 'plants and the bottom', views: ['SIDE', '3/4', 'TOP'], make: () => one(grass.geometry, grass.material) },
   { id: 'sea-fan', name: 'Sea fan', group: 'plants and the bottom', views: ['FRONT', '3/4'], make: () => one(fans.geometry, fans.material) },
   { id: 'rock', name: 'Rock', group: 'plants and the bottom', views: ['3/4', 'TOP'], make: () => one(rocks.geometry, rocks.material) },
+  { id: 'surface-above', name: 'The surface, from above', group: 'weather', views: ['LOW'], y: 0.5, place: () => [...toXZ(27.60636, -82.74974), 22] },
+  { id: 'surface-below', name: 'The surface, from below', group: 'weather', views: ['UNDER'], y: -2, place: () => [...toXZ(27.60636, -82.74974), 22] },
   { id: 'the-bay', name: 'Tampa Bay, from above', group: 'maps and places', views: ['ABOVE'], place: () => [...toXZ(27.72, -82.62), 8000] },
   { id: 'skyway', name: 'Sunshine Skyway main span', group: 'maps and places', place: () => [...skywayFrame().slice(0, 2), 620] },
   ...WRECKS.map(w => ({ id: w.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: w.name, group: 'maps and places', place: () => { const [x, z] = toXZ(...w.ll), t = BOAT_TYPES[w.kind]; return [x, z, t ? t.L * (w.s || 1) * 1.1 : 70]; } })),
@@ -50,7 +54,7 @@ export function showSpecimen(id) {
   const item = SPECIMENS.find(s => s.id === id); if (!item) throw new Error('no specimen called ' + id);
   if (specimen.obj) { scene.remove(specimen.obj); specimen.obj = null; }
   specimen.item = item;
-  if (item.place) { const [x, z, r] = item.place(), f = floorAt(x, z); specimen.at.set(x, Math.min(f + r * 0.12, -1), z); specimen.radius = r; specimen.tris = 0; specimen.size.setScalar(0); specimen.half.set(r, r * 0.25, r); camera.layers.set(0); updateClipmap(x, z); }
+  if (item.place) { const [x, z, r] = item.place(), f = floorAt(x, z); specimen.at.set(x, item.y ?? Math.min(f + r * 0.12, -1), z); specimen.radius = r; specimen.tris = 0; specimen.size.setScalar(0); specimen.half.set(r, r * 0.25, r); camera.layers.set(0); updateClipmap(x, z); }
   else { const obj = item.built ??= item.make(); obj.position.set(0, WORK_Y, 0); obj.traverse(o => { o.layers.set(SPEC_LAYER); o.frustumCulled = false; if (o.material?.uniforms?.uLift) o.material.uniforms.uLift.value = 0.3; }); scene.add(obj); obj.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(obj), s = box.getBoundingSphere(new THREE.Sphere()); specimen.obj = obj; specimen.at.copy(s.center); specimen.radius = Math.max(s.radius, 0.05); box.getSize(specimen.size); box.getCenter(specimen.at); specimen.half.copy(specimen.size).multiplyScalar(0.5).max(_tiny); specimen.tris = trisOf(obj); camera.layers.set(SPEC_LAYER); }
   setWire(specimen.wire); setTurning(specimen.turning); applySpecimen(); renderList();
@@ -58,11 +62,15 @@ export function showSpecimen(id) {
   return specimenReport(item);
 }
 const FOV = 40;
-export function applySpecimen() { WU.uFogD.value = 0.25 / Math.max(specimen.radius, 1) / 3; WU.uFogB.value = 0; day.hour = 12; }   // clear water at noon: a model is judged, not hidden
+export function applySpecimen() {}   // each frame sets its own conditions as it draws
+// the conditions a frame shows: what is really happening, then anything you set for all frames, then anything set for this one
+export const CONTROLS = [['hour', 'Hour', 0, 24, 0.25], ['rain', 'Rain', 0, 1, 0.05], ['cloud', 'Cloud', 0, 1, 0.05], ['wind', 'Wind (m/s)', 0, 28, 0.5], ['windDir', 'Wind from (deg)', 0, 359, 5], ['tide', 'Tide (m)', -1.2, 1.2, 0.05], ['clarity', 'Murk', 0, 1, 0.05]];
+export const frameEnv = i => ({ hour: 12, ...ENV, ...specimen.all, ...(specimen.frames[i] || {}) });
+function useEnv(i) { const e = frameEnv(i), a = (e.hour - 6) / 12 * Math.PI, el = Math.sin(a); applyEnv(e); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25) * (1 - 0.6 * e.cloud); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); const place = !!specimen.item?.place; WU.uFogD.value = (place ? 0.018 * (specimen.radius > 200 ? 25 / specimen.radius : 1) * fogReach(e) : 0.25 / Math.max(specimen.radius, 1) / 3); WU.uFogB.value = 0; }   // clear water at noon: a model is judged, not hidden
 const viewsOf = item => item?.views || (item?.place ? PLACE : ALL_FOUR);
-const HEAD_PX = 54;   // the page's own header
+const HEAD_PX = 54, CTRL_PX = 190;   // the page's own header
 // the grid fits how many views this model has: one fills the page, two or three share a row, four make a square. in CSS pixels from the top left
-const layout = (i, n) => { const on = listEl && listEl.style.display !== 'none', left = on ? LIST_PX : 0, W = innerWidth - left, H = innerHeight - HEAD_PX, cols = n === 4 ? 2 : n, rows = n === 4 ? 2 : 1, w = W / cols, h = H / rows; return { x: left + (i % cols) * w, y: HEAD_PX + Math.floor(i / cols) * h, w, h }; };
+const layout = (i, n) => { const on = listEl && listEl.style.display !== 'none', left = on ? LIST_PX : 0, W = innerWidth - left - (on ? CTRL_PX : 0), H = innerHeight - HEAD_PX, cols = n === 4 ? 2 : n, rows = n === 4 ? 2 : 1, w = W / cols, h = H / rows; return { x: left + (i % cols) * w, y: HEAD_PX + Math.floor(i / cols) * h, w, h }; };
 // close enough that this model fills this panel from this side, measured from its own box, so a long thin thing isn't lost in a square
 function fitCamera(yaw, pitch, aspect) {
   const { at, half } = specimen, t = Math.tan(THREE.MathUtils.degToRad(FOV / 2)); _d.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
@@ -75,14 +83,14 @@ export function renderSpecimenViews() {
   const rt = lowRT, gw = rt.width, gh = rt.height, k = gw / innerWidth, names = viewsOf(specimen.item); rt.scissorTest = true; camera.fov = FOV; WU.uRaw.value = 0; WU.uFill.value = 0;
   renderer.setClearColor(0x000000, 1); rt.viewport.set(0, 0, gw, gh); rt.scissor.set(0, 0, gw, gh); renderer.setRenderTarget(rt); renderer.clear();
   names.forEach((name, i) => { const b = layout(i, names.length), x = Math.round(b.x * k), w = Math.round(b.w * k) - 1, h = Math.round(b.h * k) - 1, y = gh - Math.round((b.y + b.h) * k); rt.viewport.set(x, y, w, h); rt.scissor.set(x, y, w, h); renderer.setRenderTarget(rt);
-    camera.aspect = w / h; camera.updateProjectionMatrix(); fitCamera(...VIEW[name], camera.aspect); renderer.render(scene, camera); });
-  rt.viewport.set(0, 0, gw, gh); rt.scissor.set(0, 0, gw, gh); rt.scissorTest = false; renderer.setRenderTarget(rt);
+    camera.aspect = w / h; camera.updateProjectionMatrix(); useEnv(i); fitCamera(...VIEW[name], camera.aspect); surface.position.set(camera.position.x, 0, camera.position.z); rainFall.position.copy(surface.position); renderer.render(scene, camera); });
+  applyEnv(); rt.viewport.set(0, 0, gw, gh); rt.scissor.set(0, 0, gw, gh); rt.scissorTest = false; renderer.setRenderTarget(rt);
 }
 // Raw: the model itself, straight to the screen in studio light
 export function renderSpecimenRaw() {
   const names = viewsOf(specimen.item), H = innerHeight; renderer.setRenderTarget(null); renderer.setScissorTest(true); renderer.setViewport(0, 0, innerWidth, H); renderer.setScissor(0, 0, innerWidth, H); renderer.setClearColor(0x161b21, 1); renderer.clear(); camera.fov = FOV; WU.uRaw.value = 1; WU.uFill.value = 0;
-  names.forEach((name, i) => { const b = layout(i, names.length); renderer.setViewport(b.x, H - b.y - b.h, b.w - 1, b.h - 1); renderer.setScissor(b.x, H - b.y - b.h, b.w - 1, b.h - 1); camera.aspect = b.w / b.h; camera.updateProjectionMatrix(); fitCamera(...VIEW[name], camera.aspect); renderer.render(scene, camera); });
-  renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, H); renderer.setClearColor(0x000000, 1); WU.uRaw.value = 0;
+  names.forEach((name, i) => { const b = layout(i, names.length); renderer.setViewport(b.x, H - b.y - b.h, b.w - 1, b.h - 1); renderer.setScissor(b.x, H - b.y - b.h, b.w - 1, b.h - 1); camera.aspect = b.w / b.h; camera.updateProjectionMatrix(); useEnv(i); fitCamera(...VIEW[name], camera.aspect); surface.position.set(camera.position.x, 0, camera.position.z); rainFall.position.copy(surface.position); renderer.render(scene, camera); });
+  applyEnv(); renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, H); renderer.setClearColor(0x000000, 1); WU.uRaw.value = 0;
 }
 // the header and each panel's name, in plain type above whichever view is on
 let headEl = null, labelEls = [];
@@ -104,8 +112,12 @@ export function specimenStl() {
   let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s);
 }
 // ── the page: a list down the side; drag to turn, wheel to zoom, ← → for the next one, F for the wires
+let ctrlEl = null;
+function renderControls() { if (!ctrlEl) return; const i = specimen.sel, names = viewsOf(specimen.item), e = frameEnv(i ?? 0), set = i == null ? specimen.all : (specimen.frames[i] ||= {}), { height, period } = seaState(e.wind); ctrlEl.innerHTML = ''; const title = document.createElement('div'); title.textContent = i == null ? 'CONDITIONS: ALL FRAMES' : `CONDITIONS: ${names[i]} ONLY`; title.setAttribute('style', 'color:#e6edf3;margin-bottom:6px'); ctrlEl.append(title);
+  for (const [key, label, lo, hi, step] of CONTROLS) { const row = document.createElement('label'); row.setAttribute('style', 'display:block;margin-bottom:5px'); const v = +e[key]; row.append(`${label}: ${v.toFixed(step < 1 ? 2 : 0)}`); const r = document.createElement('input'); r.type = 'range'; r.min = lo; r.max = hi; r.step = step; r.value = v; r.dataset.key = key; r.setAttribute('style', 'display:block;width:100%;margin:1px 0'); r.oninput = () => { set[key] = +r.value; row.firstChild.textContent = `${label}: ${(+r.value).toFixed(step < 1 ? 2 : 0)}`; }; r.onchange = () => renderControls(); row.append(r); ctrlEl.append(row); }
+  const sea = document.createElement('div'); sea.textContent = `Waves ${height.toFixed(2)} m every ${period.toFixed(1)} s`; ctrlEl.append(sea); const live = document.createElement('button'); live.textContent = ENV.live ? `Back to the real weather (${ENV.text || 'now'})` : 'Back to defaults'; live.setAttribute('style', BTN + ';border:1px solid #1c2a38;margin-top:6px;color:#8ea3b6'); live.onclick = () => { for (const k of Object.keys(set)) delete set[k]; renderControls(); }; ctrlEl.append(live); }
 const LIST_PX = 210; let listEl = null, wireBtn = null, turnBtn = null, viewBtn = null;
-function renderList() { if (!listEl) return; renderLabels(); for (const b of listEl.querySelectorAll('button[data-id]')) { const on = b.dataset.id === specimen.item?.id; b.style.color = on ? '#fff' : '#7f93a6'; b.style.background = on ? '#1c2a38' : 'none'; if (on) b.scrollIntoView({ block: 'nearest' }); }
+function renderList() { if (!listEl) return; renderLabels(); renderControls(); for (const b of listEl.querySelectorAll('button[data-id]')) { const on = b.dataset.id === specimen.item?.id; b.style.color = on ? '#fff' : '#7f93a6'; b.style.background = on ? '#1c2a38' : 'none'; if (on) b.scrollIntoView({ block: 'nearest' }); }
   if (wireBtn) { viewBtn.textContent = `View: ${specimen.raw ? 'raw' : 'in game'}`; wireBtn.textContent = `Wires: ${specimen.wire ? 'on' : 'off'}`; turnBtn.textContent = `Swimming: ${specimen.turning ? 'a turn' : 'straight'}`; } }
 export function stepSpecimenList(d) { const i = SPECIMENS.indexOf(specimen.item); showSpecimen(SPECIMENS[(i + d + SPECIMENS.length) % SPECIMENS.length].id); }
 const BTN = 'display:block;width:100%;text-align:left;background:none;border:0;padding:2px 6px;border-radius:3px;cursor:pointer;font:inherit;color:#7f93a6';
@@ -117,6 +129,9 @@ export function enterSpecimens() {
   let group = ''; for (const s of SPECIMENS) { if (s.group !== group) { group = s.group; const h = document.createElement('div'); h.textContent = group.toUpperCase(); h.setAttribute('style', 'color:#4d6072;margin:12px 0 2px'); listEl.append(h); }
     const b = document.createElement('button'); b.textContent = s.name; b.dataset.id = s.id; b.setAttribute('style', BTN); b.onclick = () => showSpecimen(s.id); listEl.append(b); }
   document.body.append(listEl);
+  // the conditions, for every frame or the one you clicked: hour, rain, cloud, wind and the waves it makes, the tide, the murk
+  ctrlEl = document.createElement('aside'); ctrlEl.setAttribute('style', `position:fixed;right:0;top:${HEAD_PX}px;width:${CTRL_PX}px;bottom:0;overflow:auto;box-sizing:border-box;padding:10px;background:#05080c;border-left:1px solid #1c2a38;border-bottom:1px solid #1c2a38;color:#8ea3b6;font:11px/1.5 ui-monospace,monospace;z-index:16`); document.body.append(ctrlEl);
+  addEventListener('pointerdown', e => { if (e.target.closest('nav,aside,header')) return; const names = viewsOf(specimen.item), hit = names.findIndex((_, k) => { const b = layout(k, names.length); return e.clientX >= b.x && e.clientX < b.x + b.w && e.clientY >= b.y && e.clientY < b.y + b.h; }); specimen.sel = hit === specimen.sel ? null : hit < 0 ? null : hit; renderList(); });
   headEl = document.createElement('header'); headEl.setAttribute('style', `position:fixed;top:0;right:0;height:${HEAD_PX}px;box-sizing:border-box;padding:9px 14px;background:#05080c;border-bottom:1px solid #1c2a38;color:#e6edf3;font:13px/1.45 ui-monospace,monospace;z-index:15`); document.body.append(headEl); addEventListener('resize', renderLabels);
   addEventListener('keydown', e => { if (e.code === 'ArrowDown' || e.code === 'ArrowRight') { e.preventDefault(); stepSpecimenList(1); } if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') { e.preventDefault(); stepSpecimenList(-1); } });
   showSpecimen(SEARCH.get('specimens') || SPECIMENS[0].id);

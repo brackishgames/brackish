@@ -6,6 +6,7 @@ import { BUILD, DEV, LOCAL, TEST } from '../core/env.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { composer, lowRT, renderer, resize } from '../render/display.js?v=__BUILD__';
 import { demUniforms } from '../render/materials.js?v=__BUILD__';
+import { ENV, initConditions, loadWeather } from '../world/conditions.js?v=__BUILD__';
 import { BRIDGES_FALLBACK, Bay, DEM_URL, NOAA, OSM_QUERY, POIS, START, TILES, bar, cached, fetchBuf, floorAt, isWater, loadmsg } from '../world/geo.js?v=__BUILD__';
 import { rebuildGrass } from '../world/seabed.js?v=__BUILD__';
 import { bridges, buildStructures, setBridges, world } from '../world/structures.js?v=__BUILD__';
@@ -14,7 +15,7 @@ import { SPECIES, speciesById } from '../actors/creatures.js?v=__BUILD__';
 import { P, becomeSpecies, unlocked } from '../actors/player.js?v=__BUILD__';
 import { applySave, loadSaved, loadedSave } from '../systems/save.js?v=__BUILD__';
 import { CHAPTERS, started } from '../systems/story.js?v=__BUILD__';
-import { $, cameraBehind, checkpoints, initHud } from '../ui/hud.js?v=__BUILD__';
+import { $, cameraBehind, checkpoints, initHud, tip } from '../ui/hud.js?v=__BUILD__';
 import { drawPanel, whenFaded } from '../ui/panel.js?v=__BUILD__';
 import { initTouch, setTitleHint } from '../ui/touch.js?v=__BUILD__';
 import { frame } from './frame.js?v=__BUILD__';
@@ -69,6 +70,8 @@ export async function boot() {
     for (const [lat, lon, name] of POIS) { const [x, z] = toXZ(lat, lon); if (!checkpoints.some(c => c.name === name)) checkpoints.push({ name, x, z }); }
     for (const w of world.wrecks) if (!checkpoints.some(c => c.name === w.name)) checkpoints.push({ name: w.name, x: w.x, z: w.z }); }
   if (!TEST) Bay.loadLive().then(() => { const L = Bay.live; if (L.ok) $('noaaline').textContent = `LIVE · NOAA ${NOAA.tideStation.name} · ${L.temp != null ? L.temp.toFixed(1) + '°C' : ''}${L.next ? ' · ' + L.next.type + ' TIDE ' + new Date(L.next.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}`; }).catch(() => {});   // live NOAA tide, temperature and currents arrive in the background
+  initConditions();
+  if (!TEST) { const weather = () => loadWeather().then(() => { if (ENV.rain > 0) tip('rain:' + new Date().toDateString(), () => 'it is raining over the bay right now, for real. you can hear it from here.'); }).catch(() => {}); weather(); setInterval(weather, TUNE.guards.weatherMs); }   // the real sky, whenever we can get it
   // OpenStreetMap bridges arrive in the background and replace the fallback set
   if (!TEST) loadBridges().then(() => { try { buildStructures(); } catch (e) { console.error(e); } });
   for (let r = 0; !isWater(P.pos.x, P.pos.z, 3) && r < 4000; r += 25) { P.pos.x = START[0] + Math.cos(r * 0.3) * r; P.pos.z = START[1] + Math.sin(r * 0.3) * r; }

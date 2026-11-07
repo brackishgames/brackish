@@ -20,7 +20,7 @@ export const speciesById = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 
 // a cownose ray, seen from every side: a raised, notched head with its eyes on the sides, a ridge down the back, wings swept to points;
 // underneath, the mouth and five pairs of gill slits; behind, a small dorsal fin, the spine at the tail's base, and the long whip
-export function rayGeometry(sp, nu = 80, nv = 48) {
+export function rayGeometry(sp, nu = 60, nv = 36) {
   const pos = [], uv = [], idx = [], half = sp.span / 2, far = nu < 20;
   const TIP = 0.46, width = t => t >= 0.86 ? 0.0001 : t < TIP ? half * Math.pow(t / TIP, 0.8) : half * Math.pow(1 - (t - TIP) / (0.86 - TIP), 1.25);   // a straight leading edge sweeping back to a pointed tip, then a shorter trailing edge
   for (const sideSign of [1, -1]) {
@@ -72,7 +72,7 @@ export const SKIN = {
     return c - 0.003 * bump(s, 0.012, 0.006) * bump(sa, -0.15, 0.2); },
 };
 export function fishGeometry(sp) {
-  const L = sp.len, rows = BODIES[sp.id] || BODIES.mullet, at = s => bodyAt(rows, Math.min(1, s)), z = s => (s - 0.5) * L, parts = [loft(rows, L, { along: 130, around: 44, carve: SKIN[sp.id], crowd: 1.4 })];
+  const L = sp.len, rows = BODIES[sp.id] || BODIES.mullet, at = s => bodyAt(rows, Math.min(1, s)), z = s => (s - 0.5) * L, parts = [loft(rows, L, { along: 90, around: 32, carve: SKIN[sp.id], crowd: 1.5 })];
   const up = s => at(s)[1] * L, dn = s => at(s)[2] * L, wd = s => at(s)[0] * L, F = (...a) => parts.push(foil(...a));
   const back = (a, b, h, tipS = b + (b - a) * 0.25, o = {}) => F([0, up(a) * 0.95, z(a)], [0, up(b) * 0.95, z(b)], [0, up((a + b) / 2) + h * L, z(tipS)], { bow: 0.25, draw: -0.2, ...o });   // a fin along the back
   const belly = (a, b, h, tipS = b + (b - a) * 0.3) => F([0, -dn(a) * 0.95, z(a)], [0, -dn(b) * 0.95, z(b)], [0, -dn((a + b) / 2) - h * L, z(tipS)], { bow: 0.2, draw: -0.15, span: 6, chord: 4 });
@@ -104,7 +104,7 @@ export function schoolFishGeometry(L = 0.31) { return join([loft(BODIES.mullet, 
 // a brown pelican: the great bill and pouch folded back on an S of neck, long broad wings with spread fingers at the tips, a short tail
 export function birdGeometry(span = 2.0) {
   const parts = [pod(span * 0.075, span * 0.07, span * 0.2, 12, 8).translate(0, 0, span * 0.03), tube([[0, span * 0.02, -span * 0.13], [0, span * 0.09, -span * 0.17], [0, span * 0.1, -span * 0.11], [0, span * 0.12, -span * 0.1]], [span * 0.03, span * 0.024, span * 0.022, span * 0.03], 6), pod(span * 0.03, span * 0.03, span * 0.038, 8, 6).translate(0, span * 0.13, -span * 0.105), pod(span * 0.012, span * 0.012, span * 0.095, 6, 5).translate(0, span * 0.125, -span * 0.2), pod(span * 0.018, span * 0.03, span * 0.07, 6, 5).translate(0, span * 0.092, -span * 0.19)];
-  for (const sx of [-1, 1]) { parts.push(foil([sx * span * 0.05, span * 0.02, -span * 0.08], [sx * span * 0.05, span * 0.02, span * 0.1], [sx * span * 0.44, span * 0.015, -span * 0.03], { bow: 0.12, draw: 0.32, thick: 0.05, span: 5, chord: 3 })); for (let k = 0; k < 3; k++) parts.push(foil([sx * span * 0.42, span * 0.015, -span * (0.02 - k * 0.022)], [sx * span * 0.42, span * 0.015, -span * (0.0 - k * 0.022)], [sx * span * (0.5 - k * 0.01), span * 0.015, -span * (0.03 - k * 0.04)], { thick: 0.03, span: 2, chord: 1 })); }
+  for (const sx of [-1, 1]) { parts.push(foil([sx * span * 0.05, span * 0.02, -span * 0.08], [sx * span * 0.05, span * 0.02, span * 0.1], [sx * span * 0.5, span * 0.015, -span * 0.01], { bow: 0.12, draw: 0.32, thick: 0.05, span: 5, chord: 3 })); }
   parts.push(foil([-span * 0.04, 0, span * 0.2], [span * 0.04, 0, span * 0.2], [0, 0, span * 0.31], { bow: 0, draw: 0, thick: 0.04, span: 3, chord: 2 }));
   return join(parts);
 }

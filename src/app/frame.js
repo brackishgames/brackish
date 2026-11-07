@@ -8,8 +8,9 @@ import { settings } from '../core/settings.js?v=__BUILD__';
 import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { camera, cellCam, cellRT, cellScene, composer, dotPass, lowRT, renderer, scene, stepQuality } from '../render/display.js?v=__BUILD__';
-import { bubbleLife, bubbles, emitBubble, emitSpray, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
+import { bubbleLife, bubbles, emitBubble, emitSpray, rainFall, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
 import { WU, beatRad, stepStrokes } from '../render/materials.js?v=__BUILD__';
+import { ENV, fogReach } from '../world/conditions.js?v=__BUILD__';
 import { Bay, floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
 import { grassCenter, rebuildGrass } from '../world/seabed.js?v=__BUILD__';
 import { updateClipmap } from '../world/seafloor.js?v=__BUILD__';
@@ -202,7 +203,7 @@ const _photoOff = new THREE.Vector3();
 // how far you can see, and what distance fades to. under water that is the water itself, lit from above: a dim glow in the sunlit shallows, black in the deep and at night.
 // fading to black here left a black strip between the lit floor and the lit surface, squeezed to a hard line by the low angle
 export function setFog(reach) { const sun = 0.12 + 0.88 * WU.uSun.value, water = TUNE.water.glow * sun * Math.exp(Math.min(camPos.y, 0) * TUNE.water.fade);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * reach; WU.uFogB.value = THREE.MathUtils.lerp(water, 0.05 + 0.3 * WU.uSun.value, aboveMix); }
+  WU.uFogD.value = THREE.MathUtils.lerp(0.018 * fogReach(ENV), 0.00018, aboveMix) * reach; WU.uFogB.value = THREE.MathUtils.lerp(water, 0.05 + 0.3 * WU.uSun.value, aboveMix); }
 export function stepCamera(dt) {
   if (specimen.on) { applySpecimen(); return; }
   if (photo) { stepPhotoCam(dt); return; }
@@ -211,7 +212,7 @@ export function stepCamera(dt) {
   camera.fov = (camera.userData.baseFov || 60) + (settings.speedFx ? 14 : 0) * P.burstMix; camera.updateProjectionMatrix();   // the view widens at speed, unless that's turned off for comfort
   { const want = settings.vignette ? Math.min(0.85, 0.75 * P.burstMix + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) / 1.2) + 0.35 * Math.min(1, (P.speed || 0) / Math.max(1, P.sp.max))) : 0;
     dotPass.uniforms.uTunnel.value += (want - dotPass.uniforms.uTunnel.value) * Math.min(1, 4 * dt); }
-  { const air = P.air ?? 1, close = Math.max(0.55 * huntHeat, air < TUNE.hud.airShow ? 0.7 * (1 - air / TUNE.hud.airShow) : 0);   // hunted, or short of air: the edges close in
+  { const air = P.air ?? 1, close = Math.max(0.55 * huntHeat, air < TUNE.hud.airShow ? 0.7 * (1 - air / TUNE.hud.airShow) : 0, 0.75 * THREE.MathUtils.clamp((P.stun || 0) / 2.5, 0, 1));   // hunted, or short of air: the edges close in
     dotPass.uniforms.uClose.value += (close - dotPass.uniforms.uClose.value) * Math.min(1, 2 * dt); }
   P.idleCam = (input.turn || input.climb || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const sway = settings.sway ? 1 : 0;   // the camera never moves on its own unless that's wanted
@@ -223,7 +224,7 @@ export function stepCamera(dt) {
   const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist); back.y += h;
   const want = _want.copy(P.pos).add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
-  if (P.pos.y > 0.05) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;   // breathing happens just under the line; only a breach takes the camera up
+  { P.peekT = P.pos.y > -0.7 && (input.climb || 0) > 0.3 ? (P.peekT || 0) + dt : 0; if (P.pos.y > 0.05 || P.peekT > 0.35) P.camUp = true; else if (P.pos.y < -0.6 || (P.pos.y <= 0.05 && (input.climb || 0) <= 0.3)) P.camUp = false; }   // breathing happens just under the line; a breach takes the camera up, and so does holding rise at the top: look around above the water, at the boats and the sky
   if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
   want.x += Math.sin(simTime * 0.35) * 0.12 * sway; want.y += Math.sin(simTime * 0.5 + 1.0) * 0.08 * sway;
   camPos.lerp(want, Math.min(1, 5 * dt));
@@ -236,7 +237,7 @@ export function stepCamera(dt) {
   setFog(1 - 0.55 * (P.reveal || 0));
 }
 export function stepAmbient(dt, t) {
-  updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
+  updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos); rainFall.position.set(camPos.x, 0, camPos.z);
   if (grassCenter.distanceTo(_xz.set(P.pos.x, P.pos.z)) > 28) rebuildGrass(P.pos.x, P.pos.z);
   shaftSeeds.forEach((s, i) => { const a = s.a + t * 0.01, x = camPos.x + Math.cos(a) * s.r, z = camPos.z + Math.sin(a) * s.r;
     placeInstance(shafts, i, x, 0, z, 0, Math.atan2(camPos.x - x, camPos.z - z) + Math.sin(t * 0.3 + s.s) * 0.2, 0, s.w, 26 + Math.sin(t * 0.2 + s.s) * 4, 1); });
@@ -320,7 +321,7 @@ function frameInner() {
   updatePaused();
   stepVolume(); stepTips(); runTimers('screen', WU.uTime.value);
   if (!TEST) { const want = real * timeScale, n = Math.min(SIM_STEPS * Math.ceil(timeScale), Math.max(1, Math.ceil(want / SIM_MAX - 1e-9))); for (let i = 0; i < n; i++) simStep(Math.min(want, n * SIM_MAX) / n); }
-  { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
+  { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25) * (1 - 0.6 * WU.uCloud.value); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
   if (specimen.on && specimen.raw) { renderSpecimenRaw(); return; }
   renderer.setRenderTarget(lowRT); if (specimen.on) renderSpecimenViews(); else renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
