@@ -16,7 +16,7 @@ their dolphin screensaver: cyan and blue dots on black, pale readouts lit on the
 The bay is real and to scale. One unit is one metre. Depths come from the NOAA NCEI DEM mosaic, which the page
 downloads the first time it runs and keeps in the browser after that. The ship channel is 12.5 m, the hole off the
 north tip of Egmont Key is 25 m, and the Gulf reaches 30 m about 50 km out. Tide, water temperature and tidal currents
-come live from NOAA CO-OPS (St. Petersburg and 15 current stations). Bridges are pulled from OpenStreetMap, with the
+come live from NOAA CO-OPS (St. Petersburg and 15 current stations), and the real weather (rain, cloud, wind, and the waves that wind makes across the bay) from the National Weather Service at St. Pete-Clearwater; `src/world/conditions.js` is the one place all of it lands. Bridges are pulled from OpenStreetMap, with the
 Skyway, Gandy, Howard Frankland and Courtney Campbell built in for when that request fails. Each place you reach for
 the first time tells you one true thing about it: the Skyway in 1980, the Blackthorn, Fort Dade, Big Bend's warm water.
 
@@ -25,7 +25,7 @@ the first time tells you one true thing about it: the Skyway in 1980, the Blackt
 Nine chapters across four bodies, each moving at the real animal's speed: a cownose ray finds the fever off Egmont and
 follows it into the Gulf; a bottlenose dolphin swims beside one of its pod and leaps with it; a bull shark feeds in
 Hillsborough Bay at night; a manatee makes for the warm water at Apollo Beach. Then you are the ray again, in the pass
-where you began, at dawn. After that you can swim anywhere as any of them.
+where you began, at dawn. After that you can swim anywhere as any of them, and Tab changes between them; until then, the story chooses who you are.
 
 The bay is not on your side. A shark that finds a ray alone, or at the ragged edge of the fever, stays on you until you
 lose it: get far away, or deep into the fever. Hammerheads follow the migration and pin rays to the sand. Hulls hit the
@@ -34,19 +34,19 @@ giggers pole the flats with a light on the bottom, and in the light you shine. D
 
 ## Playing
 
-Press Enter or click and the game goes full screen and takes the mouse. Move the mouse to steer, W and S (or ↑ ↓) swim
-faster and slower, A and D (or ← →) turn, Space rises and C dives, and hold the right button to look around. Let go of a
+Press Enter or click and the game goes full screen and takes the mouse. Play with two hands: W and S swim
+faster and slower, A and D (or ← →) turn, ↑ rises and ↓ dives (K and J too). With a hand on the mouse, the mouse steers, Space rises, Q dives, and the right button looks around. Hold rise at the surface to look above the water. Let go of a
 rise or a dive and the nose comes back level. Shift is a burst: five seconds flat out, at a little over twice the animal's
 real sprint, back in about two. Strong tide is something else: it carries you, and the readout says TIDE and which way. E is the ability: a ray senses clams buried in the sand, a dolphin
-echolocates, a shark lunges, a manatee takes a breath. Tab cycles the bodies you have been and M opens the map for fast
-travel. Esc or P pauses: settings, the journal of places you've found, restart the chapter, or start a new game.
+echolocates, a shark lunges, a manatee takes a breath. M opens the map for fast
+travel. Esc or P pauses: fast travel, the journal of places you've found, how to swim, restart the chapter, and settings (sound, controls, comfort, feedback, a new game).
 
 A controller works over USB or Bluetooth (Xbox, PlayStation, Switch Pro): left stick steers, RT swims, A bursts, X is the
 ability, the right stick looks around, START pauses. A phone plays sideways: tilt it like a wheel to turn, tip the top away
 to dive or toward you to rise, and hold a thumb anywhere to burst (TILT STEERING in settings turns tilt off for a drag
-stick). F, or *Send feedback* in the pause menu, sends us a note from where you are.
+stick). F, or *Send feedback* in settings, sends us a note from where you are.
 
-The screen is laid out by what each thing is about. Top left is you: your hearts, your speed and the burst you have left,
+The screen is laid out by what each thing is about. Top left is you: your hearts and the burst you have left, your speed in mph with the knots beside it,
 your ability on its key, then the tide on you, air and the hunt when they matter. Top middle is where you're going: the
 compass, the goal and its distance on it, and the place you're in. The left edge is the depth: the surface at the top, the
 bottom under you at the foot, and how deep you are riding beside you. A bottom corner holds the chart and the live NOAA
@@ -56,7 +56,7 @@ the goal, a new place, rising or diving, the bottom close) and goes back down a 
 bay. Depth reads in the stereo's own seven-segment digits. Hunted or short of air, the edges of the screen close in. HUD in
 settings switches it to always on. Clams give a heart back, and a well-fed animal carries up to five. At a moment worth keeping
 (a wreck or landmark close by, inside the fever, a leap together, the surface at dawn) a prompt appears and O opens photo
-mode: the bay stops, the screen clears, and Enter saves a picture.
+mode (O works anywhere): the bay stops, the screen clears, and you can orbit, zoom, slide the lens and change it (Q E) before Enter saves a picture.
 
 Settings cover volume (with ambience and effects apart), every key (CONTROLS), mouse speed, invert Y, turn speed, large
 text, the HUD (quiet or always on), opt-in crash reports and sound captions, which show the sounds that matter (an engine, a shark's pressure wave, fish scattering)
@@ -73,6 +73,16 @@ shows. There is no build step and nothing loads from anyone else's servers: thre
 plays without them. On your own machine `?dev` opens every place and body, `?dev&clock=22` sets the hour, F3 shows the
 world's state and `[` `]` slow time down or speed it up; `?seed=7` replays a run exactly. The published site ignores all
 of that, and dev mode never touches your save. The page's security policy allows only this site and those data services.
+
+## Pictures and models
+
+`npm run check` (part of `npm test`) is the first stop for tuning: it checks every model in both views and every frame, and measures motion (tail beats and Strouhal numbers against published swimming studies), the camera's framing, the sound's spectrum (against ambient-ocean noise curves, and what fear should do to it), faults in the picture, and what a frame costs, and prints one line per fault. Change a number in `src/core/tune.js` and run it again; look at a picture only when a number can't say what is wrong.
+
+`npm run shot` takes every scene (the title, swimming, a burst, the surface, night, the menus, photo mode, a phone) from the same seed into `.shots/`, with all of them on one `sheet.png`. `node tools/shot.mjs surface burst` takes just those, `--list` shows them, and `--at 27.62,-82.65,8 --clock 22 --js "P.hp = 1"` shoots any spot at any hour. It says so if the page logged an error or the canvas doesn't fit the window.
+
+[Every model in the game](models/README.md) is listed with its size and triangle count, and each opens in GitHub's 3D viewer. `npm run specimens` rewrites that page, its STL files, `models/specimens.json` and the picture below from the code that builds them for the bay, and flags any model far from its real size. To check any of them on the game's own display: `localhost:8000/?dev&specimens`. Pick a name (or ↑ ↓) and it shows from fixed angles chosen for that model, swimming, with its real size checked. The switches are in game (the dot matrix, the default) or raw (plain studio light), wires, and a turn. Conditions (hour, rain, cloud, wind and its waves, the tide, the murk) start from the real weather and can be set for all frames or, after clicking one, for just that frame; try them on *The surface*. add `&view=raw` to open raw.
+
+<img src="screenshots/specimens.png" alt="Every model in the game in plain studio light" width="100%">
 
 ## Testing
 

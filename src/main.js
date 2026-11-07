@@ -1,13 +1,13 @@
 // The game: every file is an ES module, imported in layer order, lowest first; then the bay is booted.
 // Each module imports what it uses (tools/imports.mjs writes those lines from what the code reads).
-const MODULES = ['lib/rng', 'lib/geo', 'lib/text', 'lib/tiff', 'lib/dem', 'lib/tilt', 'lib/save', 'lib/collide', 'lib/feedback',   // pure logic: no game state, unit-tested
+const MODULES = ['lib/rng', 'lib/units', 'lib/shapes', 'lib/sea', 'lib/geo', 'lib/text', 'lib/tiff', 'lib/dem', 'lib/tilt', 'lib/save', 'lib/collide', 'lib/feedback',   // pure logic: no game state, unit-tested
   'core/env', 'core/random', 'core/tune', 'core/events', 'core/settings', 'core/screen', 'core/space',   // what everything stands on
   'render/display', 'render/materials', 'render/effects',                                 // the dot-matrix display and what draws on it
-  'world/time', 'world/geo', 'world/seafloor', 'world/bridges', 'world/structures', 'world/seabed',        // the bay: its hour, depths and data, floor, what is built in it, what grows on it
+  'world/time', 'world/conditions', 'world/geo', 'world/seafloor', 'world/bridges', 'world/structures', 'world/seabed',        // the bay: its hour, depths and data, floor, what is built in it, what grows on it
   'actors/creatures', 'actors/player', 'actors/wildlife', 'actors/fever', 'actors/life', 'actors/boats',   // what swims in it, and what floats on it
   'systems/input', 'systems/audio', 'systems/save', 'systems/story',                      // what you do, what you hear, what is kept, what happens
   'ui/hud', 'ui/panel', 'ui/logo', 'ui/touch', 'ui/feedback',                              // everything on screen
-  'app/frame', 'app/testing', 'app/boot'];                                                // the loop, the test interface, and starting up
+  'app/specimens', 'app/frame', 'app/testing', 'app/boot'];                                                // the loop, the test interface, and starting up
 const BUILD = new URL(import.meta.url).searchParams.get('v') || 'dev';   // stamped by the deploy, so a visitor never gets a mix of old and new files
 const mods = {};
 for (const m of MODULES) mods[m] = await import(`./${m}.js?v=${BUILD}`);   // one at a time, in order: each layer is ready before the next starts

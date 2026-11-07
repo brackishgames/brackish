@@ -1,13 +1,15 @@
 import * as THREE from 'three';
+import { rand } from '../core/random.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { fwdOf } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
+import { emitBubble } from '../render/effects.js?v=__BUILD__';
 import { WU } from '../render/materials.js?v=__BUILD__';
 import { START } from '../world/geo.js?v=__BUILD__';
 import { creatureMesh, speciesById } from './creatures.js?v=__BUILD__';
 import { echoThing } from './wildlife.js?v=__BUILD__';
-import { burst, click, splash, thud, whoosh } from '../systems/audio.js?v=__BUILD__';
+import { biteSound, burst, click, splash, thud, whoosh } from '../systems/audio.js?v=__BUILD__';
 import { rumble } from '../systems/input.js?v=__BUILD__';
 import { flash, lastCheckpoint, say, travelTo } from '../ui/hud.js?v=__BUILD__';
 import { later, simTime } from '../app/frame.js?v=__BUILD__';
@@ -44,7 +46,7 @@ export const abilityName = () => (ABILITY[P.sp.id] || 'sense').toUpperCase();
 
 // hurt: a heart gone, a moment stunned, the screen's edge flashing; at none, back to the last checkpoint
 export function hurt(k, msg) {
-  if (P.stun > 0) return; rumble(0.4 + k * 0.5, 0.6, 320); thud(k); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
+  if (P.stun > 0) return; rumble(0.4 + k * 0.5, 0.6, 320); thud(k); biteSound(k); for (let i = 0; i < 24; i++) emitBubble(P.pos.x + (rand() - 0.5) * 1.5, P.pos.y + (rand() - 0.5), P.pos.z + (rand() - 0.5) * 1.5); P.hp = Math.max(0, P.hp - 1); P.stun = 2.5; P.pitch = -0.6; P.shake = Math.max(P.shake || 0, k);
   if (settings.flash) { flash.style.opacity = 0.75; later(TUNE.timing.hitFlash, () => { flash.style.opacity = 0; }); }
   say(P.hp > 0 ? msg : 'THE BAY WENT QUIET\n\nreturning to the last checkpoint', 3.5);
   if (P.hp === 0) later(TUNE.timing.respawn, () => { travelTo(lastCheckpoint); P.hp = 3; }, 'world');

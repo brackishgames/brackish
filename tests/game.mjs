@@ -60,13 +60,93 @@ await scenario('the current is drift, not thrust: it carries you while your own 
   const a = await S(page, SECOND / 2, { throttle: 0 }), b = await S(page, 2 * SECOND, { throttle: 0 });
   const dx = b.pos[0] - a.pos[0]; assert.ok(dx > 2.8 && dx < 4.6, `carried ${dx.toFixed(2)} m east in 2 s`); assert.ok(b.speed < 0.5, `own speed ${b.speed}`); assert.equal(b.bursting, false);
   assert.ok(Math.abs(b.current - 1) < 0.05, `current ${b.current}`);
-  await page.until(`readouts.tide.includes('TIDE 1.0→')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
+  await page.until(`readouts.tide.includes('TIDE 2.2 MPH 1.9 KT →')`, 'the TIDE readout, pointing right'); await page.eval('Bay.live.stations = []; 1');
 });
 await scenario('structures are solid: a burst into a Skyway pier stops at its face, and you feel it', async () => {
   const pier = await page.eval(`world.solids.find(c => c.tag === 'skyway pier')`); assert.ok(pier, 'the Skyway piers are colliders');
   await page.eval(`P.pos.set(${pier.x} + 20, -5, ${pier.z}); P.yaw = Math.PI / 2; P.vel.set(0, 0, 0); P.bumps = 0; 1`);
   for (let i = 0; i < 30; i++) { await S(page, 10, { burst: true }); assert.equal(await page.eval(`pushOut(world.solids.find(c => c.tag === 'skyway pier'), P.pos.x, P.pos.y, P.pos.z, 0.1)`), null, 'never inside the pier'); }
   const s = await page.eval('__game.state()'); assert.ok(s.bumps >= 1, 'a hard hit is felt'); assert.ok(Math.hypot(s.pos[0] - pier.x, s.pos[2] - pier.z) > 4.4, 'stopped outside it');
+});
+await scenario('the seafloor has no gaps: every ring reaches into the hole of the ring around it, wherever you swim', async () => {
+  const gaps = await page.eval(`(() => { const bad = [];
+    for (let p = -5000; p < 5000; p += 0.73) for (let L = 1; L < CLIP_LEVELS; L++) { const fine = 2 ** (L - 1), coarse = 2 ** L, half = CLIP_N / 2 * fine, hole = ringHole(L) * coarse, oF = clipOrigin(p, fine), oC = clipOrigin(p, coarse);
+      if (oC - hole < oF - half || oC + hole > oF + half) bad.push([p, L]); } return bad.slice(0, 3); })()`);
+  assert.deepEqual(gaps, []);
+});
+await scenario('the title logo lets go when you turn away, instead of hanging there edge-on as a row of dots', async () => {
+  await page.eval(`logo.m.uniforms.uGo.value = -1; logo.held = 0; logo.m.uniforms.uOrigin.value.copy(P.pos).add(new THREE.Vector3(0, 50, 0)); const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); logo.m.uniforms.uUp.value.set(0, 1, 0); logo.m.uniforms.uRight.value.copy(fwd).setY(0).normalize(); stepLogo(0); 1`);
+  assert.ok(await page.eval('logo.m.uniforms.uGo.value >= 0'), 'released');
+  await page.eval('logo.mesh.visible = false; logo.m.uniforms.uGo.value = 6; 1');
+});
+await scenario('photo mode opens anywhere, frames you, stays near you, and saves a picture', async () => {
+  await page.eval(`__game.teleport(${HOLE}, 12); 1`); await page.key('KeyO', 'o', 79); await page.until('photo && paused', 'photo mode, with no landmark near');
+  await S(page, 2); const d = await page.eval('camera.position.distanceTo(P.pos)'); assert.ok(d > 1 && d < 6, `framed at ${d.toFixed(1)} m`);
+  await page.eval(`photo.at.copy(P.pos).add(new THREE.Vector3(500, 0, 0)); 1`); await S(page, 1); assert.ok(await page.eval('photo.at.distanceTo(P.pos) <= TUNE.photo.reach + 0.01'), 'the lens stays near you');
+  const saved = await page.event('photo-saved'); await page.key('Enter', 'Enter', 13); const r = await saved(); assert.match(r.name, /^brackish-.*\.png$/); assert.ok(r.size > 1000, `a real picture: ${r.size} bytes`);
+  await page.key('KeyO', 'o', 79); await page.until('!photo && !paused', 'back to swimming');
+});
+await scenario('near the surface the lens never slices the water off in a straight line', async () => {
+  for (const depth of [0.2, 0.8, 1.4, 2, 3]) { await page.eval(`__game.teleport(${HOLE}, ${depth}); P.pos.y = -${depth}; 1`); await S(page, 3);
+    assert.ok(await page.eval('Math.abs(camera.position.y) >= camera.near'), `at ${depth} m the surface is further away than the lens can cut`); }
+});
+await scenario('every model in the game builds on the specimen page', async () => {
+  const sp = await browser.page(); await sp.open(URL0 + '&specimens', { w: 800, h: 600 });
+  const r = await sp.eval(`SPECIMENS.map(s => showSpecimen(s.id))`); assert.ok(r.length > 20); for (const m of r) if (!m.place) assert.ok(m.triangles > 0 && m.size.some(v => v > 0), m.id);
+  for (const m of r) if (m.group === 'animals' && m.real && m.id !== 'fever-ray') { const measured = m.id === 'cownose' ? m.size[0] : m.size[2]; assert.ok(Math.abs(measured - m.real) / m.real < 0.05, `${m.name}: ${measured} m, real ${m.real} m`); }
+  await sp.eval(`specimen.on = false; enterSpecimens(); showSpecimen('surface-above'); specimen.all.rain = 1; specimen.frames[0] = { wind: 25 }; 1`); const w = await sp.eval('frameEnv(0)'); assert.equal(w.rain, 1); assert.equal(w.wind, 25, 'a frame can overrule all of them');
+  assert.deepEqual(sp.errors, []); await sp.close?.(); await page.activate();
+});
+await scenario('two hands: ↑ and K rise, ↓ and J dive, Space and Q do it from the left, and none of them swim', async () => {
+  for (const [code, key, want] of [['ArrowUp', 'ArrowUp', 1], ['KeyK', 'k', 1], ['Space', ' ', 1], ['ArrowDown', 'ArrowDown', -1], ['KeyJ', 'j', -1], ['KeyQ', 'q', -1]]) {
+    await page.keyDown(code, key); await page.until(`keys.${code}`, code); const s = await S(page, 1); assert.equal(s.input.climb, want, code); await page.keyUp(code, key); await page.until(`!keys.${code}`, code); }
+  assert.equal(await page.eval('keys.KeyC = true; const c = (readInput(), input.climb); keys.KeyC = false; c'), 0, 'C does nothing now');
+});
+await scenario('being a dolphin: it stays in the water until you burst at the top, never passes the speed cap, and comes up for air by itself', async () => {
+  const leaps = (input, secs) => page.eval(`(() => { __game.setInput(${JSON.stringify(input)}); let n = 0, was = false, top = 0; for (let i = 0; i < ${secs} * 60; i++) { simStep(1 / 60); const up = P.pos.y > 0; if (up && !was) n++; was = up; top = Math.max(top, P.speed); } return { n, top }; })()`);
+  await page.eval(`becomeSpecies(speciesById.dolphin); __game.teleport(${HOLE}, 1); P.pos.y = -1; P.air = 1; 1`);
+  assert.equal((await leaps({ throttle: 1 }, 30)).n, 0, 'holding forward never launches you');
+  await page.eval('P.pos.y = -0.5; P.sta = 1; 1'); const b = await leaps({ throttle: 1, burst: true }, 3); assert.ok(b.n >= 1, 'a burst at the top leaps'); assert.ok(b.top <= 13, `capped: ${b.top.toFixed(1)} m/s`);
+  await page.eval(`P.pos.y = -8; P.vel.set(0, 0, 0); P.air = 0.3; P.idleT = 9; 1`); await leaps({ throttle: 1 }, 30); assert.ok(await page.eval('P.air > 0.5'), 'it surfaced and breathed on its own');
+  await page.eval('becomeSpecies(speciesById.cownose); P.air = 1; 1');
+});
+await scenario('changing body waits for free swim: inside the story Tab does nothing', async () => {
+  await page.eval(`unlocked.add('dolphin'); 1`); await page.key('Tab', 'Tab', 9); assert.equal(await page.eval('P.sp.id'), 'cownose', 'the story chooses who you are');
+  const free = await page.eval('CHAPTERS.findIndex(c => c.free)'); await page.eval(`__game.chapter(${free}); 1`); await page.key('Tab', 'Tab', 9); assert.notEqual(await page.eval('P.sp.id'), 'cownose', 'free swim lets you');
+  await page.eval(`becomeSpecies(speciesById.cownose); __game.chapter(0); 1`);
+});
+await scenario('at the surface, holding rise looks above the water; letting go comes back down', async () => {
+  await page.eval(`__game.teleport(${HOLE}, 0.3); P.pos.y = -0.2; P.camUp = false; __game.setInput({ throttle: 0.2, climb: 1 }); __game.step(60); 1`); assert.ok(await page.eval('P.camUp'), 'peeking');
+  await page.eval(`__game.setInput({ throttle: 0.2 }); __game.step(30); 1`); assert.ok(!(await page.eval('P.camUp')), 'back under');
+});
+await scenario('the tide moves the water over the bottom, and the waves follow the wind', async () => {
+  const a = await page.eval(`(() => { const [x, z] = toXZ(${HOLE}); const before = floorAt(x, z); ENV.tide = 1; applyEnv(); const up = floorAt(x, z); ENV.tide = 0; applyEnv(); return before - up; })()`); assert.ok(Math.abs(a - 1) < 0.01, `a metre of tide is a metre more water: ${a}`);
+});
+await scenario('your wake trails from behind you, whichever way you face', async () => {
+  for (const yaw of [0, 1.57, 3.14, -1.57]) { const b = await page.eval(`(() => { __game.teleport(${HOLE}, 8); P.yaw = ${yaw}; wakeBubble(P.sp); const n = (bubbleNext + 599) % 600, q = bubbles.geometry.attributes.position.array, f = fwdOf(P.yaw, P.pitch); return (q[n * 3] - P.pos.x) * f.x + (q[n * 3 + 2] - P.pos.z) * f.z; })()`); assert.ok(b < 0, `at yaw ${yaw} it appeared ${b.toFixed(2)} m ahead`); }
+});
+await scenario('every menu card fits on screen, in its own width, with nothing spilling out', async () => {
+  for (const kind of ['main', 'settings', 'sound', 'controls', 'comfort', 'keys', 'journal', 'confirm']) { const r = await page.eval(`(async () => { openMenu('${kind}'); await new Promise(f => requestAnimationFrame(() => requestAnimationFrame(f))); const rows = menu.rows.filter(x => x[0] >= 0), lab = menuItems().map(i => [...i.label()].length); closeMenu(); return { rows: rows.length, bottom: Math.max(...rows.map(x => x[1])), h: panel.h, longest: Math.max(...lab), w: panel.w }; })()`); assert.ok(r.rows > 0, `${kind} has rows`); assert.ok(r.bottom < r.h, `${kind} fits top to bottom`); assert.ok(r.longest * 6 + 15 <= r.w, `${kind} fits across`); }
+});
+await scenario('how to swim only lists what this body can do, and every key on it is real', async () => {
+  const t = await page.eval(`(() => { becomeSpecies(speciesById.cownose); renderHelpKeys(); return help.querySelector('.keys').textContent.toLowerCase(); })()`); assert.ok(!t.includes('change body'), 'no changing body in the story'); assert.ok(t.includes('clams'));
+  const b = await page.eval(`(() => { becomeSpecies(speciesById.bull); renderHelpKeys(); const x = help.querySelector('.keys').textContent.toLowerCase(); becomeSpecies(speciesById.cownose); renderHelpKeys(); return x; })()`); assert.ok(b.includes('strike'), 'a shark strikes');
+});
+await scenario('a bull shark swims by its tail: A and D in turn are speed, and stopping is a glide', async () => {
+  const sp = await page.eval(`(() => { becomeSpecies(speciesById.bull); __game.teleport(27.84, -82.47, 3); P.vel.set(0, 0, 0); P.speed = 0; let top = 0; const beat = n => { for (let i = 0; i < n; i++) { __game.setInput({ throttle: 0, turn: i % 2 ? -1 : 1 }); __game.step(14); __game.setInput({ throttle: 0 }); __game.step(4); top = Math.max(top, P.speed); } }; __game.setInput({ throttle: 0 }); __game.step(60); const idle = P.speed; beat(30); const swum = top; __game.setInput({ throttle: 0 }); __game.step(240); const after = P.speed; return { idle, swum, after, tail: P.tail }; })()`);
+  assert.ok(sp.swum > sp.idle + 1.5, `rhythm is speed: ${sp.idle.toFixed(1)} to ${sp.swum.toFixed(1)} m/s`); assert.ok(sp.after < sp.swum * 0.6, `and it fades: ${sp.after.toFixed(1)} m/s`);
+  const one = await page.eval(`(() => { P.vel.set(0, 0, 0); P.speed = 0; P.tail = 0; __game.setInput({ throttle: 0, turn: 1 }); __game.step(120); return P.tail; })()`); assert.equal(one, 0, 'holding one side is a turn, not a stroke');
+});
+await scenario('hunting mullet: rush and they scatter; come slowly from below and a strike feeds you', async () => {
+  const r = await page.eval(`(() => { becomeSpecies(speciesById.bull); const s = schools[0], put = (off, y, speed) => { s.panic = 0; s.c.set(...toXZ(27.84, -82.47).slice(0, 1), -2, toXZ(27.84, -82.47)[1]); P.pos.set(s.c.x + off, y, s.c.z); P.vel.set(0, 0, speed); P.speed = speed; P.yaw = Math.PI / 2; }; __game.setInput({ throttle: 0 });
+    put(15, -2, P.sp.max); P.speed = P.sp.max; P.tail = 1; __game.setInput({ throttle: 1, burst: true }); __game.step(5); const rushed = s.panic > 0; __game.setInput({ throttle: 0 });
+    put(4, -3.5, 0.5); P.tail = 0; __game.step(5); const crept = s.panic > 0; for (const f of s.fish) f.alive = true; const fed0 = P.fed || 0; s.panic = 0; P.pos.set(s.c.x, s.c.y, s.c.z); P.actReady = 0; __game.step(2); const before = P.fed || 0; act(); __game.step(20); const struck = (P.fed || 0) - before; becomeSpecies(speciesById.cownose); return { rushed, crept, struck, passive: before - fed0 }; })()`);
+  assert.ok(r.rushed, 'a rush scatters them from far off'); assert.ok(!r.crept, 'a slow approach from beneath does not'); assert.ok(r.struck >= 1, `a strike feeds you: ${r.struck}`); assert.equal(r.passive, 0, 'and nothing is eaten without one');
+});
+await scenario('the whole story can be finished: every chapter ends when its goal is met and leads to the next', async () => {
+  const n = await page.eval('CHAPTERS.length');
+  for (let i = 0; i < n - 1; i++) { const r = await page.eval(`(() => { __game.chapter(${i}); const c = CHAPTERS[${i}]; __game.setInput({ throttle: 0 }); let steps = 0; const meet = () => { P.stun = 0; P.hp = 3; if (c.goal && !c.follow && !c.pair) { const g = c.goal(); if (g) { P.pos.x = g[0]; P.pos.z = g[1]; } } if (c.surface) P.pos.y = -0.2; if (c.pair) story.syncs = 3; if (c.feed) P.fed = (story.fed0 || 0) + c.feed; if (c.follow) { story.followT = 121; fever.seg = FEVER_PATH.length - 1; P.pos.x = fever.c.x; P.pos.z = fever.c.z; } if (c.breaths) { story.breaths = c.breaths; P.pos.y = -0.1; } }; while (story.ch === ${i} && !story.ended && steps < 1500) { meet(); simStep(1 / 60); steps++; } return { ch: story.ch, ended: !!story.ended, steps, title: c.title }; })()`); assert.ok(r.ch === i + 1 || r.ended, `${r.title} never finished in ${r.steps} steps`); }
+  await page.eval('story.ended = false; __game.chapter(0); 1');
 });
 await scenario('the Skyway stands on its own deck: pylons and piers under it, every stay cable meeting it', async () => {
   const r = await page.eval(`(() => { const M = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), get = (name, i) => { const m = world.meshes.find(x => x.name === name); m.getMatrixAt(i, M); M.decompose(p, q, sc); return { x: p.x, y: p.y, z: p.z, h: sc.y }; };
@@ -118,11 +198,21 @@ await scenario('feedback: F opens a note; Enter sends it as a filled-in GitHub i
   await browser.closeWhere(u => u.startsWith('https://github.com/')); await page.activate();   // the issue tab would sit in front of the game
   const s = await page.eval('__game.state()'); assert.equal(s.menu, null); assert.match(s.said, /THANK YOU/);
 });
+await scenario('the menu is short: every card fits at a glance, and back lands where you came from', async () => {
+  await page.key('KeyP', 'p', 80); await page.until(`menu?.kind === 'main'`, 'the pause card');
+  for (const kind of ['main', 'settings', 'sound', 'controls']) { await page.eval(`menu.kind = '${kind}'; 1`); const rows = await page.eval('menuItems().length'); assert.ok(rows <= 8, `${kind}: ${rows} rows`); }
+  await page.eval(`menu.kind = 'main'; menu.sel = menuItems().findIndex(i => i.label() === 'SETTINGS'); 1`); const from = await page.eval('menu.sel');
+  await page.key('Enter', 'Enter', 13); await page.until(`menu.kind === 'settings'`, 'into settings');
+  await page.key('Enter', 'Enter', 13); await page.until(`menu.kind === 'sound'`, 'into sound');
+  await page.key('Escape', 'Escape', 27); await page.until(`menu.kind === 'settings' && menu.sel === 0`, 'back on SOUND');
+  await page.key('Escape', 'Escape', 27); await page.until(`menu.kind === 'main' && menu.sel === ${from}`, 'back on SETTINGS');
+  await page.key('Escape', 'Escape', 27); await page.until('!menu && !paused', 'resumed');
+});
 await scenario('rebinding: pick BURST, press B, and B bursts; a key already in use swaps over', async () => {
-  await page.eval(`openMenu('controls'); menu.binding = 'burst'; 1`); await page.key('KeyB', 'b', 66);
+  await page.eval(`openMenu('keys'); menu.binding = 'burst'; 1`); await page.key('KeyB', 'b', 66);
   assert.equal(await page.eval('settings.binds.burst'), 'KeyB'); await page.eval('closeMenu(); 1');
   await page.keyDown('KeyB', 'b', 66); let s = await S(page, 1); assert.equal(s.input.burst, true, 'B bursts'); await page.keyUp('KeyB', 'b', 66); s = await S(page, 1); assert.equal(s.input.burst, false);
-  await page.eval(`openMenu('controls'); menu.binding = 'burst'; 1`); await page.key('KeyE', 'e', 69);
+  await page.eval(`openMenu('keys'); menu.binding = 'burst'; 1`); await page.key('KeyE', 'e', 69);
   assert.equal(await page.eval('settings.binds.burst'), 'KeyE'); assert.equal(await page.eval('settings.binds.ability'), 'KeyB', 'the ability took the old key');
   await page.eval(`settings.binds = { ...DEFAULT_BINDS }; closeMenu(); 1`);
 });

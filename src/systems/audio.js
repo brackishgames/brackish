@@ -3,8 +3,10 @@ import { fxRand } from '../core/random.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { camera } from '../render/display.js?v=__BUILD__';
+import { ENV } from '../world/conditions.js?v=__BUILD__';
 import { FAN_MAX, GRASS_MAX, ROCK_MAX, fans, grass, rocks } from '../world/seabed.js?v=__BUILD__';
 import { BOAT_TYPES, world } from '../world/structures.js?v=__BUILD__';
+import { day } from '../world/time.js?v=__BUILD__';
 import { boats, gig } from '../actors/boats.js?v=__BUILD__';
 import { fever } from '../actors/fever.js?v=__BUILD__';
 import { flocks } from '../actors/life.js?v=__BUILD__';
@@ -25,33 +27,49 @@ export function seamlessNoise(ac, seconds, color = 1.0) {
   const x = Math.floor(ac.sampleRate * 0.25); for (let i = 0; i < x; i++) { const t = i / x; d[i] = d[i] * t + d[n - x + i] * (1 - t); }
   return buf;
 }
+// snapping shrimp: not a hiss but thousands of separate cracks, heavy-tailed in loudness, reaching well above what the ear expects (Everest et al. 1948)
+export function crackleNoise(ac, seconds, perSecond) {
+  const n = Math.floor(ac.sampleRate * seconds), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let k = 0; k < seconds * perSecond; k++) { const at = Math.floor(fxRand() * (n - 64)), a = (0.25 + 0.75 * fxRand()) * (fxRand() < 0.5 ? 1 : -1); for (let i = 0; i < 48; i++) d[at + i] += a * Math.exp(-i / 11); }   // real ones are sharp and it crinkles: softened to a far-off fizz, the bay's quiet breath
+  const peak = d.reduce((m, v) => Math.max(m, Math.abs(v)), 1e-6); for (let i = 0; i < n; i++) d[i] /= peak; return buf;
+}
 export function startAudio() {
   if (audio) return;
   const ac = new (window.AudioContext || window.webkitAudioContext)();
   const master = ac.createGain(); master.gain.value = 0;
   const comp = ac.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 3; comp.attack.value = 0.015; comp.release.value = 0.35;
   const water = ac.createBiquadFilter(); water.type = 'lowpass'; water.frequency.value = 1400; water.Q.value = 0.2;
-  master.connect(water).connect(comp).connect(ac.destination);
-  const amb = ac.createGain(), fx = ac.createGain(); amb.connect(master); fx.connect(master);   /* the sea on one bus, everything that happens on the other */
-  audio = { ac, master: fx, fx, main: master, amb, water, white: seamlessNoise(ac, 6, 0.0), brown: seamlessNoise(ac, 8, 0.985), pink: seamlessNoise(ac, 7, 0.9), nextT: {} };
+  const tap = ac.createAnalyser(); tap.fftSize = 16384; tap.smoothingTimeConstant = 0;   // what the player hears, for tools/check.mjs
+  master.connect(water).connect(comp).connect(ac.destination); comp.connect(tap);
+  const amb = ac.createGain(), fx = ac.createGain(); const ambDuck = ac.createGain(); amb.connect(ambDuck).connect(master); fx.connect(master);   /* the sea on one bus, everything that happens on the other */
+  audio = { ac, master: fx, fx, main: master, amb, water, white: seamlessNoise(ac, 6, 0.0), brown: seamlessNoise(ac, 8, 0.985), pink: seamlessNoise(ac, 7, 0.9), nextT: {}, tap, testDread: null, ambDuck };
+  audio.clear = ac.createGain(); audio.clear.gain.value = 0; audio.clear.connect(comp);   // what the depth's muffling must not touch: water carries high sound far better than air, and it is only our ears that fail
   const bed = (buf, type, freq, q, g) => { const src = ac.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = 0.9 + fxRand() * 0.2; const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const gg = ac.createGain(); gg.gain.value = g; src.connect(f).connect(gg).connect(amb); src.start(); return { f, g: gg, src }; };
   const lfo = (target, hz, depth, type = 'sine') => { const o = ac.createOscillator(); o.type = type; o.frequency.value = hz; const g = ac.createGain(); g.gain.value = depth; o.connect(g).connect(target); o.start(); return o; };
   // the ocean: a broad noise bed that swells like a slow sea, darker with depth
-  audio.sea = bed(audio.brown, 'lowpass', 220, 0.3, 0.45); lfo(audio.sea.g.gain, 0.07, 0.12); lfo(audio.sea.f.frequency, 0.045, 60);
-  audio.sea2 = bed(audio.pink, 'lowpass', 900, 0.3, 0.06); lfo(audio.sea2.g.gain, 0.11, 0.03);
+  audio.sea = bed(audio.brown, 'lowpass', 220, 0.3, 0.45); lfo(audio.sea.g.gain, TUNE.sound.swell, 0.12); lfo(audio.sea.f.frequency, TUNE.sound.swell * 0.5, 60);
+  audio.sea2 = bed(audio.pink, 'lowpass', 900, 0.3, 0.06); lfo(audio.sea2.g.gain, TUNE.sound.swell * 1.07, 0.03);
   audio.wind = bed(audio.pink, 'lowpass', 650, 0.3, 0); lfo(audio.wind.f.frequency, 0.13, 220); lfo(audio.wind.g.gain, 0.19, 0.05);
   audio.lap = bed(audio.pink, 'bandpass', 500, 0.5, 0); lfo(audio.lap.g.gain, 0.33, 0.1);           // water against the surface near you
   audio.rush = bed(audio.brown, 'lowpass', 400, 0.3, 0);                                            // water over your body
   audio.thrash = bed(audio.brown, 'bandpass', 700, 0.5, 0);                                         // turbulence when you work hard near the surface
   audio.flutter = bed(audio.brown, 'bandpass', 600, 0.7, 0); lfo(audio.flutter.g.gain, 2.4, 0.5, 'triangle');   // the fever's wingbeats
   audio.current = bed(audio.brown, 'highpass', 300, 0.3, 0);                                         // tide pouring through the pass
+  // the bay's own crackle, under everything, and through the clear channel
+  { const src = ac.createBufferSource(); src.buffer = crackleNoise(ac, 7, 2600); src.loop = true; const hp = ac.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 1500; hp.Q.value = 0.5; audio.shrimp = ac.createGain(); audio.shrimp.gain.value = 0; src.connect(hp).connect(audio.shrimp).connect(audio.clear); src.start(); }
+  // rain on the surface, from below: the patter of countless small bubbles, a high fine hiss, through the clear channel
+  { const src = ac.createBufferSource(); src.buffer = audio.white; src.loop = true; const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3200; hp.Q.value = 0.3; audio.rain = ac.createGain(); audio.rain.gain.value = 0; src.connect(hp).connect(audio.rain).connect(audio.clear); src.start(); }
+  // fear, silent until there is something to fear. a pressure you feel more than hear: two close tones beating, with an octave so small speakers carry it
+  { audio.pressure = ac.createGain(); audio.pressure.gain.value = 0; audio.pressure.connect(fx); for (const [f, g] of [[34, 0.8], [35.2, 0.7], [68, 0.35]]) { const o = ac.createOscillator(), og = ac.createGain(); o.frequency.value = f; og.gain.value = g; o.connect(og).connect(audio.pressure); o.start(); }
+    // and roughness: a dark noise beating at a rate the brain's alarm responds to, the quality that makes a scream a scream (Arnal et al. 2015)
+    const n = ac.createBufferSource(); n.buffer = audio.brown; n.loop = true; const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 170; bp.Q.value = 0.8; const am = ac.createGain(); am.gain.value = 0.5; const o = ac.createOscillator(); o.frequency.value = TUNE.sound.roughHz; const depth = ac.createGain(); depth.gain.value = 0.5; o.connect(depth).connect(am.gain); o.start(); audio.rough = ac.createGain(); audio.rough.gain.value = 0; n.connect(bp).connect(am).connect(audio.rough).connect(fx); n.start(); }
   // engines: underwater a boat is its propeller. each hull gets a voice: a tone, the beat of the blades, and cavitation hiss riding on that beat.
   //   ship: a slow five-blade prop, a thrum you feel at seven beats a second, heard for kilometres
   //   cruiser, skiff: fast small props, a whine of a hundred-odd hertz and a lot of hiss, heard for a few hundred metres
   //   gig skiff: no engine at all, or a trolling motor's thin electric whine you only hear close
-  const ENGINE = ENGINES = { ship: { tone: 26, wave: 'triangle', blade: 7, hiss: 700, range: 1500, g: 0.55 }, cruiser: { tone: 78, wave: 'sawtooth', blade: 13, hiss: 1800, range: 420, g: 0.3 },
-    skiff: { tone: 128, wave: 'sawtooth', blade: 21, hiss: 2800, range: 320, g: 0.26 }, troll: { tone: 820, wave: 'sine', blade: 0, hiss: 0, range: 45, g: 0.05 } };
+  const ENGINE = ENGINES = { ship: { tone: 26, wave: 'triangle', blade: 7, hiss: 700, range: 1500, g: 0.55 }, cruiser: { tone: 78, wave: 'sawtooth', blade: 13, hiss: 1800, range: 170, g: 0.3 },
+    skiff: { tone: 128, wave: 'sawtooth', blade: 21, hiss: 2800, range: 130, g: 0.26 }, troll: { tone: 820, wave: 'sine', blade: 0, hiss: 0, range: 45, g: 0.05 } };
   const voice = (src, kind) => { const e = ENGINE[kind], out = ac.createGain(); out.gain.value = 0; const pan = ac.createStereoPanner ? ac.createStereoPanner() : null; (pan ? (out.connect(pan), pan) : out).connect(fx);
     const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150; lp.Q.value = 0.9; lp.connect(out);
     const o1 = ac.createOscillator(), o2 = ac.createOscillator(); o1.type = o2.type = e.wave; o1.frequency.value = o2.frequency.value = e.tone; o2.detune.value = 11;
@@ -106,10 +124,17 @@ export function splash(k) {
   burst({ buf: 'pink', f0: 200, f1: 700, f2: 150, q: 0.5, attack: 0.05, length: 0.9 + 0.6 * k, g: 0.4 * k, when: 0.02 });
   const n = Math.floor(3 + k * 9); for (let i = 0; i < n; i++) burst({ buf: 'white', type: 'bandpass', f0: 2500 + fxRand() * 3000, f1: 4000, f2: 1500, q: 4, attack: 0.004, length: 0.04 + fxRand() * 0.06, g: 0.12 * k, when: 0.08 + fxRand() * 0.6 * (0.5 + k) });
 }
-export function bloop(k = 0.5, when = 0) {   // one bubble
-  oneShot((ac, t) => { const o = ac.createOscillator(); o.type = 'sine'; const f = 300 + fxRand() * 500; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 2.6, t + 0.06);
-    const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.08 * k, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0004, t + 0.07); o.connect(g).connect(audio.master); o.start(t); o.stop(t + 0.08); }, when);
+// one bubble, as physics has it (Minnaert 1933): a ringing sine at f = 3.26 / radius, higher under pressure, gone in a few dozen cycles, rising a little as it leaves
+export function bloop(k = 0.5, when = 0) {
+  oneShot((ac, t) => { const a = 0.0008 * Math.pow(6, fxRand()), f = 3.26 / a * Math.sqrt(1 + Math.max(0, -P.pos.y) / 10), life = Math.min(0.09, 34 / f + 0.01), o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.18, t + life);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.09 * k, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0004, t + life); o.connect(g).connect(audio.clear); o.start(t); o.stop(t + life + 0.01); }, when);
 }
+// the fish that sing here, all at dusk and through the night, all real, all recorded in this bay's waters. a soft pan, a long way off
+function fishCall(notes, pan, g) { oneShot((ac, t) => { const out = ac.createGain(); out.gain.value = g * TUNE.sound.chorus; let last = out; if (ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; out.connect(p); last = p; } last.connect(audio.fx); const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.4; lp.connect(out);
+  for (const [at, f, len, wave] of notes) { const o = ac.createOscillator(), v = ac.createGain(); o.type = wave; o.frequency.value = f; v.gain.setValueAtTime(0, t + at); v.gain.linearRampToValueAtTime(1, t + at + len * 0.2); v.gain.exponentialRampToValueAtTime(0.001, t + at + len); o.connect(v).connect(lp); o.start(t + at); o.stop(t + at + len + 0.02); } }); }
+export const toadfish = (pan, g) => fishCall([[0, 170 + fxRand() * 60, 0.34, 'sawtooth'], [0.42, 180 + fxRand() * 60, 0.16, 'sawtooth']], pan, g);   // the Gulf toadfish's boatwhistle
+export const blackDrum = (pan, g) => { const f = 90 + fxRand() * 20, n = 3 + Math.floor(fxRand() * 4); fishCall(Array.from({ length: n }, (_, i) => [i * (0.2 + fxRand() * 0.05), f, 0.12, 'sine']), pan, g * 1.6); };   // a black drum's slow thump, felt through a hull at night
+export const seatrout = (pan, g) => fishCall(Array.from({ length: 9 }, (_, i) => [i * 0.045, 420 + fxRand() * 90, 0.03, 'square']), pan, g * 0.5);   // a spotted seatrout's croak, a quick rattling train
 export function click(dist, when = 0) {   // dolphin click train, sometimes a whistle
   if (!audio || !audioOn) return; const v = 0.14 * Math.max(0, 1 - dist / 25); if (v <= 0) return;
   const n = 4 + Math.floor(fxRand() * 7), gap = 0.03 + fxRand() * 0.05;
@@ -136,6 +161,10 @@ export function clank(dist, when = 0) {   // buoy chain
 export function crackle(v) {   // snapping shrimp: a soft filtered tick
   burst({ buf: 'white', type: 'bandpass', f0: 2200, f1: 2600, f2: 2000, q: 1.5, attack: 0.002, length: 0.02, g: v });
 }
+// the bite: the blow you feel, a burst of your own bubbles, and the thin ringing in your head afterwards, fading like the real thing
+export function biteSound(k = 1) { for (let i = 0; i < 14; i++) bloop(0.5 + fxRand() * 0.5, fxRand() * 0.3); oneShot((ac, t) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = TUNE.sound.ring; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(TUNE.sound.ringLevel * k, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0002, t + TUNE.sound.ringFor); o.connect(g).connect(audio.clear); o.start(t); o.stop(t + TUNE.sound.ringFor + 0.05); }); }
+// you got away: one warm low note, and the sea starts to come back
+export function relief() { fmBell({ f: 147, ratio: 1.5, index: 0.8, decay: 7, g: 0.14, lp: 700 }); fmBell({ f: 220, ratio: 1.5, index: 0.6, decay: 6, g: 0.07, lp: 900, when: 0.5 }); for (let i = 0; i < 5; i++) bloop(0.3, 0.8 + i * 0.35); }
 export function thud(k = 1) {
   oneShot((ac, t) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(26, t + 0.4); const g = ac.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.8 * k, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.6); o.connect(g).connect(audio.master); o.start(t); o.stop(t + 0.65); });
   burst({ f0: 300, f1: 1200, f2: 200, attack: 0.03, length: 0.7, g: 0.4 * k });
@@ -177,20 +206,21 @@ export function creak(k = 1, pan = 0, when = 0) {   // steel under load: a wreck
 export const masterLevel = () => audioOn ? 0.5 * settings.volume / 10 * (paused ? 0.35 : 1) : 0;
 export function stepVolume() { if (!audio) return; const v = masterLevel(), mix = settings.amb * 100 + settings.fx;
   if (Math.abs(v - (audio.level ?? -1)) > 1e-3) { audio.level = v; audio.main.gain.setTargetAtTime(v, now(), 0.25); }
-  audio.hush = (audio.hush || 0) + (dread - (audio.hush || 0)) * (dread > (audio.hush || 0) ? 0.03 : 0.006);   // falls silent over a few seconds, comes back slowly
+  const fear = audio.testDread ?? dread; audio.hush = (audio.hush || 0) + (fear - (audio.hush || 0)) * (fear > (audio.hush || 0) ? 0.03 : 0.006);   // falls silent over a few seconds, comes back slowly
   const amb = settings.amb / 10 * (1 - TUNE.hush * audio.hush);   // before a shark the sea itself goes quiet; your own heartbeat is on the other bus
   if (mix !== audio.mix || Math.abs(amb - (audio.ambLvl ?? -1)) > 0.004) { audio.mix = mix; audio.ambLvl = amb; audio.amb.gain.setTargetAtTime(amb, now(), 0.4); audio.fx.gain.setTargetAtTime(settings.fx / 10, now(), 0.1); } }
 export const every = (key, secs, fn) => { const t = now(); if (!audio.nextT[key] || t > audio.nextT[key]) { audio.nextT[key] = t + secs; fn(); } };
 export function stepAudio(above) {
   if (!audio) return; const t = now(), depth = Math.max(0, -P.pos.y), k = 0.25, nearSurf = THREE.MathUtils.clamp(1 - depth / 2.5, 0, 1);
   // the world through water
-  audio.water.frequency.setTargetAtTime(above ? 14000 : Math.max(320, 900 - depth * 30), t, above ? 0.05 : 0.12);   // under: everything is heavy and far; out: the world is sharp
-  audio.water.Q.setTargetAtTime(above ? 0.2 : 1.1, t, 0.1);
+  audio.water.frequency.setTargetAtTime((P.stun || 0) > 0 ? 170 : above ? 14000 : Math.max(320, 900 - depth * 30), t, (P.stun || 0) > 0 ? 0.02 : above ? 0.05 : 0.8);   // struck, the world goes thick and far away, and comes back slowly   // under: everything is heavy and far; out: the world is sharp
+  audio.water.Q.setTargetAtTime(above ? 0.2 : 0.5, t, 0.1);
   if (audio.wasAbove !== undefined && audio.wasAbove !== above) burst({ buf: 'pink', type: 'bandpass', f0: above ? 500 : 1800, f1: above ? 2600 : 600, f2: above ? 1200 : 250, q: 1.4, attack: 0.01, length: 0.35, g: 0.35 });   // the pop of breaking through
   audio.wasAbove = above;
   audio.sea.g.gain.setTargetAtTime(above ? 0.25 : 0.35 + Math.min(0.25, depth * 0.012), t, 0.6); audio.sea.f.frequency.setTargetAtTime(above ? 600 : Math.max(70, 220 - depth * 6), t, 0.8);
-  audio.sea2.g.gain.setTargetAtTime(above ? 0.16 : 0.05, t, 0.6);
-  audio.wind.g.gain.setTargetAtTime(above ? 0.2 : 0, t, 0.5);
+  const blow = ENV.wind / 12;   // the sea's noise rises with the wind (Wenz 1962), and so does the air's
+  audio.sea2.g.gain.setTargetAtTime((above ? 0.16 : 0.05) * (0.6 + 1.2 * blow), t, 0.6);
+  audio.wind.g.gain.setTargetAtTime(above ? 0.08 + 0.3 * blow : 0, t, 0.5); audio.rain.gain.setTargetAtTime((above ? 0 : 0.05) * ENV.rain, t, 1);
   audio.lap.g.gain.setTargetAtTime(nearSurf * 0.22 * (above ? 1.3 : 1), t, 0.4);
   if (above) every('wave', 3 + fxRand() * 5, () => burst({ buf: 'pink', type: 'lowpass', f0: 300, f1: 1200, f2: 250, attack: 0.5, length: 2.2, g: 0.18 }));
   // your body in the water: rush with speed, thrash on the flap stroke when you work hard near the top
@@ -204,7 +234,13 @@ export function stepAudio(above) {
     if (c > 0.6 && !above) every('tide', 4, () => caption('tide', 'THE TIDE PULLS', P.pos.x + _cur.x * 40, P.pos.z + _cur.z * 40, 2)); }
   // bottom life: snapping shrimp crackle, denser over grass and rock, quieter deep and far off the bottom
   const bottomLife = Math.min(1, (grass.count / GRASS_MAX) * 2 + (rocks.count / ROCK_MAX) * 1.5 + (fans.count / FAN_MAX)), nearBottom = THREE.MathUtils.clamp(1 - (P.pos.y - lastFloor) / 8, 0, 1);
-  if (!above && fxRand() < (0.005 + 0.05 * bottomLife) * (0.3 + 0.7 * nearBottom) * (1 - (audio.hush || 0))) crackle(0.04 + 0.06 * bottomLife * nearBottom);   // a few per second over grass
+  { const hush = audio.hush || 0, T = TUNE.sound, deep = THREE.MathUtils.smoothstep(depth, 12, 30), v = masterLevel();
+    audio.clear.gain.setTargetAtTime(above ? 0 : v * (1 - TUNE.hush * hush * 0.85), t, 0.4); audio.shrimp.gain.setTargetAtTime(T.shrimp * (0.25 + 0.75 * bottomLife) * (0.35 + 0.65 * nearBottom), t, 1);
+    const held = audio.testHeld ?? wild.some(w => w.hunting && w.lunge?.phase === 'wind');   // the moment before it comes: every sound of fear drops away at once, and only your heart is left. nothing frightens like the sudden absence of what was frightening you
+    audio.pressure.gain.setTargetAtTime(above || held ? 0 : T.pressureDeep * deep + T.pressure * hush * hush, t, held ? 0.05 : 0.6); audio.rough.gain.setTargetAtTime(above || held ? 0 : T.rough * hush * hush * hush, t, held ? 0.05 : 0.4); audio.ambDuck.gain.setTargetAtTime(held ? 0.03 : 1, t, held ? 0.05 : 0.5);
+    // dusk and the night belong to the fish: a chorus you could fall asleep to, until it stops
+    const h = day.hour, dusk = THREE.MathUtils.smoothstep(h, 17.5, 20) + (1 - THREE.MathUtils.smoothstep(h, 4.5, 6.5)), g = 0.1 * Math.min(1, dusk) * (1 - hush) * (0.4 + 0.6 * nearBottom);
+    if (!above && g > 0.01) { every('toadfish', 4 + fxRand() * 9, () => toadfish((fxRand() - 0.5) * 0.7, g)); every('drum', 7 + fxRand() * 14, () => blackDrum((fxRand() - 0.5) * 0.7, g)); every('trout', 5 + fxRand() * 10, () => seatrout((fxRand() - 0.5) * 0.7, g)); } }
   // engines: every boat counts; distance muffles, prop wash shakes
   // engines: water carries them far and muffled; close in they open up, and the nearest come from their side
   P.wash = Math.max(0, (P.wash || 0) - 0.02); audio.tick = (audio.tick || 0) + 1;
@@ -212,7 +248,7 @@ export function stepAudio(above) {
     const on = v.src === gig ? gig.on : true, d = v.src.pos.distanceTo(P.pos), n = on ? THREE.MathUtils.clamp(1 - d / v.e.range, 0, 1) : 0;
     if (n > 0.3) caption('eng' + audio.engines.indexOf(v), v.src === gig ? 'MOTOR' : v.e === ENGINE_SHIP ? 'SHIP' : 'ENGINE', v.src.pos.x, v.src.pos.z, 0.6);
     if (d < 120 && P.pos.y > -4 && v.src !== gig && started) tip('dive', () => `${kn('dive')} dives. a hull only reaches the top few metres.`);
-    v.out.gain.setTargetAtTime(n * n * v.e.g * (above ? 0.6 : 1) * (1 + 0.8 * (P.wash || 0) * n), t, k);   // in air the hull hides the prop
+    v.out.gain.setTargetAtTime(n * n * n * v.e.g * (above ? 0.6 : 1) * (1 + 0.8 * (P.wash || 0) * n), t, k);   // in air the hull hides the prop
     v.lp.frequency.setTargetAtTime(120 + 2600 * n * n * n, t, 0.3);
     if (v.pan) v.pan.pan.setTargetAtTime(panAt(v.src.pos.x, v.src.pos.z), t, 0.2); }
   if ((P.wash || 0) > 0.3 && fxRand() < 0.08) crackle(0.06 * P.wash);   // cavitation in the wash
@@ -229,5 +265,5 @@ export function stepAudio(above) {
     every('phantom', 12 + fxRand() * 18, () => { caption('phantom', 'A CHAIN', bt.x, bt.z, 2); clank(4 + fxRand() * 6); if (fxRand() < 0.5) clank(9, 0.7); }); }
   if (!above && depth > 4) every('omen', 30 + fxRand() * 45, () => { caption('omen', 'SOMETHING GROANS', camPos.x, camPos.z, 2.5); (lastFloor < -12 || fxRand() < 0.4) ? groan() : creak(); });
   // hunted: a heartbeat
-  const hunterW = wild.find(w => w.hunting); if (hunterW && t > audio.heartNext) { audio.heartNext = t + (hunterW.lunge && hunterW.lunge.phase !== 'stalk' ? 0.42 : 0.75); for (const [dl, g] of [[0, 0.5], [0.16, 0.32]]) oneShot((ac, tt) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(58, tt); o.frequency.exponentialRampToValueAtTime(36, tt + 0.12); const gg = ac.createGain(); gg.gain.setValueAtTime(0, tt); gg.gain.linearRampToValueAtTime(g, tt + 0.015); gg.gain.exponentialRampToValueAtTime(0.0005, tt + 0.22); o.connect(gg).connect(audio.master); o.start(tt); o.stop(tt + 0.25); }, dl); }
+  const hunterW = wild.find(w => w.hunting), wary = !hunterW && dread > 0.45; if ((hunterW || wary) && t > audio.heartNext) { const near = hunterW ? THREE.MathUtils.clamp(1 - hunterW.pos.distanceTo(P.pos) / 30, 0, 1) : 0; audio.heartNext = t + (wary ? 1.15 : hunterW.lunge && hunterW.lunge.phase !== 'stalk' ? 0.42 : 0.92 - 0.42 * near);   /* it starts before you know why, and quickens as it nears */ for (const [dl, g] of [[0, 0.5], [0.16, 0.32]]) oneShot((ac, tt) => { const o = ac.createOscillator(); o.frequency.setValueAtTime(58, tt); o.frequency.exponentialRampToValueAtTime(36, tt + 0.12); const gg = ac.createGain(); gg.gain.setValueAtTime(0, tt); gg.gain.linearRampToValueAtTime(g, tt + 0.015); gg.gain.exponentialRampToValueAtTime(0.0005, tt + 0.22); o.connect(gg).connect(audio.master); o.start(tt); o.stop(tt + 0.25); }, dl); }
 }

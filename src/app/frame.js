@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import { pushOut } from '../lib/collide.js?v=__BUILD__';
 import { TEST } from '../core/env.js?v=__BUILD__';
+import { emit } from '../core/events.js?v=__BUILD__';
 import { fxRand, rand, randGate } from '../core/random.js?v=__BUILD__';
 import { portrait } from '../core/screen.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { camera, cellCam, cellRT, cellScene, composer, dotPass, lowRT, renderer, scene, stepQuality } from '../render/display.js?v=__BUILD__';
-import { bubbleLife, bubbles, emitBubble, emitSpray, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
-import { WU, stepStrokes, strouhalRad } from '../render/materials.js?v=__BUILD__';
+import { bubbleLife, bubbles, emitBubble, emitSpray, rainFall, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
+import { WU, beatRad, stepStrokes } from '../render/materials.js?v=__BUILD__';
+import { ENV, fogReach } from '../world/conditions.js?v=__BUILD__';
 import { Bay, floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
 import { grassCenter, rebuildGrass } from '../world/seabed.js?v=__BUILD__';
 import { updateClipmap } from '../world/seafloor.js?v=__BUILD__';
@@ -20,12 +22,13 @@ import { BIRDS, GONE, birdMesh, dives, fishMesh, flocks, schools, steerToSchool,
 import { AIR, HOLD, HP_MAX, P, hurt } from '../actors/player.js?v=__BUILD__';
 import { PREDATORS, huntHeat, stepThing, stepWild, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { blow, flush, splash, stepAudio, stepVolume, thud, whoosh } from '../systems/audio.js?v=__BUILD__';
-import { aim, helpOpen, input, keys, kn, menu, mouseSteering, needFull, openMenu, pad, photo, pollPad, readInput, rumble, sprinting } from '../systems/input.js?v=__BUILD__';
+import { B, aim, helpOpen, input, keys, kn, menu, mouseSteering, needFull, openMenu, pad, photo, pollPad, readInput, rumble, sprinting } from '../systems/input.js?v=__BUILD__';
 import { stepAutosave } from '../systems/save.js?v=__BUILD__';
 import { CHAPTERS, started, story } from '../systems/story.js?v=__BUILD__';
 import { $, mapOpen, say, sayTimer, stepGoalBeam, stepHud, stepTips, tip } from '../ui/hud.js?v=__BUILD__';
 import { logo, stepLogo } from '../ui/logo.js?v=__BUILD__';
 import { drawPanel } from '../ui/panel.js?v=__BUILD__';
+import { applySpecimen, renderSpecimenRaw, renderSpecimenViews, specimen } from './specimens.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  FRAME
 // ═══════════════════════════════════════════════════════════════════
@@ -36,13 +39,22 @@ export let above = false, aboveMix = 0, lastFloor = -5;
 export const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
 // ── the player, one step. each stage hands the next what it needs: what you're asking for, the seabed, whether you're
 //    bursting, how hard you're swimming. the body's lasting state is on P.
+// a bubble in your wake: from behind the body, whichever way you are facing
+export function wakeBubble(sp) { const f = fwdOf(P.yaw, P.pitch), side = (rand() - 0.5) * (sp.span ?? sp.len) * 0.5, back = sp.len * 0.55; emitBubble(P.pos.x - f.x * back + Math.cos(P.yaw) * side, P.pos.y - f.y * back + (rand() - 0.5) * 0.1, P.pos.z - f.z * back - Math.sin(P.yaw) * side); }
+// a shark swims with its tail, so that is what your hands do: left, right, left, right, each stroke a push. keep the rhythm and you fly; stop and you glide
+export const TAIL_SWIMMERS = new Set(['bull', 'hammer']);
+export function stepTail(sp, dt) {
+  if (!TAIL_SWIMMERS.has(sp.id)) { P.tail = 0; return; } const T = TUNE.tail, side = input.turn > 0.5 ? 1 : input.turn < -0.5 ? -1 : 0;
+  if (side && side !== P.tailHeld && side !== P.tailSide) { if (simTime - (P.tailAt ?? -9) < T.window) { P.tail = Math.min(1, (P.tail || 0) + T.gain); whoosh(0.12); } P.tailSide = side; P.tailAt = simTime; }
+  P.tailHeld = side; P.tail = Math.max(0, (P.tail || 0) - T.decay * dt);
+}
 export function stepPlayer(dt) {
   const sp = P.sp, stunned = P.stun > 0; P.stun -= dt;
   P.vel ??= new THREE.Vector3();
   const intent = steerIntent(dt, stunned), ground = terrainAround(sp, dt, intent.climb);
   steerBody(sp, intent, ground, dt);
   const wantBurst = stepBurst(stunned, dt), thrust = swim(sp, intent, wantBurst, stunned, dt);
-  porpoise(sp, intent, dt); breathe(sp, wantBurst, dt);
+  stepTail(sp, dt); porpoise(sp, wantBurst, dt); breathe(sp, wantBurst, dt);
   moveThroughWater(sp, ground.fHere, dt);
   rippleAndSplash(sp, dt); const surf = surfacing(sp, dt); wake(sp, dt);
   poseBody(sp, thrust, surf, dt);
@@ -75,7 +87,7 @@ export function steerBody(sp, { turn, climb }, { fAhead }, dt) {
   let pitchWant = climb * 0.8;
   if (!climb) {
     if (fAhead + sp.alt + 0.8 > P.pos.y) pitchWant = THREE.MathUtils.clamp((fAhead + sp.alt + 1.0 - P.pos.y) * 0.5, 0, 0.6);
-    else if (P.idleT > 3) { const prefer = sp.id === 'dolphin' ? Math.max(fAhead + sp.alt + 0.4, -0.8) : THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9);   /* a travelling dolphin keeps to the top */ pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
+    else if (P.idleT > 3) { const prefer = AIR.has(sp.id) && (P.air ?? 1) < TUNE.hud.airShow ? -0.08 : sp.id === 'dolphin' ? Math.max(fAhead + sp.alt + 0.4, -0.8) : THREE.MathUtils.clamp(fAhead * 0.5, fAhead + sp.alt + 0.4, -0.9);   /* a travelling dolphin keeps to the top, and anything with lungs comes up for air when it runs short */ pitchWant = THREE.MathUtils.clamp((prefer - P.pos.y) * 0.15, -0.3, 0.3); }
   }
   P.pitch += (pitchWant - P.pitch) * Math.min(1, (climb ? 5 : 3) * dt);
 }
@@ -83,13 +95,14 @@ export function steerBody(sp, { turn, climb }, { fAhead }, dt) {
 export function stepBurst(stunned, dt) {
   P.sta ??= 1; const wantBurst = sprinting() && !stunned && P.sta > 0 && !P.spent;
   if (wantBurst) { P.sta = Math.max(0, P.sta - dt / TUNE.burst.secs); if (P.sta === 0) P.spent = true; } else { P.sta = Math.min(1, P.sta + dt / TUNE.burst.refill); if (P.sta > TUNE.burst.reuseAt) P.spent = false; }
-  if (wantBurst && !P.bursting) { whoosh(0.7); rumble(0.35, 0.25, 160); for (let i = 0; i < 16; i++) emitBubble(P.pos.x + (rand() - .5) * 1.2, P.pos.y + (rand() - .5) * 0.6, P.pos.z + (rand() - .5) * 1.2); }   // the kick: heard, felt, seen
+  if (wantBurst && !P.bursting) { whoosh(0.7); rumble(0.35, 0.25, 160); for (let i = 0; i < 10; i++) wakeBubble(P.sp); }   // the kick: heard, felt, seen
   P.bursting = wantBurst;
   return wantBurst;
 }
   // propulsion: thrust along the body, quadratic drag, sideways water resistance, a little lift from pitch
 export function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
-  const fwd = fwdOf(P.yaw, P.pitch), wantSpeed = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? sp.max * TUNE.burst.boost : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const fwd = fwdOf(P.yaw, P.pitch), wantBase = throttle < 0 ? -0.35 * sp.cruise : wantBurst ? Math.min(sp.max * TUNE.burst.boost, TUNE.burst.top) : throttle === 0 ? 0.12 * sp.cruise : (sprinting() && !stunned ? sp.cruise * 1.25 : sp.cruise);
+  const wantSpeed = Math.max(wantBase, (P.tail || 0) > 0 ? sp.cruise * 0.5 + (P.tail) * (sp.max - sp.cruise * 0.5) : wantBase);
   const along = P.vel.dot(fwd), dragAt = v => 2.4 * sp.max * v * Math.abs(v) / (sp.max * sp.max);   // the same quadratic drag the water applies below
   // thrust = what holding that speed costs against the drag, plus a push toward it, so every speed is actually reached; a burst pushes hardest
   const thrust = THREE.MathUtils.clamp(dragAt(wantSpeed) / 0.85 + (wantSpeed - along) * (wantBurst ? 10.0 : 6.0), -0.6 * sp.max, wantBurst ? Math.max(4.5 * sp.max, 1.3 * dragAt(wantSpeed) / 0.85) : 2.4 * sp.max) * (0.85 + 0.15 * Math.sin(P.mesh.material.uniforms.uPhase.value * 2.0));
@@ -108,15 +121,14 @@ export function swim(sp, { climb, throttle }, wantBurst, stunned, dt) {
   P.speed = Math.max(0, along);
   return thrust;
 }
-export function porpoise(sp, { climb, throttle }, dt) {
-  const inAir = P.pos.y > 0.0;
-  if (sp.id === 'dolphin' && !inAir && P.pos.y > -1.4 && throttle > 0 && !climb && Math.abs(P.yawRate) < 0.35 && P.speed > sp.cruise * 0.75) {   /* porpoising: at speed a dolphin travels in leaps, the cheaper way to go */
-    P.porpT = (P.porpT || 0) + dt; P.porpNext ??= 2 + rand() * 2.5;
-    if (P.porpT > P.porpNext) { P.porpT = 0; P.porpNext = 2.5 + rand() * 2.5; P.vel.y = 3.2 + Math.min(3, P.speed * 0.25); P.leapT = 0.9; P.pitch = Math.max(P.pitch, 0.35);
-      const mate = wild.find(o => o.partner && !o.air);   /* a companion close beside you leaps when you do */
-      if (mate && mate.pos.distanceTo(P.pos) < 12 && mate.pos.y > -2.5) { mate.air = true; mate.vy = P.vel.y * (0.95 + rand() * 0.1); mate.pos.y = Math.max(mate.pos.y, -0.4); story.together(); }
-      else if (mate && CHAPTERS[story.ch].pair) say('swim beside it', 1.5); }
-  } else P.porpT = Math.max(0, (P.porpT || 0) - dt * 2);
+// a dolphin leaps when you ask: burst at the top and you are out of the water, and again for as long as you hold it. it never leaves the water by itself
+export function porpoise(sp, wantBurst, dt) {
+  P.porpT = Math.max(0, (P.porpT || 0) - dt);
+  if (sp.id !== 'dolphin' || !wantBurst || P.porpT > 0 || P.pos.y > 0 || P.pos.y < -TUNE.leap.near) return;
+  P.porpT = TUNE.leap.every; P.vel.y = TUNE.leap.kick; P.leapT = 0.9; P.pitch = Math.max(P.pitch, 0.35);
+  const mate = wild.find(o => o.partner && !o.air);   /* a companion close beside you leaps when you do */
+  if (mate && mate.pos.distanceTo(P.pos) < 12 && mate.pos.y > -2.5) { mate.air = true; mate.vy = P.vel.y * (0.95 + rand() * 0.1); mate.pos.y = Math.max(mate.pos.y, -0.4); story.together(); }
+  else if (mate && CHAPTERS[story.ch].pair) say('swim beside it', 1.5);
 }
 export function breathe(sp, wantBurst, dt) {
   if (HOLD[sp.id]) {   // lungs: air drains under, comes back in a few breaths at the top, twice as fast when you burst
@@ -178,28 +190,38 @@ export function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
       P.glide = (P.glide || 0) + dt; const gliding = work < 0.25 && Math.sin(P.glide * 0.6) > 0.2;
       u.uFlap.value += ((gliding ? 0.12 : 0.3 + 0.7 * work) - u.uFlap.value) * Math.min(1, 2.5 * dt);
     } else u.uFlap.value = 0.35 + 0.65 * work; }
-  { const u = P.mesh.material.uniforms, target = sp.kind === 'ray' ? strouhalRad(sp, P.speed, u.uFlap.value) : sp.freq * (0.7 + 0.6 * THREE.MathUtils.clamp(thrust / sp.max, 0, 1.2)); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); }
-  if (P.speed > sp.cruise * 1.3) for (let i = 0; i < 2; i++) if (rand() < 0.5) emitBubble(P.pos.x + (rand() - .5) * (sp.span ?? sp.len) * 0.8, P.pos.y - 0.1, P.pos.z + 0.3);
-  else if (rand() < 0.04) emitBubble(P.pos.x, P.pos.y, P.pos.z);
+  { const u = P.mesh.material.uniforms, target = beatRad(sp, P.speed, u.uFlap.value, P.bursting ? 1.6 : 1); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); u.uBend.value += (THREE.MathUtils.clamp((P.yawRate || 0) / sp.turn, -1, 1) - u.uBend.value) * Math.min(1, 4 * dt); }   // tail beats follow speed; the spine follows the turn
+    if (P.speed > sp.cruise * 1.3) { for (let i = 0; i < 2; i++) if (rand() < 0.5) wakeBubble(sp); } else if (rand() < 0.04) wakeBubble(sp);
 }
-export function stepPhotoCam(dt) {   // photo mode: orbit and zoom around the body; keys, sticks, mouse and wheel all work
-  const k = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0), z = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0), u = (keys.Space ? 1 : 0) - (keys.KeyC ? 1 : 0);
-  photo.yaw += (k * 1.2 - pad.lookX * 1.6 - pad.turn * 1.2) * dt; photo.pitch = THREE.MathUtils.clamp(photo.pitch + (u * 0.9 + pad.lookY * 1.2) * dt, -1.3, 1.3);
-  photo.dist = THREE.MathUtils.clamp(photo.dist * (1 + (z - pad.climb) * dt), 1.2, 60); photo.t += dt;
-  camPos.set(P.pos.x + Math.sin(photo.yaw) * Math.cos(photo.pitch) * photo.dist, P.pos.y + Math.sin(photo.pitch) * photo.dist, P.pos.z + Math.cos(photo.yaw) * Math.cos(photo.pitch) * photo.dist);
-  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.3);
-  camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(P.pos);
+// the lens draws nothing nearer than camera.near: just under the surface that sliced the water off in a dead straight line across the screen
+export function keepOffSurface() { const clear = camera.near * 1.25; if (Math.abs(camPos.y) < clear) camPos.y = camPos.y < 0 ? -clear : clear; }
+export function stepPhotoCam(dt) {   // photo mode: orbit, zoom, and slide the lens around you; the keys, the sticks, the mouse and the wheel all work
+  const on = (...codes) => codes.some(c => keys[c]) ? 1 : 0, T = TUNE.photo;
+  photo.yaw += (on('ArrowLeft') - on('ArrowRight') - pad.lookX * 1.6) * 1.2 * dt; photo.pitch = THREE.MathUtils.clamp(photo.pitch + (on('ArrowUp') - on('ArrowDown') + pad.lookY * 1.3) * 0.9 * dt, -1.3, 1.3);
+  photo.dist = THREE.MathUtils.clamp(photo.dist * (1 - pad.throttle * dt), 0.6, 60); photo.fov = THREE.MathUtils.clamp(photo.fov + (on('KeyE') - on('KeyQ')) * 30 * dt, ...T.lens); photo.t += dt;
+  const fwd = on(B('forward')) - on(B('back')) + pad.climb, side = on(B('right')) - on(B('left')) - pad.turn, rise = on(B('rise')) - on(B('dive')), slide = Math.max(1, photo.dist) * 1.2 * dt, s = Math.sin(photo.yaw), c = Math.cos(photo.yaw);
+  photo.at.x += (-s * fwd + c * side) * slide; photo.at.z += (-c * fwd - s * side) * slide; photo.at.y += rise * slide;
+  const off = _photoOff.copy(photo.at).sub(P.pos); if (off.length() > T.reach) photo.at.copy(P.pos).addScaledVector(off.normalize(), T.reach);   // it stays near you: the bay beyond it isn't there until you swim to it
+  camPos.set(photo.at.x + s * Math.cos(photo.pitch) * photo.dist, photo.at.y + Math.sin(photo.pitch) * photo.dist, photo.at.z + c * Math.cos(photo.pitch) * photo.dist);
+  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.3); keepOffSurface();
+  camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(photo.at); if (camera.fov !== photo.fov) { camera.fov = photo.fov; camera.updateProjectionMatrix(); }
   above = camPos.y > 0; aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+  setFog(1);
 }
+const _photoOff = new THREE.Vector3();
+// how far you can see, and what distance fades to. under water that is the water itself, lit from above: a dim glow in the sunlit shallows, black in the deep and at night.
+// fading to black here left a black strip between the lit floor and the lit surface, squeezed to a hard line by the low angle
+export function setFog(reach) { const sun = 0.12 + 0.88 * WU.uSun.value, water = TUNE.water.glow * sun * Math.exp(Math.min(camPos.y, 0) * TUNE.water.fade);
+  WU.uFogD.value = THREE.MathUtils.lerp(0.018 * fogReach(ENV), 0.00018, aboveMix) * reach; WU.uFogB.value = THREE.MathUtils.lerp(water, 0.05 + 0.3 * WU.uSun.value, aboveMix); }
 export function stepCamera(dt) {
+  if (specimen.on) { applySpecimen(); return; }
   if (photo) { stepPhotoCam(dt); return; }
   P.burstMix = (P.burstMix || 0) + ((P.bursting ? 1 : 0) - (P.burstMix || 0)) * Math.min(1, (P.bursting ? 5 : 2) * dt);   // snaps in, eases out
-  const size = P.mesh.userData.size, dist = 2.4 + size * 2.5 + P.speed * 0.12 + P.burstMix * (1 + size), h = 1.0 + size * 0.6;
+  const size = P.mesh.userData.size, dist = TUNE.camera.near + size * TUNE.camera.perSize + P.speed * TUNE.camera.perSpeed + P.burstMix * (0.2 + 0.4 * size), h = 0.6 + size * 0.28;
   camera.fov = (camera.userData.baseFov || 60) + (settings.speedFx ? 14 : 0) * P.burstMix; camera.updateProjectionMatrix();   // the view widens at speed, unless that's turned off for comfort
   { const want = settings.vignette ? Math.min(0.85, 0.75 * P.burstMix + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) / 1.2) + 0.35 * Math.min(1, (P.speed || 0) / Math.max(1, P.sp.max))) : 0;
     dotPass.uniforms.uTunnel.value += (want - dotPass.uniforms.uTunnel.value) * Math.min(1, 4 * dt); }
-  { const air = P.air ?? 1, close = Math.max(0.55 * huntHeat, air < TUNE.hud.airShow ? 0.7 * (1 - air / TUNE.hud.airShow) : 0);   // hunted, or short of air: the edges close in
+  { const air = P.air ?? 1, close = Math.max(0.55 * huntHeat, air < TUNE.hud.airShow ? 0.7 * (1 - air / TUNE.hud.airShow) : 0, 0.75 * THREE.MathUtils.clamp((P.stun || 0) / 2.5, 0, 1));   // hunted, or short of air: the edges close in
     dotPass.uniforms.uClose.value += (close - dotPass.uniforms.uClose.value) * Math.min(1, 2 * dt); }
   P.idleCam = (input.turn || input.climb || sprinting()) ? 0 : (P.idleCam || 0) + dt;
   const sway = settings.sway ? 1 : 0;   // the camera never moves on its own unless that's wanted
@@ -208,23 +230,23 @@ export function stepCamera(dt) {
   aim.lookT += dt; if (!aim.look && aim.lookT > 0.8) { const k = Math.min(1, 2.5 * dt); aim.lookYaw *= 1 - k; aim.lookPitch *= 1 - k; }   // let go and it comes back behind you
   aim.lookYaw = Math.atan2(Math.sin(aim.lookYaw), Math.cos(aim.lookYaw));
   const yawT = P.yaw + drift + aim.lookYaw + (P.endingCam ? Math.sin(simTime * 0.08) * 1.2 * sway : 0);
-  const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist); back.y += h;
+  const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist * (P.camUp ? 1.7 : 1)); back.y += h;   // looking above the water the camera stands off, so you are still in the picture
   const want = _want.copy(P.pos).add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
-  if (P.pos.y > 0.05) P.camUp = true; else if (P.pos.y < -0.6) P.camUp = false;   // breathing happens just under the line; only a breach takes the camera up
+  { P.peekT = P.pos.y > -0.7 && (input.climb || 0) > 0.3 ? (P.peekT || 0) + dt : 0; if (P.pos.y > 0.05 || P.peekT > 0.35) P.camUp = true; else if (P.pos.y < -0.6 || (P.pos.y <= 0.05 && (input.climb || 0) <= 0.3)) P.camUp = false; }   // breathing happens just under the line; a breach takes the camera up, and so does holding rise at the top: look around above the water, at the boats and the sky
   if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
   want.x += Math.sin(simTime * 0.35) * 0.12 * sway; want.y += Math.sin(simTime * 0.5 + 1.0) * 0.08 * sway;
   camPos.lerp(want, Math.min(1, 5 * dt));
-  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
+  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5); keepOffSurface();
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6 * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(_sc.set(0, 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), (P.camUp ? 2 : 6) * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(_sc.set(0, P.camUp ? 0 : 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
   camera.position.copy(camPos); { const k = settings.horizonTilt ? P.roll * 0.15 : 0; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(_sc.set(fxRand() - .5, fxRand() - .5, fxRand() - .5).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018, 0.00018, aboveMix) * (1 - 0.55 * (P.reveal || 0)); WU.uFogB.value = (0.05 + 0.3 * WU.uSun.value) * aboveMix;
+  setFog(1 - 0.55 * (P.reveal || 0));
 }
 export function stepAmbient(dt, t) {
-  updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos);
+  updateClipmap(P.pos.x, P.pos.z); surface.position.set(camPos.x, 0, camPos.z); sky.position.copy(camPos); rainFall.position.set(camPos.x, 0, camPos.z);
   if (grassCenter.distanceTo(_xz.set(P.pos.x, P.pos.z)) > 28) rebuildGrass(P.pos.x, P.pos.z);
   shaftSeeds.forEach((s, i) => { const a = s.a + t * 0.01, x = camPos.x + Math.cos(a) * s.r, z = camPos.z + Math.sin(a) * s.r;
     placeInstance(shafts, i, x, 0, z, 0, Math.atan2(camPos.x - x, camPos.z - z) + Math.sin(t * 0.3 + s.s) * 0.2, 0, s.w, 26 + Math.sin(t * 0.2 + s.s) * 4, 1); });
@@ -242,7 +264,7 @@ export function stepAmbient(dt, t) {
   for (const s of schools) {
     if (s.c.lengthSq() === 0 || s.c.distanceTo(P.pos) > 160) { const sp = spotNear(P.pos, 25, 85, 1.5); if (!sp) continue; s.c.set(sp.x, Math.min(-1.5, sp.f + 2 + rand() * 3), sp.z); s.base = s.spread; for (const fish of s.fish) fish.alive = true; }
     const pd = s.c.distanceTo(P.pos);
-    if (pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3;   // a charge scatters the school
+    { const H = TUNE.hunt, hunter = PREDATORS.has(P.sp.id), felt = (P.speed > P.sp.cruise * H.fastOver ? H.feelFast : H.feelSlow) * (P.pos.y < s.c.y - 0.5 ? H.under : 1); if (hunter ? pd < felt : pd < 6 && P.speed > P.sp.cruise * 1.2) s.panic = 3; }   // their flanks feel pressure in the water: rush and they are gone; come slowly from below and you may get close
     if (s.panic <= 0) for (const w of wild) if (w.sp && PREDATORS.has(w.sp.id) && w.pos.distanceTo(s.c) < 14) { s.panic = 3; if (pd < 50) flush(s.c.x, s.c.z, 1 - pd / 50); break; }   // sharks are silent; their prey is not
     s.panic = Math.max(0, s.panic - dt); s.spread += ((s.panic > 0 ? s.base * 3 : s.base) - s.spread) * Math.min(1, 3 * dt);
     if (s.panic > 0) { steerToSchool(s, 2 * s.c.x - P.pos.x, 2 * s.c.z - P.pos.z); }
@@ -250,7 +272,7 @@ export function stepAmbient(dt, t) {
     const f = floorAt(s.c.x, s.c.z); if (f > -2.5) s.dir += 2 * dt; s.c.y = THREE.MathUtils.clamp(s.c.y, f + 1, -1.2);
     for (const fish of s.fish) { const ph = t * fish.w + fish.ph; _e.set(Math.sin(ph * 1.7) * 0.1, s.dir + Math.cos(ph) * 0.35, 0); _m.makeRotationFromEuler(_e);
       const fx = s.c.x + fish.off.x * s.spread + Math.sin(ph) * 0.6, fy = s.c.y + fish.off.y * s.spread, fz = s.c.z + fish.off.z * s.spread + Math.cos(ph * 0.8) * 0.6;
-      if (fish.alive && (PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin') && (P.speed > P.sp.cruise * 1.3 || P.strikeT > 0) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? 1.8 : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; if (P.fed % 3 === 0 && P.hp < HP_MAX) { P.hp++; say('♥  well fed', 1.2); } s.panic = 3; emitBubble(fx, fy, fz); }
+      if (fish.alive && (P.strikeT > 0 ? PREDATORS.has(P.sp.id) || P.sp.id === 'dolphin' : P.sp.id === 'dolphin' && P.speed > P.sp.cruise * 1.3) && Math.abs(fx - P.pos.x) < (P.strikeT > 0 ? TUNE.hunt.reach : 1) && Math.abs(fz - P.pos.z) < (P.strikeT > 0 ? TUNE.hunt.reach : 1) && Math.abs(fy - P.pos.y) < 1.2) { fish.alive = false; P.fed = (P.fed || 0) + 1; if (P.fed % 3 === 0 && P.hp < HP_MAX) { P.hp++; say('♥  well fed', 1.2); } s.panic = 3; emitBubble(fx, fy, fz); }
       if (!fish.alive) _m.scale(GONE);
       _m.setPosition(fx, fy, fz); fishMesh.setMatrixAt(k++, _m); }
   }
@@ -308,8 +330,10 @@ function frameInner() {
   updatePaused();
   stepVolume(); stepTips(); runTimers('screen', WU.uTime.value);
   if (!TEST) { const want = real * timeScale, n = Math.min(SIM_STEPS * Math.ceil(timeScale), Math.max(1, Math.ceil(want / SIM_MAX - 1e-9))); for (let i = 0; i < n; i++) simStep(Math.min(want, n * SIM_MAX) / n); }
-  { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
+  { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25) * (1 - 0.6 * WU.uCloud.value); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
-  renderer.setRenderTarget(lowRT); renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
-  if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; renderer.domElement.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `brackish-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */   /* the frame just drawn, before it is cleared */
+  if (specimen.on && specimen.raw) { renderSpecimenRaw(); return; }
+  renderer.setRenderTarget(lowRT); if (specimen.on) renderSpecimenViews(); else renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
+  if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; const name = `brackish-${(photo.spot || 'the-bay').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
+    renderer.domElement.toBlob(b => { if (!b) return; emit('photo-saved', { name, size: b.size }); if (TEST) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the frame just drawn, before it is cleared. the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */
 }

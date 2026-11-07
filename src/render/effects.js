@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MOBILE } from '../core/env.js?v=__BUILD__';
-import { rand } from '../core/random.js?v=__BUILD__';
+import { fxRand, rand } from '../core/random.js?v=__BUILD__';
 import { scene } from './display.js?v=__BUILD__';
 import { GLSL_COMMON, mat } from './materials.js?v=__BUILD__';
 import { spotNear } from '../world/geo.js?v=__BUILD__';
@@ -19,10 +19,17 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(25000, 24, 12), mat({
       gl_FragColor = outB(b); }` }));
 sky.frustumCulled = false; scene.add(sky);
 
-export const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 48), mat({ side: THREE.DoubleSide, transparent: true,
-  vertexShader: GLSL_COMMON + `varying vec3 vW;
-    void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-  fragmentShader: GLSL_COMMON + `varying vec3 vW;
+// the sea's surface, centred on you: fine close by, where waves are, and coarse out to the horizon
+export function seaGeometry(rings = 120, around = 72) { const pos = [0, 0, 0], idx = []; for (let j = 0; j < rings; j++) { const r = 1.5 * Math.pow(20000 / 1.5, j / (rings - 1)); for (let i = 0; i < around; i++) { const a = i / around * Math.PI * 2; pos.push(Math.cos(a) * r, Math.sin(a) * r, 0); } }
+  for (let i = 0; i < around; i++) idx.push(0, 1 + i, 1 + (i + 1) % around); for (let j = 0; j + 1 < rings; j++) for (let i = 0; i < around; i++) { const a = 1 + j * around + i, b = 1 + j * around + (i + 1) % around, c = a + around, d = b + around; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g; }
+export const surface = new THREE.Mesh(seaGeometry(), mat({ side: THREE.DoubleSide, transparent: true,
+  // the sea's real shape: three wave trains around the wind's direction, as tall and as long as this wind and this fetch make them, dying away with distance
+  vertexShader: GLSL_COMMON + `varying vec3 vW; varying float vH;
+    float wave(vec2 p, vec2 dir, float period, float amp) { float w = 6.2832 / period, k = w * w / 9.81; return amp * sin(k * dot(dir, p) - w * uTime); }
+    void main(){ vec4 w = modelMatrix * vec4(position,1.0); vec2 d = uWindDir, s = vec2(-d.y, d.x), p = w.xz; float near = exp(-length(position.xy) / 260.0);
+      float h = wave(p, d, uWavePeriod, 0.3) + wave(p, normalize(d + s * 0.4), uWavePeriod * 0.72, 0.16) + wave(p, normalize(d - s * 0.55), uWavePeriod * 1.3, 0.12); vH = h; w.y += h * uChop * near; vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: GLSL_COMMON + `varying vec3 vW; varying float vH;
     void main(){
       float vD = length(cameraPosition - vW);
       float a = sin(vW.x * 0.45 + uTime * 0.9) * sin(vW.z * 0.38 - uTime * 0.7);
@@ -34,15 +41,21 @@ export const surface = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000, 48, 
         vec3 rfl = reflect(-v, vec3(0.0, 1.0, 0.0)); float glit = pow(max(dot(rfl, uSunDir), 0.0), 40.0) * smoothstep(-0.05, 0.1, uSunDir.y);
         float moonGlit = pow(max(dot(rfl, moonDir()), 0.0), 60.0) * moonUp();
         float day = 0.12 + 0.88 * uSun;
-        b = (0.015 + 0.14 * g * g * g) * day + 0.5 * pow(max(s2, 0.0), 5.0) * (0.05 + 0.95 * glit) * (0.2 + 0.8 * uSun) + 0.06 * pow(p, 4.0) * g * day + 0.45 * pow(max(s2, 0.0), 4.0) * moonGlit;
+        b = (0.015 + 0.44 * (0.02 + 0.98 * pow(g, 5.0))) * day +   /* Fresnel (Schlick): straight down you see into the water, at a low angle it mirrors the sky */ 0.5 * pow(max(s2, 0.0), 5.0) * (0.05 + 0.95 * glit) * (0.2 + 0.8 * uSun) + 0.06 * pow(p, 4.0) * g * day + 0.45 * pow(max(s2, 0.0), 4.0) * moonGlit;
         alpha = mix(0.08, 0.35 + 0.55 * g * g, smoothstep(3.0, 40.0, vD));
       } else {
         // from below: crests drawn as moving lines, the way the deck drew its sea
         float w = sin(vW.x * 0.11 + vW.z * 0.04 + uTime * 0.22) * 0.6 + sin(vW.z * 0.08 - vW.x * 0.03 - uTime * 0.16) * 0.4;
         float crest = smoothstep(0.86, 0.97, w);   // a few thin crests, far apart, drifting
-        b = 0.12 + 0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5));
+        float near = 1.0 - smoothstep(0.6, 2.5, fwidth(vW.x) + fwidth(vW.z));   // far off at a low angle the pattern is finer than a dot, and can only alias into rows of dashes
+        // Snell's window: from below, the whole sky above squeezes into a bright disc overhead, 97 degrees across (rays past 48.6 degrees from straight up reflect back down). its edge ripples with the waves
+        float up = abs(normalize(cameraPosition - vW).y), window = smoothstep(0.63, 0.7 + 0.02 * a, up) * (0.25 + 0.75 * uSun);
+        b = 0.12 + 0.45 * window + (0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5))) * near;
       }
-      gl_FragColor = vec4(applyFog(b, vD), 0.0, 0.0, alpha);
+      b += uChop * 0.7 * max(vH, 0.0) * smoothstep(120.0, 10.0, vD);   // crests catch the light
+      if (uRain > 0.0) { vec2 c = floor(vW.xz * 2.5); float h = fract(sin(dot(c + floor(uTime * 7.0 + fract(c.x * 0.37) * 7.0), vec2(12.9898, 78.233))) * 43758.5453); b += step(1.0 - 0.14 * uRain, h) * 0.5 * smoothstep(50.0, 4.0, vD); }   // every drop a ring
+      b *= 1.0 - 0.45 * uCloud;
+      gl_FragColor = vec4(uRaw > 0.5 ? vec3(applyFog(b, vD)) : vec3(applyFog(b, vD), 0.0, 0.0), alpha);
     }` }));
 surface.rotation.x = -Math.PI / 2; surface.frustumCulled = false; scene.add(surface);
 
@@ -72,6 +85,9 @@ export function pointsCloud(n, size, bright, ring = false) {
         gl_FragColor = outB(b); }` }));
   p.frustumCulled = false; scene.add(p); return p;
 }
+// rain, seen from the air: fine streaks falling through a box that follows you
+export const RAIN_N = 700, rainFall = (() => { const pos = new Float32Array(RAIN_N * 3); for (let i = 0; i < RAIN_N * 3; i += 3) { pos[i] = fxRand() * 60 - 30; pos[i + 1] = fxRand() * 30; pos[i + 2] = fxRand() * 60 - 30; } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const p = new THREE.Points(g, mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexShader: GLSL_COMMON + `varying float vA; void main(){ vec3 q = position; q.y = mod(q.y - uTime * 9.0, 30.0); q.x -= uWindDir.x * q.y * 0.15; q.z -= uWindDir.y * q.y * 0.15; vec4 w = modelMatrix * vec4(q, 1.0); vA = step(0.0, w.y) * step(fract(position.x * 7.13), uRain); vec4 mv = viewMatrix * w; gl_PointSize = 1.5; gl_Position = projectionMatrix * mv; }`, fragmentShader: GLSL_COMMON + `varying float vA; void main(){ if (vA < 0.5) discard; gl_FragColor = outB(0.5); }` })); p.frustumCulled = false; scene.add(p); return p; })();
 export const snow = pointsCloud(MOBILE ? 1000 : 2500, 1, 0.28), snowBox = 110;
 { const a = snow.geometry.attributes.position.array; for (let i = 0; i < a.length; i++) a[i] = (rand() - 0.5) * snowBox; }
 export const bubbles = pointsCloud(600, 2.2, 0.9, true), bubbleLife = new Float32Array(600).fill(99);

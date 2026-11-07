@@ -25,5 +25,7 @@ jobs:
       - run: npm run test:unit
       - name: Play the game
         run: npm run test:game
+      - name: Art, motion, sound and frame budgets
+        run: npm run check
         env:
           CHROME: /usr/bin/google-chrome

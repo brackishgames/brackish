@@ -1,17 +1,18 @@
 import * as THREE from 'three';
 import { MOBILE } from '../core/env.js?v=__BUILD__';
+import { emit } from '../core/events.js?v=__BUILD__';
 import { between, rand } from '../core/random.js?v=__BUILD__';
 import { _f, fwdInto, fwdOf, orient } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
 import { emitBubble } from '../render/effects.js?v=__BUILD__';
-import { strouhalRad } from '../render/materials.js?v=__BUILD__';
+import { beatRad } from '../render/materials.js?v=__BUILD__';
 import { floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
 import { day } from '../world/time.js?v=__BUILD__';
 import { creatureMesh, speciesById } from './creatures.js?v=__BUILD__';
 import { fever, feverR } from './fever.js?v=__BUILD__';
 import { P, hurt } from './player.js?v=__BUILD__';
-import { caption, click, thud, whump } from '../systems/audio.js?v=__BUILD__';
+import { caption, click, flush, relief, thud, whump } from '../systems/audio.js?v=__BUILD__';
 import { kn, rumble, sprinting } from '../systems/input.js?v=__BUILD__';
 import { started, story } from '../systems/story.js?v=__BUILD__';
 import { say, tip } from '../ui/hud.js?v=__BUILD__';
@@ -105,6 +106,7 @@ export function stepInterest(w, rel, d, { hunters, fr, pFloor }, dt) {
     const dim = day.hour < 7.5 || day.hour > 18;   // they hunt the low light
     const rate = fr < 0.85 ? -0.3 : (fr < 1.2 ? 0.22 : 0.14) * (P.speed > P.sp.cruise * 1.2 ? 1.8 : 1) * (P.hp < 3 ? 1.5 : 1) * (dim ? 1.3 : 1);   // panic and blood draw it in
     w.interest = THREE.MathUtils.clamp((w.interest || 0) + rate * dt, 0, 1);
+    if (w.interest > 0.28 && !w.fled) { w.fled = true; flush(P.pos.x + (w.pos.x - P.pos.x) * 0.3, P.pos.z + (w.pos.z - P.pos.z) * 0.3, 0.8); emit('predator-near'); } if (w.interest < 0.1) w.fled = false;   // the first sign is the small fish leaving, before you know why
     if (w.interest > 0.45 && !w.warned) { w.warned = true; say('something large is keeping pace below you', 2.5); tip('burst', () => `${kn('burst')} bursts. a hard turn inside its lunge makes it miss. lose it in the fever, or far away.`); }
   } else if (!w.hunting) { w.interest = Math.max(0, (w.interest || 0) - 0.05 * dt); if (w.interest < 0.2) w.warned = false; }
 }
@@ -115,7 +117,7 @@ export function huntCourse(w, rel, d, { hunters, fr, pFloor }, dt, c) {
   if (!w.hunting) { w.hunting = true; w.huntT = 0; w.misses = 0; w.bumped = false; w.track = 1; w.seen = P.pos.clone(); w.lunge = { phase: 'stalk', t: 0, side: rand() < 0.5 ? -1 : 1 };
     say(hammer ? `${w.sp.name.toUpperCase()}\nit hunts rays along the bottom. stay off the sand, or get to the shallows.` : `${w.sp.name.toUpperCase()}\nit has you alone. get back into the fever, or out-turn it.`, 3.5); }
   w.huntT += dt; const L = w.lunge; L.t += dt;
-  const lose = why => { w.hunting = false; w.cool = 30; w.interest = 0; w.warned = false; if (why) say(why, 2.5); };
+  const lose = why => { w.hunting = false; w.cool = 30; w.interest = 0; w.warned = false; if (why) { say(why, 2.5); relief(); } };
   // once it is on you it stays on you, like the law: you have to break contact long enough for it to lose you
   const why = rel !== 'hunt' || d > 120 ? 'gone' : fr < 0.85 ? 'fever' : hammer && pFloor > -3 ? 'shallow' : d > 28 ? 'far' : '';
   if (!why) { w.track = Math.min(1, w.track + 0.5 * dt); w.seen.copy(P.pos); } else w.track -= dt / (why === 'fever' ? 2 : 6);   // among a thousand others it can't hold on to you
@@ -194,7 +196,7 @@ export function poseAnimal(w, f, d, dt) {
   w.pos.y = THREE.MathUtils.clamp(w.pos.y, f + w.sp.alt, w.air ? 8 : -0.5);
   w.mesh.position.copy(w.pos); orient(w.mesh, w.yaw, w.pitch, w.roll);
   { const u = w.mesh.material.uniforms, work = Math.min(1, w.v / w.sp.max); w.mesh.userData.baseGlow ??= u.uGlow.value; u.uGlow.value = w.mesh.userData.baseGlow * (w.passing ? 0.5 : 1) * (1 + 0.9 * (P.reveal || 0) * (d < (P.revealRange || 50) ? 1 : 0)); u.uFlap.value += ((w.sp.kind === 'ray' ? 0.35 + 0.65 * work : 0.6 + 0.4 * work) - u.uFlap.value) * Math.min(1, 2 * dt);
-    const target = w.sp.kind === 'ray' ? strouhalRad(w.sp, w.v, u.uFlap.value) : w.sp.freq * (0.55 + 0.9 * work); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); }
+    const target = beatRad(w.sp, w.v, u.uFlap.value, w.hunting ? 1.6 : 1), turning = Math.atan2(Math.sin(w.yaw - (w.lastYaw ?? w.yaw)), Math.cos(w.yaw - (w.lastYaw ?? w.yaw))) / Math.max(dt, 1e-3); w.lastYaw = w.yaw; u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); u.uBend.value += (THREE.MathUtils.clamp(turning / w.sp.turn, -1, 1) - u.uBend.value) * Math.min(1, 3 * dt); }
 }
 
 

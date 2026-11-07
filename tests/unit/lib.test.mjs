@@ -76,3 +76,7 @@ test('feedback reports: no pings, no escaping, fit in a link', () => {
   const u = new URL(issueUrl(r)); assert.equal(u.searchParams.get('template'), 'feedback.yml'); assert.equal(u.searchParams.get('what'), r.what); assert.equal(u.searchParams.get('details'), r.details);
   const long = issueUrl({ ...r, details: 'x'.repeat(20000) }); assert.ok(long.length <= 7000); assert.equal(new URL(long).searchParams.get('what'), r.what, 'the details give way before the note');
 });
+
+import { seaState, readObservation, waveNumber } from '../../src/lib/sea.js';
+test('waves grow with wind and fetch, and stay within what the bay makes', () => { const calm = seaState(2), blow = seaState(12); assert.ok(blow.height > calm.height * 3); assert.ok(blow.height > 0.5 && blow.height < 1.6, `${blow.height} m in a stiff wind`); assert.ok(blow.period > 2.5 && blow.period < 6); assert.ok(Math.abs(waveNumber(8) - (2 * Math.PI / 8) ** 2 / 9.81) < 1e-9); });
+test('a weather observation reads into rain, cloud and wind', () => { const r = readObservation({ presentWeather: [{ weather: 'rain', intensity: 'heavy' }], windSpeed: { value: 36 }, windDirection: { value: 300 }, cloudLayers: [{ amount: 'OVC' }], textDescription: 'Heavy Rain' }); assert.equal(r.rain, 1); assert.equal(r.cloud, 1); assert.equal(r.wind, 10); const c = readObservation({ presentWeather: [], windSpeed: { value: null }, cloudLayers: [{ amount: 'CLR' }] }); assert.equal(c.rain, 0); assert.equal(c.wind, 0); });

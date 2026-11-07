@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- the import map is the only inline script: its hash is in script-src, so editing it means updating the hash (tests/csp.test.mjs checks) -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dkbwup3fc4qZtE2mhGxuDg2W9n9jSYXT2ga3eHEEcj0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.tidesandcurrents.noaa.gov https://gis.ngdc.noaa.gov https://overpass-api.de https://*.workers.dev; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dkbwup3fc4qZtE2mhGxuDg2W9n9jSYXT2ga3eHEEcj0='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.weather.gov https://api.tidesandcurrents.noaa.gov https://gis.ngdc.noaa.gov https://overpass-api.de https://*.workers.dev; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>BRACKISH</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
@@ -82,6 +82,7 @@
   #tBurst { right: calc(24px + env(safe-area-inset-right)); bottom: calc(28px + env(safe-area-inset-bottom)); width: 88px; height: 88px; }
   #tAct { right: calc(124px + env(safe-area-inset-right)); bottom: calc(34px + env(safe-area-inset-bottom)); width: 64px; height: 64px; }
   #tMap { right: calc(20px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; }
+  body:not(.free) #tCreature { display: none; }
   #tCreature { right: calc(76px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; font-size: 16px; }
   #tPause { right: calc(132px + env(safe-area-inset-right)); top: calc(48px + env(safe-area-inset-top)); width: 46px; height: 46px; }
   #stick { position: fixed; z-index: 6; width: 112px; height: 112px; margin: -56px 0 0 -56px; border: 1px solid #e8f1ff33; border-radius: 50%; display: none; pointer-events: none; }

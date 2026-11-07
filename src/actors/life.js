@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { hash2 } from '../lib/rng.js?v=__BUILD__';
+import { bump, join, tube } from '../lib/shapes.js?v=__BUILD__';
+import { events } from '../core/events.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
 import { placeInstance } from '../core/space.js?v=__BUILD__';
 import { scene } from '../render/display.js?v=__BUILD__';
 import { emitBubble } from '../render/effects.js?v=__BUILD__';
 import { creatureMat } from '../render/materials.js?v=__BUILD__';
 import { floorAt, spotNear } from '../world/geo.js?v=__BUILD__';
-import { birdGeometry } from './creatures.js?v=__BUILD__';
+import { birdGeometry, schoolFishGeometry } from './creatures.js?v=__BUILD__';
 import { ABILITY, HP_MAX, P, abilityName } from './player.js?v=__BUILD__';
 import { bloop, splash } from '../systems/audio.js?v=__BUILD__';
 import { kn } from '../systems/input.js?v=__BUILD__';
@@ -16,11 +17,14 @@ import { say, tip } from '../ui/hud.js?v=__BUILD__';
 import { _xz } from '../app/frame.js?v=__BUILD__';
 // The bay's small life: moon jellies, clams and shrimp to eat, mullet schools, pelicans and gulls.
 // moon jellies: slow, pulsing, harmless, lovely in the dark
+// a moon jelly: a shallow bell with a scalloped rim and four gonad rings seen through it, frilled oral arms beneath, and a fringe of fine tentacles
 export function jellyGeometry() {
-  const bell = new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.6, 1);
-  const parts = [bell];
-  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; parts.push(new THREE.PlaneGeometry(0.02, 0.5).translate(0, -0.26, 0).rotateY(a).translate(Math.cos(a) * 0.12, 0, Math.sin(a) * 0.12)); }
-  return mergeGeometries(parts.map(p => p.index ? p.toNonIndexed() : p), false);
+  const under = new THREE.SphereGeometry(0.22, 40, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5).scale(1, 0.2, 1), scallop = g => { const q = g.attributes.position; for (let i = 0; i < q.count; i++) { const x = q.getX(i), z = q.getZ(i), a = Math.atan2(z, x), r = Math.hypot(x, z) / 0.22, k = 1 + 0.035 * Math.cos(a * 16) * r * r * r; q.setX(i, x * k); q.setZ(i, z * k); } g.computeVertexNormals(); return g; };   // the underside closes the bell
+  scallop(under); const bell = new THREE.SphereGeometry(0.22, 40, 12, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.55, 1), q = bell.attributes.position;
+  for (let i = 0; i < q.count; i++) { const x = q.getX(i), z = q.getZ(i), y = q.getY(i), a = Math.atan2(z, x), r = Math.hypot(x, z) / 0.22; const k = 1 + 0.035 * Math.cos(a * 16) * r * r * r; q.setXYZ(i, x * k, y + 0.007 * bump(r, 0.5, 0.12) * Math.max(0, Math.cos(a * 4)), z * k); } bell.computeVertexNormals();
+  const parts = [bell, under]; for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4, pts = [], rad = []; for (let k = 0; k <= 18; k++) { const t = k / 18; pts.push([Math.cos(a) * 0.05 + 0.012 * Math.sin(t * 7 + i * 1.7), -0.015 - t * 0.28, Math.sin(a) * 0.05 + 0.012 * Math.cos(t * 6 + i * 1.7)]); rad.push(0.016 * (1 - t * 0.85)); } parts.push(tube(pts, rad, 6)); }
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, x = Math.cos(a) * 0.215, z = Math.sin(a) * 0.215, pts = []; for (let k = 0; k <= 4; k++) pts.push([x * (1 - k * 0.03), -0.012 - k * 0.09, z * (1 - k * 0.03)]); parts.push(tube(pts, [0.0025, 0.002, 0.0015, 0.001, 0.0006], 3)); }
+  return join(parts);
 }
 export const JELLIES = 36;
 export const jellyMesh = new THREE.InstancedMesh(jellyGeometry(), creatureMat({ mode: 5, freq: 1.4, glow: 0.85 }), JELLIES);
@@ -38,8 +42,14 @@ export function stepJellies(dt, t) {
 
 // food: clam beds on the bottom give a heart back, shrimp clouds in mid-water refill the burst.
 // they sit in fixed places (hashed by 60 m cell) so you can learn where they are; eaten ones stay eaten.
+// a clam: two ribbed, domed valves, hinged and just open
+export function clamGeometry(R = 0.18) {   // a hard clam (quahog): two thick valves, heart-shaped from the hinge, with the rings of its years, each side rising to its beak
+  const valve = up => { const n = 22, m = 8, pos = [], idx = []; for (let j = 0; j <= m; j++) { const v = j / m, vv = Math.pow(v, 0.8); for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2, x = Math.cos(a), z = Math.sin(a), edge = 1 - 0.1 * bump(z, 1, 0.5) + 0.05 * bump(z, -1, 0.7), rings = 0.012 * Math.sin(v * 38) * v, dome = (1 - v * v) * 0.38 + 0.08 * bump(Math.hypot(x * vv, (z - 1) * 0.5 * vv + vv * z * 0.5), 0.1, 0.25) * (1 - v); pos.push(x * vv * R * edge, up * (dome + rings) * R, (z * vv * edge * 0.86 + (1 - vv) * 0.3) * R); } } for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) { const a = j * (n + 1) + i, c = a + n + 1; idx.push(a, c, a + 1, a + 1, c, c + 1); }
+    { const rim = m * (n + 1), mid = pos.length / 3; pos.push(0, 0, 0.26 * R); for (let i = 0; i < n; i++) idx.push(mid, rim + i + 1, rim + i); }   // a shell has an inside: closed, so nothing shows through
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(pos.length / 3 * 2).fill(0.5), 2)); g.setIndex(idx); g.computeVertexNormals(); return g.translate(0, 0, -R * 0.75).rotateX(up * 0.04).translate(0, 0, R * 0.75); };   // hinged along one edge, a crack open
+  return join([valve(1), valve(-1)]); }
 export const FOOD_MAX = 60, eaten = new Set();
-export const foodMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.18, 1), creatureMat({ glow: 1.4 }), FOOD_MAX);
+export const foodMesh = new THREE.InstancedMesh(clamGeometry(), creatureMat({ glow: 1.4 }), FOOD_MAX);
 foodMesh.frustumCulled = false; foodMesh.count = 0; scene.add(foodMesh);
 export let foodList = [], foodCenter = new THREE.Vector2(1e9, 1e9);
 export function rebuildFood() {
@@ -71,10 +81,9 @@ export function stepFood(dt, t) {
 // mullet schools
 export const GONE = new THREE.Vector3(0.001, 0.001, 0.001);
 export function steerToSchool(s, tx, tz) { const want = Math.atan2(-(tx - s.c.x), -(tz - s.c.z)); let d = want - s.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); s.turn = THREE.MathUtils.clamp(d * 3, -2, 2); }
-export const fishGeo = new THREE.BufferGeometry();
-fishGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.14, 0, 0.045, 0.02, 0, -0.045, 0.02, 0, 0, 0.11, 0, 0.055, 0.17, 0, -0.055, 0.17], 3));
-fishGeo.setIndex([0, 1, 2, 1, 3, 2, 3, 4, 5]);
+export const fishGeo = schoolFishGeometry();
 export const SCHOOLS = 7, FISH_PER = 55;
+events.addEventListener('predator-near', () => { for (const s of schools) s.panic = 3; });
 export const fishMesh = new THREE.InstancedMesh(fishGeo, creatureMat({ glow: 0.8 }), SCHOOLS * FISH_PER);
 fishMesh.frustumCulled = false; scene.add(fishMesh);
 export const schools = Array.from({ length: SCHOOLS }, () => ({ c: new THREE.Vector3(), dir: rand() * 6.28, turn: 0, v: 0.6 + rand() * 0.6, spread: 2.5 + rand() * 3, base: 0, panic: 0,

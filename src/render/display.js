@@ -23,6 +23,7 @@ scene.background = new THREE.Color(0x000000);
 export const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 30000);
 
 export let pitchCss = MOBILE ? 3 : 4;
+export const setDotPitch = px => { pitchCss = px; resize(); };   // the model page shows four views at once, so it needs finer dots than the game
 export const lowRT = new THREE.WebGLRenderTarget(16, 16, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
 // the cell pass: one fragment per dot, at grid resolution. contrast, depth and the OEL drive levels are the same for every
 // pixel of a dot, so they are worked out here once instead of at every screen pixel.
@@ -38,7 +39,7 @@ export const cellMat = new THREE.ShaderMaterial({ uniforms: { tScene: { value: l
       vec4 tx = texture2D(tScene, uv); float b = tx.r;
       float m = (texture2D(tScene, uv + vec2(px.x, 0.0)).r + texture2D(tScene, uv - vec2(px.x, 0.0)).r + texture2D(tScene, uv + vec2(0.0, px.y)).r + texture2D(tScene, uv - vec2(0.0, px.y)).r
                + texture2D(tScene, uv + 2.0 * vec2(px.x, 0.0)).r + texture2D(tScene, uv - 2.0 * vec2(px.x, 0.0)).r + texture2D(tScene, uv + 2.0 * vec2(0.0, px.y)).r + texture2D(tScene, uv - 2.0 * vec2(0.0, px.y)).r) / 8.0;
-      b = clamp(b + 0.7 * (b - m), 0.0, 1.0);          // local contrast: bright things stand off flat fields
+      b = clamp(b + 0.7 * max(b - m, 0.0), 0.0, 1.0);   // local contrast: bright things stand off flat fields. it only ever lifts: pushing a dot down for being next to something bright drew a black line along every edge
       b = pow(b, 1.25);                                 // deepen the mids so the field reads as dark water
       b = b < 0.012 ? 0.0 : max(1.0 / 49.0, pow(floor(sqrt(b) * 7.0 + bayer(cell)) / 7.0, 2.0));   // OEL drive: off, or one of seven perceptual levels (dense in the darks), ordered-dithered between them
       gl_FragColor = vec4(b, tx.g, 0.0, 1.0);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { toXZ } from '../lib/geo.js?v=__BUILD__';
+import { emit } from '../core/events.js?v=__BUILD__';
 import { rand } from '../core/random.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
 import { day } from './time.js?v=__BUILD__';
@@ -77,7 +78,9 @@ export function tileSample(t, x, z) {
   return (a + (b - a) * fx) * (1 - fy) + (c + (e - c) * fx) * fy;
 }
 export let vex = 1;
-export function floorAt(x, z) {
+export let tideLevel = 0; export const setTideLevel = v => { tideLevel = v; };
+export function floorAt(x, z) { return rawFloorAt(x, z) - tideLevel; }   // the bottom doesn't move, the water does: the sea stays at y = 0, so a falling tide brings the bottom up
+export function rawFloorAt(x, z) {
   const i = TILES.inner, m = 300;
   const t = (x > i.xmin + m && x < i.xmax - m && z > i.zmin + m && z < i.zmax - m) ? i : TILES.outer;
   return tileSample(t, x, z) * vex;
@@ -153,7 +156,7 @@ export const Bay = {
   },
   applyLive(data) {
     const L = this.live, gmt = s => Date.parse(s.replace(' ', 'T') + 'Z');
-    const lv = data.lvl?.data?.[0]; if (lv) { L.level = +lv.v; L.updated = gmt(lv.t); }
+    const lv = data.lvl?.data?.[0]; if (lv) { L.level = +lv.v; L.updated = gmt(lv.t); emit('tide', L.level); }
     const t = data.temp?.data?.[0]; if (t && t.v !== '') L.temp = +t.v;
     const preds = data.hilo?.predictions || [], now = Date.now(), nxt = preds.find(p => gmt(p.t) > now);
     if (nxt) { L.next = { type: nxt.type === 'H' ? 'HIGH' : 'LOW', at: gmt(nxt.t), v: +nxt.v }; L.rising = nxt.type === 'H'; }
