@@ -310,17 +310,16 @@ export function drawStoryLine(v, oHelp) {   // the story line at the bottom (hid
   const { ts, label, lines } = storyLayout(v);
   let y = H - 14 - SB - lines.length * 10 * ts; if (label) pText(label, cx, y - 11, 140 * os, 'center'); for (const l of lines) { pText(l, cx, y, 230 * os, 'center', ts); y += 10 * ts; } }
 }
-export function drawHelp(v, oHelp) {   // how to swim: measured first, centred when there is room, shrunk when there is not
-  const { W, H, ST, SL, SB, cx, t, cols } = v;
-  const ks = [...help.querySelectorAll('.keys > *')], keyW = Math.max(...ks.filter((_, i) => i % 2 === 0).map(k => k.textContent.length)) * 6 + 6;
-  const keyX = Math.max(4, cx - 80), descX = keyX + keyW, maxD = Math.max(8, Math.floor((W - descX - 3) / 6));
-  let rows = 0; for (let i = 1; i < ks.length; i += 2) rows += wrap(ks[i].textContent, maxD).length;
-  const big = W > 140 && H > 150, listH = (big ? 24 : 14) + rows * 10 + (ks.length / 2) * 2;   // measure first: centre it when there is room, shrink when there is not
-  let y = Math.max(4, Math.round((H - listH - 70) / 2)); pText('HOW TO SWIM', cx, y, 240 * oHelp, 'center', big ? 2 : 1); y += big ? 24 : 14;
-  for (let i = 0; i + 1 < ks.length; i += 2) { pText(ks[i].textContent, keyX, y, 230 * oHelp); for (const l of wrap(ks[i + 1].textContent, maxD)) { pText(l, descX, y, 180 * oHelp); y += 10; } y += 2; }
-  y += 6; for (const note of help.querySelector('.lore').textContent.split('\n')) { const ls = wrap(note.trim(), cols); if (y + ls.length * 10 > H - 18) break;   // only what fits
-    for (const l of ls) { pText(l, cx, y, 150 * oHelp, 'center'); y += 10; } }
-  pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, y + 6, 110 * oHelp, 'center');
+// every card on this display is built the same: a frame of fine dots, a title and a rule, then its rows, with the head unit's status beside the title and the keys under the frame
+export function cardFrame(bx, by, bw, bh, a = 1) { for (let x = bx; x <= bx + bw; x += 2) { pDot(x, by, 70 * a); pDot(x, by + bh, 70 * a); } for (let y = by; y <= by + bh; y += 2) { pDot(bx, y, 70 * a); pDot(bx + bw, y, 70 * a); } }
+export function cardHead(title, ix, by, bx, bw, a = 1) { pText(title, ix, by + 6, 240 * a); pText(statusLine(), bx + bw - 7, by + 7, 140 * a, 'right', 1, true); for (let x = ix; x < bx + bw - 7; x += 2) pDot(x, by + 16, 90 * a); return by + 22; }
+export const statusLine = () => `${clockText(day.hour)}${ENV.live ? '  ' + (ENV.rain > 0 ? 'RAIN' : ENV.cloud > 0.6 ? 'OVERCAST' : 'CLEAR') : ''}`;   // the clock on the stereo's glass
+export function drawHelp(v, oHelp) {   // how to swim: a card like every other, one thing a row
+  const { W, H, cx } = v, ks = [...help.querySelectorAll('.keys > *')], pairs = []; for (let i = 0; i + 1 < ks.length; i += 2) pairs.push([ks[i].textContent, ks[i + 1].textContent]);
+  const keyW = Math.max(...pairs.map(p => [...p[0]].length)) * 6 + 8, descW = Math.max(...pairs.map(p => p[1].length)) * 6, bw = Math.min(W - 6, Math.max(keyW + descW + 16, 150)), bh = 28 + pairs.length * 10, bx = (W - bw) >> 1, by = Math.max(2, (H - bh - 10) >> 1), ix = bx + 8, a = oHelp;
+  dotPass.uniforms.uDim.value = Math.max(dotPass.uniforms.uDim.value, 0.96 * oHelp); cardFrame(bx, by, bw, bh, a); let y = cardHead('HOW TO SWIM', ix, by, bx, bw, a);
+  for (const [k, d] of pairs) { pText(k, ix, y, 240 * a); pText(d, ix + keyW, y, 170 * a); y += 10; }
+  pText(MOBILE ? 'TAP TO CLOSE' : 'H TO CLOSE', cx, by + bh + 5, 105 * a, 'center', 1, true);
 }
 export function drawPauseCard(v) {   // paused: a small framed card, left-aligned, the bay almost gone behind it
   const { W, H, ST, SL, SB, cx, t, cols } = v;
@@ -330,8 +329,7 @@ export function drawPauseCard(v) {   // paused: a small framed card, left-aligne
   const chars = Math.max(TITLE.length, ...labels.map(l => [...l].length + 2), ...note.map(l => l.length)), bw = Math.min(W - 6, chars * 6 + 15), bx = (W - bw) >> 1, ix = bx + 8;
   const fit = Math.max(3, Math.floor((H - 46 - note.length * 9) / 10)), shown = Math.min(fit, items.length), first = Math.max(0, Math.min(menu.sel - (fit >> 1), items.length - fit));   /* long lists scroll with the selection */
   const bh = 22 + (note.length ? note.length * 9 + 5 : 0) + shown * 10 + 3, by = Math.max(2, (H - bh - 10) >> 1);
-  for (let x = bx; x <= bx + bw; x += 2) { pDot(x, by, 70); pDot(x, by + bh, 70); } for (let y = by; y <= by + bh; y += 2) { pDot(bx, y, 70); pDot(bx + bw, y, 70); }   // the frame
-  let y = by + 6; pText(TITLE, ix, y, 240); y += 10; for (let x = ix; x < bx + bw - 7; x += 2) pDot(x, y, 90); y += 6;
+  cardFrame(bx, by, bw, bh); let y = cardHead(TITLE, ix, by, bx, bw);
   for (const l of note) { pText(l, ix, y, 185); y += 9; } if (note.length) y += 5;
   menu.rows = [];
   items.forEach((it, i) => { if (i < first || i >= first + fit) { menu.rows.push([-99, -99]); return; } const on = i === menu.sel; pText((on ? '► ' : '  ') + labels[i], ix, y, on ? 255 : 165); menu.rows.push([y - 2, y + 8]); y += 10; });
@@ -340,13 +338,13 @@ export function drawPauseCard(v) {   // paused: a small framed card, left-aligne
 }
 export function drawFastTravel(v) {   // fast travel: the bay as dots, the places you have found
   const { W, H, ST, SL, SB, cx, t, cols } = v;
-  pText('FAST TRAVEL', cx, 3, 230, 'center');
-  const land = W > H * 1.3, S = Math.max(20, land ? Math.min(H - 20, (W >> 1) - 8) : Math.min(W - 12, Math.floor(H * 0.55))), mx = land ? W - S - 6 : (W - S) >> 1, my = 14;
+  pText('FAST TRAVEL', 6, 3, 240); pText(statusLine(), W - 6, 4, 140, 'right', 1, true); for (let x = 6; x < W - 6; x += 2) pDot(x, 12, 90);
+  const land = W > H * 1.3, S = Math.max(20, land ? Math.min(H - 20, (W >> 1) - 8) : Math.min(W - 12, Math.floor(H * 0.55))), mx = land ? W - S - 6 : (W - S) >> 1, my = 16;
   const tt = TILES.outer, span = tt.xmax - tt.xmin, ccx = (tt.xmin + tt.xmax) / 2, ccz = (tt.zmin + tt.zmax) / 2;
   if (!panel.map || panel.mapS !== S) { panel.map = Bay.chart(ccx, ccz, span, S); panel.mapS = S; }
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) pDot(mx + i, my + j, panel.map[j * S + i]);
   checkpoints.forEach((c, i) => { const [px, py] = mapXY(c.x, c.z, S), v = i === mapSel ? (Math.sin(t * 8) > 0 ? 255 : 120) : 220; for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) pDot(mx + px + dx, my + py + dy, v); });
   { const [px, py] = mapXY(P.pos.x, P.pos.z, S); if (Math.sin(t * 5) > -0.3) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) pDot(mx + px + dx, my + py + dy, 255); }
-  const lx = land ? 6 : mx, ly = land ? 16 : my + S + 6, maxN = Math.max(1, Math.floor((H - ly - 4) / 10)), first = Math.max(0, Math.min(mapSel - (maxN >> 1), checkpoints.length - maxN)), lc = Math.max(8, Math.floor((land ? mx - 10 : W - lx - 4) / 6) - 2);
+  const lx = land ? 6 : mx, ly = land ? 18 : my + S + 6, maxN = Math.max(1, Math.floor((H - ly - 4) / 10)), first = Math.max(0, Math.min(mapSel - (maxN >> 1), checkpoints.length - maxN)), lc = Math.max(8, Math.floor((land ? mx - 10 : W - lx - 4) / 6) - 2);
   checkpoints.slice(first, first + maxN).forEach((c, k) => { const i = first + k; pText((i === mapSel ? '► ' : '  ') + c.name.slice(0, lc), lx, ly + k * 10, i === mapSel ? 255 : 150); });
 }

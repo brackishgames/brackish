@@ -41,14 +41,16 @@ export const surface = new THREE.Mesh(seaGeometry(), mat({ side: THREE.DoubleSid
         vec3 rfl = reflect(-v, vec3(0.0, 1.0, 0.0)); float glit = pow(max(dot(rfl, uSunDir), 0.0), 40.0) * smoothstep(-0.05, 0.1, uSunDir.y);
         float moonGlit = pow(max(dot(rfl, moonDir()), 0.0), 60.0) * moonUp();
         float day = 0.12 + 0.88 * uSun;
-        b = (0.015 + 0.14 * g * g * g) * day + 0.5 * pow(max(s2, 0.0), 5.0) * (0.05 + 0.95 * glit) * (0.2 + 0.8 * uSun) + 0.06 * pow(p, 4.0) * g * day + 0.45 * pow(max(s2, 0.0), 4.0) * moonGlit;
+        b = (0.015 + 0.44 * (0.02 + 0.98 * pow(g, 5.0))) * day +   /* Fresnel (Schlick): straight down you see into the water, at a low angle it mirrors the sky */ 0.5 * pow(max(s2, 0.0), 5.0) * (0.05 + 0.95 * glit) * (0.2 + 0.8 * uSun) + 0.06 * pow(p, 4.0) * g * day + 0.45 * pow(max(s2, 0.0), 4.0) * moonGlit;
         alpha = mix(0.08, 0.35 + 0.55 * g * g, smoothstep(3.0, 40.0, vD));
       } else {
         // from below: crests drawn as moving lines, the way the deck drew its sea
         float w = sin(vW.x * 0.11 + vW.z * 0.04 + uTime * 0.22) * 0.6 + sin(vW.z * 0.08 - vW.x * 0.03 - uTime * 0.16) * 0.4;
         float crest = smoothstep(0.86, 0.97, w);   // a few thin crests, far apart, drifting
         float near = 1.0 - smoothstep(0.6, 2.5, fwidth(vW.x) + fwidth(vW.z));   // far off at a low angle the pattern is finer than a dot, and can only alias into rows of dashes
-        b = 0.12 + (0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5))) * near;
+        // Snell's window: from below, the whole sky above squeezes into a bright disc overhead, 97 degrees across (rays past 48.6 degrees from straight up reflect back down). its edge ripples with the waves
+        float up = abs(normalize(cameraPosition - vW).y), window = smoothstep(0.63, 0.7 + 0.02 * a, up) * (0.25 + 0.75 * uSun);
+        b = 0.12 + 0.45 * window + (0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5))) * near;
       }
       b += uChop * 0.7 * max(vH, 0.0) * smoothstep(120.0, 10.0, vD);   // crests catch the light
       if (uRain > 0.0) { vec2 c = floor(vW.xz * 2.5); float h = fract(sin(dot(c + floor(uTime * 7.0 + fract(c.x * 0.37) * 7.0), vec2(12.9898, 78.233))) * 43758.5453); b += step(1.0 - 0.14 * uRain, h) * 0.5 * smoothstep(50.0, 4.0, vD); }   // every drop a ring

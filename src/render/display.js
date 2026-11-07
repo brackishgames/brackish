@@ -12,7 +12,7 @@ export function noGL(why) { const el = document.getElementById('nogl'); el.class
 export const renderer = (() => { try { return new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch (e) { noGL('this browser could not start the 3D display'); throw e; } })();
 renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); noGL('the graphics card dropped the display. it will come back on its own, or reload the page'); });
 renderer.domElement.addEventListener('webglcontextrestored', () => location.reload());   // simpler and surer than rebuilding every texture
-renderer.setPixelRatio(Math.min(MOBILE ? 1.5 : 2, devicePixelRatio));
+renderer.setPixelRatio(Math.min(1.5, devicePixelRatio));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
@@ -78,7 +78,7 @@ dotPass.uniforms.tScene.value = cellRT.texture;
 composer.addPass(dotPass);
 if (hdrOK) composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.4, 0.55));   // half-res bloom: the look is soft anyway
 // adaptive quality: if frames run slow for a few seconds, render at a lower pixel ratio (the dots keep their size); come back up when there is room
-export const Q = { level: 0, ema: 1 / 60, slowT: 0, fastT: 0, last: performance.now(), dprs: [...new Set([Math.min(MOBILE ? 1.5 : 2, devicePixelRatio), 1.5, 1.25, 1].filter(v => v <= Math.min(MOBILE ? 1.5 : 2, devicePixelRatio)))] };
+export const Q = { level: 0, ema: 1 / 60, slowT: 0, fastT: 0, last: performance.now(), dprs: [...new Set([Math.min(1.5, devicePixelRatio), 1.5, 1.25, 1].filter(v => v <= Math.min(1.5, devicePixelRatio)))] };
 export function stepQuality(active) {   // active: the game is being played (not on the title, not paused)
   const t = performance.now(), dt = Math.min(0.25, (t - Q.last) / 1000); Q.last = t; Q.ema += (dt - Q.ema) * 0.05; if (!active || document.hidden) return;
   if (Q.ema > 1 / 40) { Q.slowT += dt; Q.fastT = 0; } else if (Q.ema < 1 / 57) { Q.fastT += dt; Q.slowT = 0; } else Q.slowT = Q.fastT = 0;

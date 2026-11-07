@@ -25,7 +25,7 @@ import { later } from '../app/frame.js?v=__BUILD__';
 //  STORY  —  a young cownose ray, the channel, the fever, the Gulf.
 // ═══════════════════════════════════════════════════════════════════
 export const CHAPTERS = [
-  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.60629, -82.75359], goal: () => toXZ(27.6055, -82.7565), radius: 60,
+  { title: 'I · THE HOLE OFF EGMONT', species: 'cownose', clock: 7, start: [27.60629, -82.75535], goal: () => toXZ(27.6055, -82.7565), radius: 60,
     lines: ['You are a young cownose ray.', 'The current pours through the pass by Egmont Key, into a hole 25 metres deep.', 'Follow the beam of light.', 'E to sense. Clams hide in the sand, and they give a heart back.'] },
   { title: 'II · THE CHANNEL', start: [27.61982, -82.65863], goal: () => toXZ(27.6215, -82.6555), radius: 90,
     lines: ['Something hums under the Skyway.', 'The ship channel is dredged deep and the hulls do not see you.', 'Cross it. When the water hums, dive.'] },

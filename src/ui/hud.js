@@ -9,7 +9,7 @@ import { GLSL_COMMON, mat } from '../render/materials.js?v=__BUILD__';
 import { POIS, START, TILES, floorAt, isWater, vex } from '../world/geo.js?v=__BUILD__';
 import { BOAT_TYPES, world } from '../world/structures.js?v=__BUILD__';
 import { nearestBoat } from '../actors/boats.js?v=__BUILD__';
-import { P, unlocked } from '../actors/player.js?v=__BUILD__';
+import { ABILITY, P, unlocked } from '../actors/player.js?v=__BUILD__';
 import { huntHeat, wild } from '../actors/wildlife.js?v=__BUILD__';
 import { chimeCheckpoint } from '../systems/audio.js?v=__BUILD__';
 import { B, keyLabel, keyboardHint, kn } from '../systems/input.js?v=__BUILD__';
@@ -33,11 +33,10 @@ export function say(text, secs = 3, label = '') { sayLog.push((label ? label + '
 export function renderHelpKeys() {
   const L = a => keyLabel(B(a)), esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
   // each line short enough to fit on one row of a small screen (about 28 characters)
-  const rows = MOBILE ? [['TILT', 'lean to turn · tip to dive'], ['HOLD', 'burst, while the dots last'], ['◆', 'sense or echo: finds clams'], ['M', 'map and fast travel'],
-    ...(CHAPTERS[story.ch]?.free ? [['⇄', 'become a body you have been']] : []), ['II', 'pause · settings · feedback']]
-    : [['MOUSE', 'steer · right button looks'], [`${L('forward')} ${L('back')}`, 'forward · back'], [`${L('left')} ${L('right')}`, 'turn · ← → too'],
-    ['↑ ↓', 'rise · dive · K J too'], [`${L('rise')} ${L('dive')}`, 'rise · dive, by the left hand'], [L('burst'), 'burst, while the dots last. at the top, a dolphin leaps'], [L('ability'), 'sense or echo: finds clams'], ...(CHAPTERS[story.ch]?.free ? [[L('creature'), 'become a body you have been']] : []),
-    [`${L('map')} ${L('pause')} ${L('help')}`, 'map · pause · this screen'], [L('photo'), 'photo mode, anywhere'], [L('feedback'), 'send us a note from here']];
+  const what = { sense: 'feel for clams in the sand', echo: 'click, and hear what is near', lunge: 'strike at what is close', breathe: 'breathe at the surface', leap: 'leap clear of the water' }[ABILITY[P.sp.id] || 'sense'], free = CHAPTERS[story.ch]?.free;
+  // each line short enough to fit on one row of a small screen, and only what you can do as this animal, right now
+  const rows = MOBILE ? [['TILT', 'lean to turn · tip to dive'], ['HOLD', 'burst'], ['◆', what], ['M', 'chart'], ...(free ? [['⇄', 'change body']] : []), ['II', 'pause']]
+    : [[`${L('forward')} ${L('back')}`, 'swim · slow'], [`${L('left')} ${L('right')}`, 'turn'], ['↑ ↓', 'rise · dive'], [L('burst'), 'burst'], [L('ability'), what], ['MOUSE', 'steer · right button looks'], ['HOLD ↑', 'at the top: look above water'], [L('map'), 'chart'], [L('photo'), 'photo'], [L('pause'), 'pause · settings'], [L('feedback'), 'send us a note'], ...(free ? [[L('creature'), 'change body']] : [])];
   help.querySelector('.keys').innerHTML = rows.map(([k, d]) => `<b>${esc(k)}</b><span>${esc(d)}</span>`).join('');
 }
 
@@ -81,7 +80,7 @@ export function mapKey(code) {   // ↑ ↓ pick a place, ENTER goes there
 export function toggleMap() { mapOpen = !mapOpen; mapEl.style.display = mapOpen ? 'flex' : 'none'; if (mapOpen) { mapSel = Math.max(0, checkpoints.indexOf(lastCheckpoint)); renderMapList(); } }
 export function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join('');  }
 
-export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,   // a guide, not a thing in the water: it shows through the surface and the murk, or it could never be followed
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: GLSL_COMMON + `varying vec2 vUv; void main(){ float e = sin(vUv.x * 3.14159); float b = 0.55 * e * e * (1.0 - vUv.y * 0.6) * (0.75 + 0.25 * sin(uTime * 3.0 - vUv.y * 12.0)); gl_FragColor = outB(b); }` }));
   export function stepGoalBeam(t) {
@@ -89,7 +88,7 @@ export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0
   if (!story.goal) return;
   const [x, z] = story.goal, f = floorAt(x, z), d = Math.hypot(x - camPos.x, z - camPos.z);
   goalBeam.position.set(x, f, z); goalBeam.rotation.y = Math.atan2(camPos.x - x, camPos.z - z);
-  goalBeam.scale.set(2 + d * 0.02, Math.max(12, -f + 30), 1);
+  goalBeam.scale.set(2 + d * 0.02, Math.max(30, -f + 40) + d * 0.06, 1);
 }
 // the readouts, the place you're in, the warning, the compass marks, and the story line's countdown: once a frame
 export const readouts = { place: '', floor: '0', tide: '' };   // worked out here, laid out by the panel (src/ui/panel.js)
@@ -116,7 +115,7 @@ export function stepHud(dt) {
 export function initHud() {
   bl.textContent = keyboardHint();
   renderHelpKeys();
-  goalBeam.frustumCulled = false;
+  goalBeam.frustumCulled = false; goalBeam.renderOrder = 5;
   goalBeam.visible = false;
   scene.add(goalBeam);
 }

@@ -221,7 +221,7 @@ export function stepCamera(dt) {
   aim.lookT += dt; if (!aim.look && aim.lookT > 0.8) { const k = Math.min(1, 2.5 * dt); aim.lookYaw *= 1 - k; aim.lookPitch *= 1 - k; }   // let go and it comes back behind you
   aim.lookYaw = Math.atan2(Math.sin(aim.lookYaw), Math.cos(aim.lookYaw));
   const yawT = P.yaw + drift + aim.lookYaw + (P.endingCam ? Math.sin(simTime * 0.08) * 1.2 * sway : 0);
-  const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist); back.y += h;
+  const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist * (P.camUp ? 1.7 : 1)); back.y += h;   // looking above the water the camera stands off, so you are still in the picture
   const want = _want.copy(P.pos).add(back);
   // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
   { P.peekT = P.pos.y > -0.7 && (input.climb || 0) > 0.3 ? (P.peekT || 0) + dt : 0; if (P.pos.y > 0.05 || P.peekT > 0.35) P.camUp = true; else if (P.pos.y < -0.6 || (P.pos.y <= 0.05 && (input.climb || 0) <= 0.3)) P.camUp = false; }   // breathing happens just under the line; a breach takes the camera up, and so does holding rise at the top: look around above the water, at the boats and the sky
@@ -230,7 +230,7 @@ export function stepCamera(dt) {
   camPos.lerp(want, Math.min(1, 5 * dt));
   camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5); keepOffSurface();
   const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), 6 * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(_sc.set(0, 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), (P.camUp ? 2 : 6) * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(_sc.set(0, P.camUp ? 0 : 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
   camera.position.copy(camPos); { const k = settings.horizonTilt ? P.roll * 0.15 : 0; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(_sc.set(fxRand() - .5, fxRand() - .5, fxRand() - .5).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
   above = camPos.y > 0;
   aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);

@@ -37,7 +37,7 @@ export const mat = (opts) => new THREE.ShaderMaterial({ ...opts, uniforms: { ...
 // a stiff-fronted dolphin works almost only behind the dorsal fin; the spine curves into a turn (uBend: +1 hard left), and a ray beats its inside wing less
 export const creatureVert = GLSL_COMMON + /* glsl */`
   attribute float aPhase;
-  uniform float uMode, uHalf, uLen, uFreq, uAmp, uFlap, uPhase, uBend, uWave;
+  uniform float uMode, uHalf, uLen, uFreq, uAmp, uFlap, uPhase, uBend, uWave, uLite;
   varying vec3 vW, vN; varying float vD, vFin; varying vec2 vUv;
   vec3 swim(vec3 p, float ph) {
     ph += 0.28 * sin(ph * 0.137) + 0.16 * sin(ph * 0.061);   // no living thing keeps perfect time
@@ -69,7 +69,7 @@ export const creatureVert = GLSL_COMMON + /* glsl */`
   void main() {
     float ph = uPhase + aPhase; vFin = 1.0 - step(0.5, length(normal));
     vec3 p = swim(position, ph), n = vFin > 0.5 ? vec3(0.0, 1.0, 0.0) : normalize(normal);
-    if (uMode != 0.0 && vFin < 0.5) {   // the surface's own direction, after the bend: a body stays smooth while it moves
+    if (uMode != 0.0 && vFin < 0.5 && uLite < 0.5) {   // the surface's own direction, after the bend: a body stays smooth while it moves
       vec3 a = normalize(abs(n.y) < 0.9 ? cross(n, vec3(0.0, 1.0, 0.0)) : cross(n, vec3(1.0, 0.0, 0.0))), b = cross(n, a); float e = 0.02 * uLen;
       vec3 m = normalize(cross(swim(position + a * e, ph) - p, swim(position + b * e, ph) - p)); n = dot(m, n) < 0.0 ? -m : m; }
     #ifdef USE_INSTANCING
@@ -105,7 +105,7 @@ export function strouhalRad(sp, U, flap) { const A = Math.max(0.05, 2 * (sp.amp 
 export function creatureMat(o = {}) {
   const m = mat({ side: THREE.DoubleSide, vertexShader: creatureVert, fragmentShader: creatureFrag, uniforms: {
     uMode: { value: o.mode ?? 0 }, uHalf: { value: o.half ?? 1 }, uLen: { value: o.len ?? 1 }, uFreq: { value: o.freq ?? 2 },
-    uAmp: { value: o.amp ?? 0.3 }, uFlap: { value: 1 }, uBend: { value: 0 }, uWave: { value: o.wave ?? 5.5 }, uGlow: { value: o.glow ?? 1 }, uPhase: { value: rand() * 6.28 } } });
+    uAmp: { value: o.amp ?? 0.3 }, uFlap: { value: 1 }, uBend: { value: 0 }, uWave: { value: o.wave ?? 5.5 }, uLite: { value: o.lite ? 1 : 0 }, uGlow: { value: o.glow ?? 1 }, uPhase: { value: rand() * 6.28 } } });
   creatureMats.push(m); return m;
 }
 export function stepStrokes(dt) { for (const m of creatureMats) m.uniforms.uPhase.value += m.uniforms.uFreq.value * dt; }
