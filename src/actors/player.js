@@ -34,9 +34,11 @@ export const ABILITY = { cownose: 'sense', dolphin: 'echo', bull: 'lunge', hamme
 export const ABILITY_CD = { sense: 3, echo: 2, lunge: 1.2, breathe: 2, leap: 1.5 };
 export const pulses = [];
 export function act() {
-  const kind = ABILITY[P.sp.id] || 'sense', now = simTime;   // world time: a pause doesn't run the cooldown down if ((P.actReady || 0) > now) return; P.actReady = now + ABILITY_CD[kind];
+  const kind = ABILITY[P.sp.id] || 'sense', now = simTime;   // world time: a pause doesn't run the cooldown down
+  if ((P.actReady || 0) > now) return; P.actReady = now + ABILITY_CD[kind];
   if (kind === 'sense' || kind === 'echo') {   // rays feel electric fields; dolphins hear their own clicks come back
-    pulses.push({ t0: WU.uTime.value, kind });   // the rings are drawn on screen time P.reveal = 1; P.revealRange = kind === 'echo' ? 90 : 50;
+    pulses.push({ t0: WU.uTime.value, kind });   // the rings are drawn on screen time
+    P.reveal = 1; P.revealRange = kind === 'echo' ? 90 : 50;
     if (kind === 'echo') { click(3); click(3, 0.22); later(TUNE.timing.echoReach, echoThing, 'world'); } else burst({ buf: 'brown', type: 'lowpass', f0: 120, f1: 380, f2: 70, attack: 0.06, length: 1.4, g: 0.35 });
   } else if (kind === 'lunge') { P.vel.addScaledVector(fwdOf(P.yaw, P.pitch), P.sp.max * 1.3); P.strikeT = 0.45; whoosh(0.7); }
   else if (kind === 'breathe') { if (P.pos.y > -1.2) { P.sta = 1; P.spent = false; splash(0.3); say('a breath', 1.2); } else { say('too deep to breathe', 1.2); P.actReady = now + 0.3; } }
