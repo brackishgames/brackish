@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.0-beta.9](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.8...v0.1.0-beta.9) (2026-11-10)
+
+
+### Features
+
+* out of the water the lens is still wet ([2aa7cfd](https://github.com/brackishgames/brackish/commit/2aa7cfd8c1a884c4266af89d6a7a15637fe1bd33))
+* the beam of light stands on the water, and is seen only through the air ([2aa7cfd](https://github.com/brackishgames/brackish/commit/2aa7cfd8c1a884c4266af89d6a7a15637fe1bd33))
+* the lens comes up through the surface with you, and the waterline crosses the screen ([886c74d](https://github.com/brackishgames/brackish/commit/886c74df13dfcbfc9260f8f6f521b4f1ba3cb543))
+* the lens comes up through the surface with you, and the waterline crosses the screen ([2aa7cfd](https://github.com/brackishgames/brackish/commit/2aa7cfd8c1a884c4266af89d6a7a15637fe1bd33))
+* the surface bends what is beyond it ([2aa7cfd](https://github.com/brackishgames/brackish/commit/2aa7cfd8c1a884c4266af89d6a7a15637fe1bd33))
+
+
+### Bug Fixes
+
+* E rests between uses again, sense opens the water, and the depth gauge has its ends ([b95d781](https://github.com/brackishgames/brackish/commit/b95d781ab2f547ee1eac9493e9d3b772de4537d9))
+* the camera can get above the water at all ([2aa7cfd](https://github.com/brackishgames/brackish/commit/2aa7cfd8c1a884c4266af89d6a7a15637fe1bd33))
+* you sit clear of the words at the bottom, seen from over your back ([2aa7cfd](https://github.com/brackishgames/brackish/commit/2aa7cfd8c1a884c4266af89d6a7a15637fe1bd33))
+
 ## [0.1.0-beta.8](https://github.com/brackishgames/brackish/compare/v0.1.0-beta.7...v0.1.0-beta.8) (2026-11-07)
 
 
