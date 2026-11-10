@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { pushOut } from '../lib/collide.js?v=__BUILD__';
-import { TEST } from '../core/env.js?v=__BUILD__';
+import { MOBILE, TEST } from '../core/env.js?v=__BUILD__';
 import { emit } from '../core/events.js?v=__BUILD__';
 import { fxRand, rand, randGate } from '../core/random.js?v=__BUILD__';
 import { portrait } from '../core/screen.js?v=__BUILD__';
 import { settings } from '../core/settings.js?v=__BUILD__';
 import { _f, fwdInto, fwdOf, orient, placeInstance } from '../core/space.js?v=__BUILD__';
 import { TUNE } from '../core/tune.js?v=__BUILD__';
-import { camera, cellCam, cellRT, cellScene, composer, dotPass, lowRT, renderer, scene, stepQuality } from '../render/display.js?v=__BUILD__';
+import { Q, behindRT, camera, cellCam, cellRT, cellScene, composer, dotPass, lowRT, renderer, scene, stepQuality } from '../render/display.js?v=__BUILD__';
 import { bubbleLife, bubbles, emitBubble, emitSpray, rainFall, shaftSeeds, shafts, sky, snow, snowBox, stepSeeps, stepSpray, surface } from '../render/effects.js?v=__BUILD__';
 import { WU, beatRad, stepStrokes } from '../render/materials.js?v=__BUILD__';
 import { ENV, fogReach } from '../world/conditions.js?v=__BUILD__';
@@ -34,7 +34,7 @@ import { applySpecimen, renderSpecimenRaw, renderSpecimenViews, specimen } from 
 // ═══════════════════════════════════════════════════════════════════
 export const clock = { last: performance.now(), elapsedTime: 0, getDelta() { const n = performance.now(), d = (n - this.last) / 1000; this.last = n; this.elapsedTime += d; return d; } }, _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
 export const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
-export let above = false, aboveMix = 0, lastFloor = -5;
+export let above = false, lastFloor = -5;
 
 export const _cur = new THREE.Vector3(), _next = new THREE.Vector3(), _want = new THREE.Vector3(), _along = new THREE.Vector3(), _xz = new THREE.Vector2(), _sc = new THREE.Vector3();
 // ── the player, one step. each stage hands the next what it needs: what you're asking for, the seabed, whether you're
@@ -193,8 +193,15 @@ export function poseBody(sp, thrust, { surfPitch, surfY }, dt) {
   { const u = P.mesh.material.uniforms, target = beatRad(sp, P.speed, u.uFlap.value, P.bursting ? 1.6 : 1); u.uFreq.value += (target - u.uFreq.value) * Math.min(1, 2 * dt); u.uBend.value += (THREE.MathUtils.clamp((P.yawRate || 0) / sp.turn, -1, 1) - u.uBend.value) * Math.min(1, 4 * dt); }   // tail beats follow speed; the spine follows the turn
     if (P.speed > sp.cruise * 1.3) { for (let i = 0; i < 2; i++) if (rand() < 0.5) wakeBubble(sp); } else if (rand() < 0.04) wakeBubble(sp);
 }
-// the lens draws nothing nearer than camera.near: just under the surface that sliced the water off in a dead straight line across the screen
-export function keepOffSurface() { const clear = camera.near * 1.25; if (Math.abs(camPos.y) < clear) camPos.y = camPos.y < 0 ? -clear : clear; }
+// where each dot of the lens is, for the frame about to be drawn (render/display.js SEA): the spot on the near plane a dot looks through is O + X * column + Y * row
+export function setLens(dt = 0) {
+  camera.updateMatrixWorld(); const e = camera.matrixWorld.elements, n = camera.near, t = Math.tan(camera.fov * Math.PI / 360) * n, a = t * camera.aspect, W = lowRT.width, H = lowRT.height;
+  WU.uLensX.value.set(e[0], e[1], e[2]).multiplyScalar(2 * a / W); WU.uLensY.value.set(e[4], e[5], e[6]).multiplyScalar(2 * t / H);
+  WU.uLensO.value.set(e[12] - n * e[8] - a * e[0] - t * e[4], e[13] - n * e[9] - a * e[1] - t * e[5], e[14] - n * e[10] - a * e[2] - t * e[6]);
+  const mid = e[13] - n * e[9], half = a * Math.abs(e[1]) + t * Math.abs(e[5]) + 0.6 * WU.uChop.value;   // the lens's middle, and how far above and below it its corners and the waves reach
+  WU.uSide.value = specimen.on || mid + half < 0 ? -1 : mid - half > 0 ? 1 : 0; WU.uGlint.value = 0.16 + 0.5 * WU.uSun.value;
+  WU.uWetAge.value = WU.uSide.value < 1 ? 0 : WU.uWetAge.value + dt; WU.uWet.value = specimen.on ? 0 : WU.uSide.value < 1 ? 1 : Math.max(WU.uWet.value - dt / TUNE.lens.dries, TUNE.lens.rain * WU.uRain.value);   // wet while any of it is in the water, and for a while after; rain keeps it wet
+}
 export function stepPhotoCam(dt) {   // photo mode: orbit, zoom, and slide the lens around you; the keys, the sticks, the mouse and the wheel all work
   const on = (...codes) => codes.some(c => keys[c]) ? 1 : 0, T = TUNE.photo;
   photo.yaw += (on('ArrowLeft') - on('ArrowRight') - pad.lookX * 1.6) * 1.2 * dt; photo.pitch = THREE.MathUtils.clamp(photo.pitch + (on('ArrowUp') - on('ArrowDown') + pad.lookY * 1.3) * 0.9 * dt, -1.3, 1.3);
@@ -203,21 +210,21 @@ export function stepPhotoCam(dt) {   // photo mode: orbit, zoom, and slide the l
   photo.at.x += (-s * fwd + c * side) * slide; photo.at.z += (-c * fwd - s * side) * slide; photo.at.y += rise * slide;
   const off = _photoOff.copy(photo.at).sub(P.pos); if (off.length() > T.reach) photo.at.copy(P.pos).addScaledVector(off.normalize(), T.reach);   // it stays near you: the bay beyond it isn't there until you swim to it
   camPos.set(photo.at.x + s * Math.cos(photo.pitch) * photo.dist, photo.at.y + Math.sin(photo.pitch) * photo.dist, photo.at.z + c * Math.cos(photo.pitch) * photo.dist);
-  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.3); keepOffSurface();
+  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.3);
   camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(photo.at); if (camera.fov !== photo.fov) { camera.fov = photo.fov; camera.updateProjectionMatrix(); }
-  above = camPos.y > 0; aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
+  above = camPos.y > 0;
   setFog(1);
 }
 const _photoOff = new THREE.Vector3();
 // how far you can see, and what distance fades to. under water that is the water itself, lit from above: a dim glow in the sunlit shallows, black in the deep and at night.
 // fading to black here left a black strip between the lit floor and the lit surface, squeezed to a hard line by the low angle
 export function setFog(reach) { const sun = 0.12 + 0.88 * WU.uSun.value, water = TUNE.water.glow * sun * Math.exp(Math.min(camPos.y, 0) * TUNE.water.fade);
-  WU.uFogD.value = THREE.MathUtils.lerp(0.018 * fogReach(ENV), 0.00018, aboveMix) * reach; WU.uFogB.value = THREE.MathUtils.lerp(water, 0.05 + 0.3 * WU.uSun.value, aboveMix); }
+  WU.uFogD.value = 0.018 * fogReach(ENV) * reach; WU.uFogB.value = water; WU.uAirD.value = 0.00018; WU.uAirB.value = 0.05 + 0.3 * WU.uSun.value; }   // both at once: which one a dot gets is the lens's business (setLens)
 export function stepCamera(dt) {
   if (specimen.on) { applySpecimen(); return; }
   if (photo) { stepPhotoCam(dt); return; }
   P.burstMix = (P.burstMix || 0) + ((P.bursting ? 1 : 0) - (P.burstMix || 0)) * Math.min(1, (P.bursting ? 5 : 2) * dt);   // snaps in, eases out
-  const size = P.mesh.userData.size, dist = TUNE.camera.near + size * TUNE.camera.perSize + P.speed * TUNE.camera.perSpeed + P.burstMix * (0.2 + 0.4 * size), h = 0.6 + size * 0.28;
+  const size = P.mesh.userData.size, dist = TUNE.camera.near + size * TUNE.camera.perSize + P.speed * TUNE.camera.perSpeed + P.burstMix * (0.2 + 0.4 * size), h = dist * TUNE.camera.rise;
   camera.fov = (camera.userData.baseFov || 60) + (settings.speedFx ? 14 : 0) * P.burstMix; camera.updateProjectionMatrix();   // the view widens at speed, unless that's turned off for comfort
   { const want = settings.vignette ? Math.min(0.85, 0.75 * P.burstMix + 0.6 * Math.min(1, Math.abs(P.yawRate || 0) / 1.2) + 0.35 * Math.min(1, (P.speed || 0) / Math.max(1, P.sp.max))) : 0;
     dotPass.uniforms.uTunnel.value += (want - dotPass.uniforms.uTunnel.value) * Math.min(1, 4 * dt); }
@@ -230,19 +237,19 @@ export function stepCamera(dt) {
   aim.lookT += dt; if (!aim.look && aim.lookT > 0.8) { const k = Math.min(1, 2.5 * dt); aim.lookYaw *= 1 - k; aim.lookPitch *= 1 - k; }   // let go and it comes back behind you
   aim.lookYaw = Math.atan2(Math.sin(aim.lookYaw), Math.cos(aim.lookYaw));
   const yawT = P.yaw + drift + aim.lookYaw + (P.endingCam ? Math.sin(simTime * 0.08) * 1.2 * sway : 0);
-  const back = fwdOf(yawT, P.pitch * 0.45 + aim.lookPitch).multiplyScalar(-dist * (P.camUp ? 1.7 : 1)); back.y += h;   // looking above the water the camera stands off, so you are still in the picture
+  // the lens and the surface. under water it stays under; as you come to the top it comes up through the surface with you and stands off above it, where the boats, the sky and
+  // the way are. it is one motion, not a switch: the waterline crosses the screen as the lens crosses the water (render/display.js SEA), and goes back down the same way
+  { const T = TUNE.camera, to = P.pos.y > 0 ? 1 : THREE.MathUtils.smoothstep(P.pos.y + Math.max(0, P.vel.y) * T.lead, T.topFrom, T.topTo), was = P.top || 0;
+    P.top = was + (to - was) * Math.min(1, (to > was ? T.topRise : T.topFall + 3 * THREE.MathUtils.smoothstep(-P.pos.y, 1, 3)) * dt); }   /* quickly up; slowly down, unless you have really dived: a run of leaps is watched from above */
+  const top = P.top, back = fwdOf(yawT, P.pitch * 0.45 * (1 - top) + aim.lookPitch).multiplyScalar(-dist * (1 + 0.7 * top)); back.y += h;   // above the water the camera stands off, so you are still in the picture
   const want = _want.copy(P.pos).add(back);
-  // the camera stays under until you break the surface, and stays up until you really dive (no popping at the line)
-  { P.peekT = P.pos.y > -0.7 && (input.climb || 0) > 0.3 ? (P.peekT || 0) + dt : 0; if (P.pos.y > 0.05 || P.peekT > 0.35) P.camUp = true; else if (P.pos.y < -0.6 || (P.pos.y <= 0.05 && (input.climb || 0) <= 0.3)) P.camUp = false; }   // breathing happens just under the line; a breach takes the camera up, and so does holding rise at the top: look around above the water, at the boats and the sky
-  if (P.camUp) want.y = Math.max(want.y, 1.2 + size * 0.3); else want.y = Math.min(want.y, -0.35);   // just under the surface, never level with you
+  want.y = THREE.MathUtils.lerp(Math.min(want.y, TUNE.camera.under), Math.max(want.y, 1.2 + size * 0.3), top);
   want.x += Math.sin(simTime * 0.35) * 0.12 * sway; want.y += Math.sin(simTime * 0.5 + 1.0) * 0.08 * sway;
   camPos.lerp(want, Math.min(1, 5 * dt));
-  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5); keepOffSurface();
-  const nearTop = !P.camUp ? THREE.MathUtils.smoothstep(P.pos.y, -2.5, -0.3) : 0;
-  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6), (P.camUp ? 2 : 6) * (1 - Math.min(1, Math.abs(aim.lookYaw)))).add(_sc.set(0, P.camUp ? 0 : 0.6 + size * 0.3 + nearTop * 0.8, 0)), Math.min(1, 8 * dt));
+  camPos.y = Math.max(camPos.y, floorAt(camPos.x, camPos.z) + 0.5);
+  camLook.lerp(_v.copy(P.pos).addScaledVector(fwdOf(P.yaw, P.pitch * 0.6 * (1 - top)), dist * THREE.MathUtils.lerp(TUNE.camera.ahead, TUNE.camera.aheadUp, top) * (1 - Math.min(1, Math.abs(aim.lookYaw)))), Math.min(1, 8 * dt));
   camera.position.copy(camPos); { const k = settings.horizonTilt ? P.roll * 0.15 : 0; camera.up.set(-Math.cos(P.yaw) * Math.sin(k), Math.cos(k), Math.sin(P.yaw) * Math.sin(k)); } P.shake = Math.max(0, (P.shake || 0) - dt * 1.5); if (P.shake > 0 && settings.shake) camera.position.add(_sc.set(fxRand() - .5, fxRand() - .5, fxRand() - .5).multiplyScalar(P.shake * 0.35)); camera.lookAt(camLook);
-  above = camPos.y > 0;
-  aboveMix += ((above ? 1 : 0) - aboveMix) * Math.min(1, 6 * dt);
+  above = camPos.y > 0; P.camUp = above;
   setFog(1 - 0.55 * (P.reveal || 0));
 }
 export function stepAmbient(dt, t) {
@@ -333,6 +340,8 @@ function frameInner() {
   { const a = (day.hour - 6) / 12 * Math.PI, el = Math.sin(a); WU.uSun.value = THREE.MathUtils.smoothstep(el, -0.12, 0.25) * (1 - 0.6 * WU.uCloud.value); WU.uSunDir.value.set(Math.cos(a), el, -0.25).normalize(); }
   stepLogo(real); stepGoalBeam(); stepAudio(!started ? above : P.pos.y > -0.2); /* sound follows your ears, not the camera */ stepHud(real);
   if (specimen.on && specimen.raw) { renderSpecimenRaw(); return; }
+  setLens(real); const thru = !specimen.on && !MOBILE && Q.level === 0 && camPos.y > -TUNE.lens.thruFrom; WU.uThru.value = thru ? 1 : 0;   // refraction draws the bay twice: only near the surface, where it shows, and only on a machine with room for it
+  if (thru) { surface.visible = false; WU.uPass.value = 1; renderer.setRenderTarget(behindRT); renderer.render(scene, camera); surface.visible = true; WU.uPass.value = 0; }   /* what is beyond the surface, for it to bend */
   renderer.setRenderTarget(lowRT); if (specimen.on) renderSpecimenViews(); else renderer.render(scene, camera); renderer.setRenderTarget(cellRT); renderer.render(cellScene, cellCam); renderer.setRenderTarget(null); drawPanel(); composer.render();
   if (photo && photo.shot) { photo.shot = false; photo.savedT = photo.t; const name = `brackish-${(photo.spot || 'the-bay').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
     renderer.domElement.toBlob(b => { if (!b) return; emit('photo-saved', { name, size: b.size }); if (TEST) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); if (photoUrl) URL.revokeObjectURL(photoUrl); photoUrl = a.href; }, 'image/png'); }   /* the frame just drawn, before it is cleared. the last photo's file is let go when the next is taken: no browser says when a download has finished reading it */

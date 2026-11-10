@@ -98,7 +98,8 @@ export function initTouch() {
     if (Math.abs(touch.turn) < 0.12) touch.turn = 0; if (Math.abs(touch.climb) < 0.12) touch.climb = 0;
     touch.kx = dx * k * STICK_R; touch.ky = dy * k * STICK_R;
   });
-  addEventListener('pointerup', e => { if (photo && MOBILE) { photoPointer(e, 'up'); return; } unlockAudio(); if (menu?.kind === 'feedback') fbEl().focus({ preventScroll: true }); if (MOBILE) { goLandscape(); enableTilt(); } endStick(e); });   // a tap counts as a gesture on the way up: that is when phones allow full screen and motion addEventListener('pointercancel', endStick);
+  addEventListener('pointerup', e => { if (photo && MOBILE) { photoPointer(e, 'up'); return; } unlockAudio(); if (menu?.kind === 'feedback') fbEl().focus({ preventScroll: true }); if (MOBILE) { goLandscape(); enableTilt(); } endStick(e); });   // a tap counts as a gesture on the way up: that is when phones allow full screen and motion
+  addEventListener('pointercancel', endStick);
   tbtn('tBurst', el => { keys.ShiftLeft = true; el.classList.add('on'); }, el => { keys.ShiftLeft = false; el.classList.remove('on'); });
   tbtn('tAct', () => { if (started) act(); });
   tbtn('tMap', () => { if (started) toggleMap(); });

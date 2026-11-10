@@ -204,7 +204,8 @@ export function drawYou(v) {
 export function drawDepthGauge(v) {   // surface at the top, the bottom of the bay below, you between; rise and dive chevrons beside you
   const { W, H, ST, SL, SB, cx, t, cols } = v;
   { const gx = SL, g0 = Math.round(H * 0.34), gh = Math.max(16, Math.min(Math.round(H * 0.3), chartBox(v).left ? H - chartBox(v).MS - SB - 30 - g0 : H)),   /* on a phone, clear of the chart below it */ floor = Math.max(1, -floorAt(P.pos.x, P.pos.z)), at = THREE.MathUtils.clamp(-P.pos.y / floor, 0, 1);   /* depth gauge: surface at the top, the bottom of the bay below, you between */
-    for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let m = 5; m < floor; m += 5) { const ty = g0 + Math.round(m / floor * gh); pDot(gx + 1, ty, 110); pDot(gx + 2, ty, 80); }   // a tick every five metres, so a deep bottom reads deep for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
+    for (let y = 0; y <= gh; y += 2) pDot(gx, g0 + y, 50); for (let m = 5; m < floor; m += 5) { const ty = g0 + Math.round(m / floor * gh); pDot(gx + 1, ty, 110); pDot(gx + 2, ty, 80); }   // a tick every five metres, so a deep bottom reads deep
+    for (let x = -1; x <= 2; x++) { pDot(gx + x, g0 - 1, 150); pDot(gx + x, g0 + gh + 1, 110); }
     const py = g0 + Math.round(at * gh); for (let x = -1; x <= 2; x++) { pDot(gx + x, py, 255); pDot(gx + x, py + 1, 255); }
     { const w = pSeg(Math.max(0, -P.pos.y).toFixed(1), gx + 5, py - 3, INK.value); pText('M', gx + 6 + w, py - 1, INK.label, 'left', 1, true); }   // how deep you are rides beside you, in the stereo's big digits
     pText('FLOOR', gx - 1, g0 + gh + 4, INK.label, 'left', 1, true); pText(P.pos.y - floorAt(P.pos.x, P.pos.z) > TUNE.water.bottomSeen ? '---' : readouts.floor + 'M', gx + 23, g0 + gh + 4, 190, 'left', 1, true);   // past where you can see it, you don't know   // and the bottom under you, at the bottom

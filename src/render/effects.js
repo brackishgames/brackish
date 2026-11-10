@@ -15,7 +15,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(25000, 24, 12), mat({
       float sd = max(dot(vDir, uSunDir), 0.0); b += (0.6 * pow(sd, 120.0) + 0.25 * pow(sd, 6.0)) * smoothstep(-0.05, 0.1, uSunDir.y);
       b += step(0.9965, hash(vDir)) * 0.7 * (1.0 - uSun) * smoothstep(0.02, 0.2, vDir.y);   // stars
       float md = max(dot(vDir, moonDir()), 0.0); b += (0.9 * pow(md, 400.0) + 0.08 * pow(md, 5.0)) * moonUp();   // the moon and its halo
-      b = mix(b, uFogB, step(uFogB, 0.001));   // under water the sky is black
+      b = mix(b, mix(uFogB, 0.5, uPass), 1.0 - dry());   // through water there is no sky, only the water. (drawn for the surface to look through, it is a plain light that whatever stands in the air shows dark against)
       gl_FragColor = outB(b); }` }));
 sky.frustumCulled = false; scene.add(sky);
 
@@ -35,6 +35,10 @@ export const surface = new THREE.Mesh(seaGeometry(), mat({ side: THREE.DoubleSid
       float a = sin(vW.x * 0.45 + uTime * 0.9) * sin(vW.z * 0.38 - uTime * 0.7);
       float c = sin(vW.x * 0.11 - vW.z * 0.13 + uTime * 0.35);
       float p = 0.5 + 0.5 * (a * 0.7 + c * 0.3), b, alpha = 1.0;
+      // refraction: the slope of the water here, from its waves and the ripples on them, bends the line of sight, so what is beyond the surface is looked up a little to one side
+      vec2 slope = vec2(seaH(vW.xz + vec2(0.3, 0.0)) - seaH(vW.xz - vec2(0.3, 0.0)), seaH(vW.xz + vec2(0.0, 0.3)) - seaH(vW.xz - vec2(0.0, 0.3))) / 0.6
+        + 0.05 * vec2(sin(vW.x * 2.3 + uTime * 1.7) + sin(vW.z * 3.1 - uTime * 1.3), sin(vW.z * 2.7 + uTime * 1.5) + sin(vW.x * 3.4 + uTime * 1.1));
+      vec2 suv = gl_FragCoord.xy / uRes, bend = 0.07 * slope / max(1.0, vD * 0.2);
       if (gl_FrontFacing) {   // seen from the air: dark glassy water you can see into, sparkle toward the horizon
         vec3 v = normalize(cameraPosition - vW); float g = 1.0 - max(v.y, 0.0);
         float s2 = sin(vW.x * 1.7 + uTime * 1.3) * sin(vW.z * 1.4 - uTime * 1.1);
@@ -50,12 +54,14 @@ export const surface = new THREE.Mesh(seaGeometry(), mat({ side: THREE.DoubleSid
         float near = 1.0 - smoothstep(0.6, 2.5, fwidth(vW.x) + fwidth(vW.z));   // far off at a low angle the pattern is finer than a dot, and can only alias into rows of dashes
         // Snell's window: from below, the whole sky above squeezes into a bright disc overhead, 97 degrees across (rays past 48.6 degrees from straight up reflect back down). its edge ripples with the waves
         float up = abs(normalize(cameraPosition - vW).y), window = smoothstep(0.63, 0.7 + 0.02 * a, up) * (0.25 + 0.75 * uSun);
+        if (uThru > 0.5) window *= clamp(texture2D(tBehind, suv + 1.5 * bend).r / 0.5, 0.0, 1.4);   // and in that window, bent by the waves, whatever stands in the air: a hull, a piling, a bird, dark against the sky
         b = 0.12 + 0.45 * window + (0.55 * pow(p, 5.0) + 0.22 * crest * (0.3 + 0.7 * depthLight(-0.5))) * near;
       }
       b += uChop * 0.7 * max(vH, 0.0) * smoothstep(120.0, 10.0, vD);   // crests catch the light
       if (uRain > 0.0) { vec2 c = floor(vW.xz * 2.5); float h = fract(sin(dot(c + floor(uTime * 7.0 + fract(c.x * 0.37) * 7.0), vec2(12.9898, 78.233))) * 43758.5453); b += step(1.0 - 0.14 * uRain, h) * 0.5 * smoothstep(50.0, 4.0, vD); }   // every drop a ring
       b *= 1.0 - 0.45 * uCloud;
-      gl_FragColor = vec4(uRaw > 0.5 ? vec3(applyFog(b, vD)) : vec3(applyFog(b, vD), 0.0, 0.0), alpha);
+      b = applyFog(b, vD); if (uThru > 0.5 && gl_FrontFacing) { b = mix(texture2D(tBehind, suv + bend).r, b, alpha); alpha = 1.0; }   // from the air: the water's own shine over what is under it, bent
+      gl_FragColor = vec4(uRaw > 0.5 ? vec3(b) : vec3(b, 0.0, 0.0), alpha);
     }` }));
 surface.rotation.x = -Math.PI / 2; surface.frustumCulled = false; scene.add(surface);
 
@@ -65,7 +71,7 @@ export const shafts = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).tran
     void main(){ vUv = uv; vec4 w = modelMatrix * instanceMatrix * vec4(position,1.0); vY = w.y; vec4 mv = viewMatrix * w; vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`,
   fragmentShader: GLSL_COMMON + `varying vec2 vUv; varying float vD, vY;
     void main(){ float e = sin(vUv.x * 3.14159);
-      float b = 0.10 * e * e * vUv.y * vUv.y * depthLight(vY) * (0.7 + 0.3 * sin(uTime * 0.8 + vUv.x * 6.0)) * (1.0 - fogF(vD)) * step(uFogB, 0.001);
+      float b = 0.10 * e * e * vUv.y * vUv.y * depthLight(vY) * (0.7 + 0.3 * sin(uTime * 0.8 + vUv.x * 6.0)) * (1.0 - fogF(vD)) * (1.0 - dry());   // seen in the water, never from the air
       gl_FragColor = outB(b); }` }), SHAFTS);
 shafts.frustumCulled = false; scene.add(shafts);
 export const shaftSeeds = Array.from({ length: SHAFTS }, (_, i) => ({ a: i / SHAFTS * Math.PI * 2 + rand(), r: 15 + rand() * 70, w: 2 + rand() * 4, s: rand() * 6 }));
