@@ -80,15 +80,15 @@ export function mapKey(code) {   // ↑ ↓ pick a place, ENTER goes there
 export function toggleMap() { mapOpen = !mapOpen; mapEl.style.display = mapOpen ? 'flex' : 'none'; if (mapOpen) { mapSel = Math.max(0, checkpoints.indexOf(lastCheckpoint)); renderMapList(); } }
 export function renderMapList() { $('cplist').innerHTML = checkpoints.map((c, i) => `<li class="${i === mapSel ? 'sel' : ''}">${c.name}</li>`).join('');  }
 
-export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,   // a guide, not a thing in the water: it shows through the surface and the murk, or it could never be followed
+export const goalBeam = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat({ transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,   // a guide, not a thing: it stands on the water over where you are going, and is seen only through the air: through whatever of the lens is out of the water. to find your way you come up and look, as an animal does
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: GLSL_COMMON + `varying vec2 vUv; void main(){ float e = sin(vUv.x * 3.14159); float b = 0.55 * e * e * (1.0 - vUv.y * 0.6) * (0.75 + 0.25 * sin(uTime * 3.0 - vUv.y * 12.0)); gl_FragColor = outB(b); }` }));
+  fragmentShader: GLSL_COMMON + `varying vec2 vUv; void main(){ float e = sin(vUv.x * 3.14159); float b = 0.55 * e * e * (1.0 - vUv.y * 0.6) * (0.75 + 0.25 * sin(uTime * 3.0 - vUv.y * 12.0)) * dry(); gl_FragColor = outB(b); }` }));
   export function stepGoalBeam(t) {
-  goalBeam.visible = !!story.goal;
-  if (!story.goal) return;
-  const [x, z] = story.goal, f = floorAt(x, z), d = Math.hypot(x - camPos.x, z - camPos.z);
-  goalBeam.position.set(x, f, z); goalBeam.rotation.y = Math.atan2(camPos.x - x, camPos.z - z);
-  goalBeam.scale.set(2 + d * 0.02, Math.max(30, -f + 40) + d * 0.06, 1);
+  goalBeam.visible = !!story.goal && camPos.y > -1.5;   // no dot of the lens is out of the water deeper than that
+  if (!goalBeam.visible) return;
+  const [x, z] = story.goal, d = Math.hypot(x - camPos.x, z - camPos.z);
+  goalBeam.position.set(x, 0, z); goalBeam.rotation.y = Math.atan2(camPos.x - x, camPos.z - z);
+  goalBeam.scale.set(2 + d * 0.02, 40 + d * 0.06, 1);
 }
 // the readouts, the place you're in, the warning, the compass marks, and the story line's countdown: once a frame
 export const readouts = { place: '', floor: '0', tide: '' };   // worked out here, laid out by the panel (src/ui/panel.js)

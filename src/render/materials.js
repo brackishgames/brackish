@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { rand } from '../core/random.js?v=__BUILD__';
+import { GLSL_SEA, SEA } from './display.js?v=__BUILD__';
 import { TILES } from '../world/geo.js?v=__BUILD__';
 // ═══════════════════════════════════════════════════════════════════
 //  SHARED GLSL  —  brightness-only shading, fog to a target brightness
 //  (the water's own dim glow below, haze above), sunlight fading with depth.
 // ═══════════════════════════════════════════════════════════════════
-export const WU = { uTime: { value: 0 }, uFogD: { value: 0.014 }, uFogB: { value: 0 }, uSun: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uFill: { value: 0 }, uRaw: { value: 0 }, uChop: { value: 0.1 }, uWavePeriod: { value: 2 }, uWindDir: { value: new THREE.Vector2(1, 0) }, uRain: { value: 0 }, uTide: { value: 0 }, uCloud: { value: 0 } };   // the model page: uFill lifts the dark sides in the dot view, uRaw draws plain images with no dots. both always 0 in the game
-export const GLSL_COMMON = /* glsl */`
-  uniform float uTime, uFogD, uFogB, uSun, uFill, uRaw, uChop, uWavePeriod, uRain, uTide, uCloud; uniform vec2 uWindDir; uniform vec3 uSunDir;
-  float fogF(float d) { float k = d * uFogD; return 1.0 - exp(-k * k); }
-  float applyFog(float b, float d) { return mix(b, uFogB, fogF(d)); }
+export const WU = { ...SEA, uFogD: { value: 0.014 }, uFogB: { value: 0 }, uAirD: { value: 0.00018 }, uAirB: { value: 0.3 }, uSun: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uFill: { value: 0 }, uRaw: { value: 0 }, uRain: { value: 0 }, uTide: { value: 0 }, uCloud: { value: 0 } };   // the model page: uFill lifts the dark sides in the dot view, uRaw draws plain images with no dots. both always 0 in the game
+export const GLSL_COMMON = GLSL_SEA + /* glsl */`
+  uniform float uFogD, uFogB, uAirD, uAirB, uSun, uFill, uRaw, uRain, uTide, uCloud; uniform vec3 uSunDir;
+  float fogF(float d) { float k = d * mix(uFogD, uAirD, dry()); return 1.0 - exp(-k * k); }   // through a wet dot of the lens, the water's murk; through a dry one, the air's haze
+  float applyFog(float b, float d) { return mix(b, mix(uFogB, uAirB, dry()), fogF(d)); }
   float depthLight(float y) { return exp(min(y, 0.0) * 0.06) * (0.12 + 0.88 * uSun + 0.12 * smoothstep(0.0, 0.15, -uSunDir.y)); }
   vec3 moonDir() { return normalize(vec3(-uSunDir.x, max(0.3, -uSunDir.y), -uSunDir.z)); }
   float moonUp() { return smoothstep(0.0, 0.15, -uSunDir.y); }
@@ -28,7 +29,7 @@ export const demUniforms = {
   uBoxO: { value: new THREE.Vector4(TILES.outer.xmin, TILES.outer.zmin, TILES.outer.xmax, TILES.outer.zmax) },
   uBoxI: { value: new THREE.Vector4(TILES.inner.xmin, TILES.inner.zmin, TILES.inner.xmax, TILES.inner.zmax) },
 };
-export const mat = (opts) => new THREE.ShaderMaterial({ ...opts, uniforms: { ...WU, ...(opts.uniforms || {}) } });
+export const mat = (opts) => new THREE.ShaderMaterial({ ...opts, fragmentShader: '#define FRAG\n' + opts.fragmentShader, uniforms: { ...WU, ...(opts.uniforms || {}) } });   // FRAG: only a fragment knows which dot of the lens it is seen through
 
 
 // the animated brightness material every body uses (and the structures, at a lower glow): rim-lit, smooth where the model is smooth.

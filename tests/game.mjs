@@ -86,9 +86,9 @@ await scenario('photo mode opens anywhere, frames you, stays near you, and saves
   const saved = await page.event('photo-saved'); await page.key('Enter', 'Enter', 13); const r = await saved(); assert.match(r.name, /^brackish-.*\.png$/); assert.ok(r.size > 1000, `a real picture: ${r.size} bytes`);
   await page.key('KeyO', 'o', 79); await page.until('!photo && !paused', 'back to swimming');
 });
-await scenario('near the surface the lens never slices the water off in a straight line', async () => {
-  for (const depth of [0.2, 0.8, 1.4, 2, 3]) { await page.eval(`__game.teleport(${HOLE}, ${depth}); P.pos.y = -${depth}; 1`); await S(page, 3);
-    assert.ok(await page.eval('Math.abs(camera.position.y) >= camera.near'), `at ${depth} m the surface is further away than the lens can cut`); }
+await scenario('at the surface the lens knows which of its dots are in the water and which are out, so the picture is split along the waterline and never sliced', async () => {
+  const sides = await page.eval(`[-2, -0.15, 0, 0.15, 2].map(y => { camera.position.set(P.pos.x, y, P.pos.z); camera.lookAt(P.pos.x, y, P.pos.z - 10); setLens(); const row = r => WU.uLensO.value.y + WU.uLensY.value.y * r; return [WU.uSide.value, row(0) < 0, row(lowRT.height) > 0]; })`);
+  assert.deepEqual(sides.map(s => s[0]), [-1, 0, 0, 0, 1], 'all under, across the lens, all out'); for (const s of sides.slice(1, 4)) assert.ok(s[1] && s[2], 'across it, the bottom row of dots is in the water and the top row in the air');
 });
 await scenario('every model in the game builds on the specimen page', async () => {
   const sp = await browser.page(); await sp.open(URL0 + '&specimens', { w: 800, h: 600 });
@@ -115,9 +115,16 @@ await scenario('changing body waits for free swim: inside the story Tab does not
   const free = await page.eval('CHAPTERS.findIndex(c => c.free)'); await page.eval(`__game.chapter(${free}); 1`); await page.key('Tab', 'Tab', 9); assert.notEqual(await page.eval('P.sp.id'), 'cownose', 'free swim lets you');
   await page.eval(`becomeSpecies(speciesById.cownose); __game.chapter(0); 1`);
 });
-await scenario('at the surface, holding rise looks above the water; letting go comes back down', async () => {
-  await page.eval(`__game.teleport(${HOLE}, 0.3); P.pos.y = -0.2; P.camUp = false; __game.setInput({ throttle: 0.2, climb: 1 }); __game.step(60); 1`); assert.ok(await page.eval('P.camUp'), 'peeking');
-  await page.eval(`__game.setInput({ throttle: 0.2 }); __game.step(30); 1`); assert.ok(!(await page.eval('P.camUp')), 'back under');
+await scenario('the lens comes up through the surface with you and goes back down with you: no cut, and the waterline crosses the screen', async () => {
+  const watch = (input, n, before = '') => page.eval(`(() => { ${before} __game.setInput(${JSON.stringify(input)}); let crossings = 0, jump = 0, split = 0, air = 0, was = camPos.y, wasAir = false, lag = null, topAt = null; for (let i = 0; i < ${n}; i++) { __game.step(1); setLens(); if ((camPos.y > 0) !== (was > 0)) crossings++; jump = Math.max(jump, Math.abs(camPos.y - was)); was = camPos.y; if (WU.uSide.value === 0 && Math.abs(camPos.y) < 0.25) split++; const inAir = P.pos.y > 0.05; if (inAir && !wasAir) air++; wasAir = inAir; if (topAt === null && P.pos.y > TUNE.camera.topTo) topAt = i; if (topAt !== null && lag === null && camPos.y > 0) lag = (i - topAt) / 60; } camera.updateMatrixWorld(); return { cam: camPos.y, side: WU.uSide.value, crossings, jump, split, air, lag, me: P.pos.y, ndc: P.pos.clone().project(camera).y }; })()`);
+  const up = await watch({ throttle: 1, climb: 1 }, 420, `becomeSpecies(speciesById.cownose); __game.teleport(${HOLE}, 4);`);
+  assert.ok(up.cam > 0.6 && up.side === 1, `rising to the top takes the lens above the water: ${up.cam.toFixed(2)} m`); assert.equal(up.crossings, 1, 'through the surface once'); assert.ok(up.jump < 0.2, `in one motion, never a cut: ${up.jump.toFixed(2)} m in a step at most`);
+  assert.ok(up.split >= 3, `with the waterline on the screen on the way: ${up.split} steps`); assert.ok(up.lag < 0.35, `as you arrive, not after: ${up.lag} s`); assert.ok(up.me < 0 && Math.abs(up.ndc) < 0.6, 'and you stay in the water, and in the picture');
+  const wet = await page.eval(`(() => { const rain = WU.uRain.value; WU.uRain.value = 0; setLens(0.5); const just = WU.uWet.value; setLens(TUNE.lens.dries); const later = WU.uWet.value; WU.uRain.value = rain; return { just, later }; })()`); assert.ok(wet.just > 0.8, `out of the water the lens is still wet: ${wet.just}`); assert.equal(wet.later, 0, 'and it dries');
+  const down = await watch({ throttle: 1, climb: -1 }, 180);
+  assert.ok(down.cam < -0.4 && down.side === -1, `dive and it goes back under: ${down.cam.toFixed(2)} m`); assert.equal(await page.eval('WU.uWet.value'), 1, 'wet again'); assert.equal(down.crossings, 1, 'once'); assert.ok(down.jump < 0.2 && down.split >= 3, 'the same way');
+  const leaps = await watch({ throttle: 1, burst: true }, 270, `becomeSpecies(speciesById.dolphin); __game.teleport(${HOLE}, 3); __game.setInput({ throttle: 1 }); __game.step(60); P.sta = 1; P.pos.y = -1;`); await page.eval('becomeSpecies(speciesById.cownose); 1');
+  assert.ok(leaps.air >= 2, `a dolphin leaps and leaps: ${leaps.air}`); assert.equal(leaps.crossings, 1, 'and the lens goes up with the first, and watches the rest from there');
 });
 await scenario('the tide moves the water over the bottom, and the waves follow the wind', async () => {
   const a = await page.eval(`(() => { const [x, z] = toXZ(${HOLE}); const before = floorAt(x, z); ENV.tide = 1; applyEnv(); const up = floorAt(x, z); ENV.tide = 0; applyEnv(); return before - up; })()`); assert.ok(Math.abs(a - 1) < 0.01, `a metre of tide is a metre more water: ${a}`);
@@ -234,6 +241,12 @@ await scenario('the quiet HUD: calm water is just the bay; a hit brings the hear
     await page.eval('P.hp = 2; 1'); await page.until('hudParts.hearts.k === 1', 'the hearts up after a hit');
     await page.eval('settings.hudFull = true; 1'); await page.until('Object.values(hudParts).every(p => p.k === 1)', 'all of it up, always');
   } finally { await page.eval(`settings.hudFull = false; TUNE.hud.linger = ${was.linger}; TUNE.hud.fall = ${was.fall}; P.hp = 3; 1`); }
+});
+await scenario('E does what it says, once: a ray\'s sense opens the water, and a lunge can\'t be mashed into flight', async () => {
+  const sense = await page.eval(`(() => { becomeSpecies(speciesById.cownose); __game.teleport(${HOLE}, 12); P.actReady = 0; P.reveal = 0; __game.setInput({ throttle: 1 }); __game.step(30); const far = WU.uFogD.value; act(); __game.step(2); return { reveal: P.reveal, far, now: WU.uFogD.value }; })()`);
+  assert.ok(sense.reveal > 0.9, `the sense is felt: ${sense.reveal}`); assert.ok(sense.now < sense.far * 0.7, `and you see further for it: fog ${sense.far.toFixed(4)} to ${sense.now.toFixed(4)}`);
+  const lunge = await page.eval(`(() => { becomeSpecies(speciesById.bull); __game.teleport(${HOLE}, 12); P.actReady = 0; P.vel.set(0, 0, 0); __game.setInput({ throttle: 1 }); __game.step(60); act(); const once = P.vel.length(); for (let i = 0; i < 5; i++) act(); const mashed = P.vel.length(); __game.step(Math.ceil(ABILITY_CD.lunge * 60) + 1); const before = P.vel.length(); act(); return { once, mashed, again: P.vel.length() - before, max: P.sp.max }; })()`);
+  assert.ok(lunge.once > lunge.max, `a lunge is a lunge: ${lunge.once.toFixed(1)} m/s`); assert.equal(lunge.mashed, lunge.once, 'five more presses in the same moment add nothing'); assert.ok(lunge.again > lunge.max, 'and after its rest it is there again');
 });
 await scenario('a dolphin\'s echo, deep, can come back off something with no name', async () => {
   await page.eval(`becomeSpecies(speciesById.dolphin); __game.teleport(${HOLE}, 12); thing.next = 0; TUNE.thing.chance = 1; echoThing(); TUNE.thing.chance = 0.3; 1`);
